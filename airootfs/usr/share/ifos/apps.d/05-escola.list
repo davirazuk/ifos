@@ -1,9 +1,9 @@
 # IFOS software catalog — Escola / School
 #
 # Cobertura das disciplinas técnicas: programação, web, banco de dados, redes,
-# eletrônica e automação, manutenção e suporte, desenho técnico/CAD, matemática
-# e estudo. Organizado por área, não por nome de curso, para continuar útil
-# quando a oferta mudar.
+# eletrônica e automação, manutenção e suporte, desenho técnico/CAD, jogos
+# digitais, geoprocessamento, matemática e estudo. Organizado por área, não
+# por nome de curso, para continuar útil quando a oferta mudar.
 #
 # Os "Kits" no topo instalam de uma vez tudo que uma área costuma pedir.
 
@@ -14,6 +14,8 @@ Kit Eletrônica|Tudo para eletrônica e automação: KiCad, ferramentas Arduino 
 Kit Manutenção e Suporte|Tudo para manutenção: diagnóstico, recuperação de dados e particionamento|hwinfo inxi lshw dmidecode smartmontools testdisk ddrescue gparted stress|repo
 Kit Banco de Dados|MariaDB, PostgreSQL, SQLite e um cliente gráfico|mariadb postgresql sqlite sqlitebrowser dbeaver|repo
 Kit Escritório (pt-BR)|LibreOffice completo em português|libreoffice-fresh libreoffice-fresh-pt-br|repo
+Kit Jogos Digitais|Tudo para o curso de Jogos Digitais: motor Godot, editor de sprites e editor de mapas|godot libresprite tiled|repo
+Kit Geoprocessamento (avançado)|GRASS e SAGA GIS, para agropecuária e análise geoespacial avançada|grass saga-gis|aur
 
 # ── Programação ──────────────────────────────────────────────────────────────
 Visual Studio Code|Editor da Microsoft, build open source|code|repo
@@ -59,6 +61,19 @@ Fritzing|Prototipagem eletrônica didática|fritzing|aur
 FreeCAD|Modelagem 3D paramétrica|freecad|repo
 LibreCAD|Desenho técnico 2D, estilo AutoCAD|librecad|repo
 QGIS|Geoprocessamento e mapas|qgis|repo
+GRASS GIS|Análise geoespacial avançada, usado em agricultura de precisão|grass|aur
+SAGA GIS|Processamento e análise de dados geoespaciais, útil em agropecuária|saga-gis|aur
+
+# ── Jogos digitais ───────────────────────────────────────────────────────────
+Godot Engine|Motor de jogos gratuito e open source, 2D e 3D, com editor visual|godot|repo
+Godot Engine (Mono)|Godot com suporte a C#/.NET|godot-mono|repo
+LibreSprite|Editor de pixel art e animação de sprites, fork livre do Aseprite|libresprite|repo
+Aseprite|Editor de pixel art e animação, compilado da fonte oficial|aseprite|aur
+Tiled|Editor de mapas em tiles para jogos 2D|tiled|repo
+Blender|Modelagem, animação e renderização 3D para assets de jogos|blender|repo
+Krita|Pintura digital para arte conceitual e texturas|krita|repo
+Audacity|Edição de efeitos sonoros e trilha para jogos|audacity|repo
+LMMS|Composição de trilha sonora e efeitos|lmms|repo
 
 # ── Manutenção e suporte ─────────────────────────────────────────────────────
 Diagnóstico de hardware|Informações e testes de hardware|hwinfo inxi lshw dmidecode stress|repo
