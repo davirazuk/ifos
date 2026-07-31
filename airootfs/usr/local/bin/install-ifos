@@ -380,7 +380,10 @@ PACKAGES=(
     xfce4-terminal alacritty xterm
     thunar thunar-volman thunar-archive-plugin gvfs gvfs-mtp gvfs-smb tumbler
     xarchiver mousepad gthumb
-    sddm polkit polkit-gnome plymouth
+    # sddm-greeter links against Qt5, not qt6-declarative; without this the
+    # ifos login theme's `import QtQuick.Controls 2.15` fails to resolve and
+    # SDDM silently falls back to its stock theme.
+    sddm qt5-quickcontrols2 polkit polkit-gnome plymouth
     xdg-user-dirs xdg-utils xdg-desktop-portal xdg-desktop-portal-gtk
     maim xclip xdotool arandr htop fastfetch dialog
     webkit2gtk-4.1 python-gobject adwaita-icon-theme adwaita-cursors

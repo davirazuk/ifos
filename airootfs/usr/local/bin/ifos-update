@@ -165,6 +165,33 @@ GRUBCFG
     fi
 }
 
+# ── Packages this system should have but might be missing ───────────────────
+# pacman -Syu only upgrades packages that are already installed; a package
+# newly added to install-ifos's list after this machine was set up (like the
+# qt5-quickcontrols2 fix for the login theme) never reaches an existing
+# machine through any other path than this.
+install_missing_packages() {
+    local installer="$REPO_DIR/airootfs/usr/local/bin/install-ifos"
+    [[ -f $installer ]] || return 0
+
+    local -a wanted
+    mapfile -t wanted < <(
+        sed -n '/^PACKAGES=(/,/^)/p' "$installer" |
+            sed '1d;$d;s/#.*//' | tr -s ' \t' '\n' | grep -vE '^\s*$'
+    )
+    (( ${#wanted[@]} )) || return 0
+
+    local -a missing=() pkg
+    for pkg in "${wanted[@]}"; do
+        pacman -Qq "$pkg" &>/dev/null || missing+=("$pkg")
+    done
+    (( ${#missing[@]} )) || return 0
+
+    info "Installing packages new to IFOS: ${missing[*]}"
+    $SUDO pacman -S --needed --noconfirm "${missing[@]}" \
+        || warn "Some new packages failed to install."
+}
+
 # ── Repairs for home directories that already exist ──────────────────────────
 # Prefer the copy in the fresh checkout: on a machine whose ifos-update is a
 # release behind, that is the only one carrying the newest repairs.
@@ -228,6 +255,10 @@ NEW_DATE=$($SUDO git -C "$REPO_DIR" log -1 --format=%cd --date=short)
 OLD_COMMIT=$(cat "$STATE/applied-commit" 2>/dev/null || echo none)
 
 printf '\n  installed: %s\n  available: %s (%s)\n\n' "$OLD_COMMIT" "$NEW_COMMIT" "$NEW_DATE"
+
+if (( DO_PACKAGES )) && (( ! CHECK_ONLY )); then
+    install_missing_packages
+fi
 
 if [[ $OLD_COMMIT == "$NEW_COMMIT" ]]; then
     ok "Already up to date."
