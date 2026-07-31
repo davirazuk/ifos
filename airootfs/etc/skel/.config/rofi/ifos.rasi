@@ -84,7 +84,10 @@ element-icon {
 
 element-text {
     vertical-align:     0.5;
-    highlight:          bold @mauve;
+    /* A literal colour: rofi's grammar for `highlight` takes a colour, not a
+       property reference, so `bold @mauve` fails to parse. Same hex as @mauve;
+       ifos-theme substitutes hexes, so it still follows the palette. */
+    highlight:          bold #7ed957;
 }
 
 message {

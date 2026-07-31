@@ -132,12 +132,36 @@ ifos-update              # update packages, then the IFOS files
 ifos-update --check      # show what changed, change nothing
 ifos-update --dotfiles   # also take the new desktop defaults (backs yours up)
 ifos-update --ifos-only  # skip pacman
+ifos-update --repair     # only repair known-broken files in your ~/.config
 ```
 
 It clones the repo to `/var/lib/ifos/repo`, applies everything under
 `airootfs/` with `branding-sync.sh`, and records the commit it applied so
 `--check` can show you the difference. Your own `~/.config` is left alone
 unless you pass `--dotfiles`.
+
+### Fixes that have to reach a home directory you already have
+
+Updating `/etc/skel` only changes what *new* accounts get; your existing
+`~/.config` keeps whatever it was created with, bug and all. So `ifos-update`
+also runs `/usr/share/ifos/repair-dotfiles.sh`, a list of narrow, idempotent
+repairs to files you already have. They preserve the colours you are running —
+only `--dotfiles` replaces your configuration outright.
+
+```
+/usr/share/ifos/repair-dotfiles.sh --check       # say what is broken
+/usr/share/ifos/repair-dotfiles.sh               # repair this account
+sudo /usr/share/ifos/repair-dotfiles.sh --all-users
+```
+
+On a machine installed before any of this existed, the update that brings the
+repairs in is run by the *old* `ifos-update`, which does not know to call them.
+That first time only, ask for them yourself:
+
+```
+ifos-update --ifos-only     # gets the new files, including the repair script
+ifos-update --repair        # applies the repairs to your ~/.config
+```
 
 Point it at your own fork by editing `/etc/ifos/update.conf` — useful for
 running a customised IFOS across a lab of machines.
@@ -154,6 +178,7 @@ running a customised IFOS across a lab of machines.
 | `ifos-theme ifms\|mocha` | Switch between the green IFMS theme and Catppuccin Mocha |
 | `install-yay` | Enable AUR access |
 | `ifos-post-install` | Re-apply IFOS defaults on an installed system |
+| `/usr/share/ifos/repair-dotfiles.sh` | Repair known-broken files in a `~/.config` you already have |
 | `ifos-welcome` | The welcome screen again |
 
 ---

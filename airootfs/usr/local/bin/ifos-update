@@ -6,6 +6,7 @@
 #      ifos-update --ifos-only  skip pacman, just refresh the IFOS files
 #      ifos-only --packages     only pacman -Syu
 #      ifos-update --dotfiles   also refresh your ~/.config from the new defaults
+#      ifos-update --repair     only repair known-broken files in your ~/.config
 #      ifos-update --check      show what would change, change nothing
 #
 #  The IFOS parts of the system - the launcher, the software catalog, the
@@ -13,6 +14,11 @@
 #  repository. This pulls the current version of them onto an installed machine,
 #  so a system installed months ago can be brought up to date without
 #  reinstalling.
+#
+#  Updating the defaults in /etc/skel does not touch a home directory that
+#  already exists, so afterwards this also runs the small, idempotent repairs in
+#  repair-dotfiles.sh against your ~/.config. Those keep your colours; only
+#  --dotfiles replaces your configuration outright.
 #
 #  Package updates come from Arch as usual; this does not hold anything back.
 #
@@ -39,17 +45,45 @@ DO_PACKAGES=1
 DO_IFOS=1
 DO_DOTFILES=0
 CHECK_ONLY=0
+REPAIR_ONLY=0
 
 for arg in "$@"; do
     case $arg in
-        -h|--help)   sed -n '3,20p' "$0" | sed 's/^# \?//'; exit 0 ;;
+        -h|--help)   sed -n '3,25p' "$0" | sed 's/^# \?//'; exit 0 ;;
         --ifos-only) DO_PACKAGES=0 ;;
         --packages)  DO_IFOS=0 ;;
         --dotfiles)  DO_DOTFILES=1 ;;
+        --repair)    REPAIR_ONLY=1; DO_PACKAGES=0 ;;
         --check)     CHECK_ONLY=1 ;;
         *) die "unknown option '$arg' (try --help)" ;;
     esac
 done
+
+# ── Repairs for home directories that already exist ──────────────────────────
+# Prefer the copy in the fresh checkout: on a machine whose ifos-update is a
+# release behind, that is the only one carrying the newest repairs.
+repair_dotfiles() {
+    local script
+    for script in "$REPO_DIR/airootfs/usr/share/ifos/repair-dotfiles.sh" \
+                  /usr/share/ifos/repair-dotfiles.sh; do
+        [[ -f $script ]] || continue
+        info "Checking your configuration for known problems…"
+        if [[ $EUID -eq 0 ]]; then
+            # Run as root: no single "your" home to repair, so do them all.
+            bash "$script" --all-users "$@"
+        else
+            bash "$script" "$@"
+        fi
+        return 0
+    done
+    warn "repair-dotfiles.sh is missing; skipping the configuration repairs."
+}
+
+if (( REPAIR_ONLY )); then
+    (( CHECK_ONLY )) && { repair_dotfiles --check; exit 0; }
+    repair_dotfiles
+    exit 0
+fi
 
 [[ -d /run/archiso ]] && die "This updates an installed system; you are on live media."
 
@@ -91,10 +125,17 @@ printf '\n  installed: %s\n  available: %s (%s)\n\n' "$OLD_COMMIT" "$NEW_COMMIT"
 
 if [[ $OLD_COMMIT == "$NEW_COMMIT" ]]; then
     ok "Already up to date."
-    (( DO_DOTFILES )) || exit 0
+    # The system files are current, but a home directory created before a fix
+    # landed is not, so still look for repairs.
+    if (( CHECK_ONLY )); then
+        repair_dotfiles --check
+        exit 0
+    fi
+    (( DO_DOTFILES )) || { repair_dotfiles; exit 0; }
 fi
 
 if (( CHECK_ONLY )); then
+    repair_dotfiles --check
     info "Changes since $OLD_COMMIT:"
     if [[ $OLD_COMMIT != none ]]; then
         $SUDO git -C "$REPO_DIR" log --oneline "$OLD_COMMIT..$NEW_COMMIT" 2>/dev/null | head -20 \
@@ -131,10 +172,24 @@ if (( DO_DOTFILES )); then
         [[ -f /etc/skel/$f ]] && cp -a "/etc/skel/$f" "$HOME/$f"
     done
     ok "Dotfiles refreshed (your previous ones are in $BACKUP)"
+
+    # The defaults are always the green palette. The stamp lives in
+    # ~/.config/ifos, which /etc/skel does not carry, so it survived the copy -
+    # use it to paint the fresh files back in whichever theme was chosen.
+    THEME_STAMP="${XDG_CONFIG_HOME:-$HOME/.config}/ifos/theme"
+    if [[ -r $THEME_STAMP ]] && command -v ifos-theme >/dev/null; then
+        WANT=$(<"$THEME_STAMP")
+        if [[ -n $WANT && $WANT != ifms ]]; then
+            info "Re-applying your $WANT theme…"
+            ifos-theme "$WANT" >/dev/null && ok "Theme restored: $WANT"
+        fi
+    fi
+
     command -v i3-msg >/dev/null && [[ -n ${DISPLAY:-} ]] && i3-msg restart >/dev/null 2>&1
 else
-    warn "Your ~/.config was left alone. Use --dotfiles to take the new defaults"
-    warn "(your current ones get backed up first)."
+    repair_dotfiles
+    warn "Your ~/.config was otherwise left alone. Use --dotfiles to take the new"
+    warn "defaults (your current ones get backed up first)."
 fi
 
 cat <<EOF
@@ -142,6 +197,7 @@ cat <<EOF
 ${c_grn}✓ IFOS is up to date.${c_reset}
 
     ${c_b}ifos-update --check${c_reset}      see what changed
+    ${c_b}ifos-update --repair${c_reset}     re-check your ~/.config for known problems
     ${c_b}ifos-update --dotfiles${c_reset}   also take the new desktop defaults
 
 EOF

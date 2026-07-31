@@ -36,6 +36,7 @@ file_permissions=(
   ["/usr/local/bin/install-yay"]="0:0:755"
   ["/usr/share/ifos/post-install.sh"]="0:0:755"
   ["/usr/share/ifos/branding-sync.sh"]="0:0:755"
+  ["/usr/share/ifos/repair-dotfiles.sh"]="0:0:755"
   ["/etc/skel/.config/polybar/launch.sh"]="0:0:755"
   ["/etc/skel/.config/picom/launch.sh"]="0:0:755"
   ["/etc/skel/.config/i3/scripts/osd.sh"]="0:0:755"

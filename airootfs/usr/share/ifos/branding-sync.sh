@@ -62,8 +62,9 @@ copy /usr/share/ifos/keybindings.txt
 copy /usr/share/ifos/escola.list
 copy /usr/share/ifos/i3-bigpicture.config
 copy /usr/share/xsessions/ifos-bigpicture.desktop
-copy /usr/share/ifos/post-install.sh   0755
-copy /usr/share/ifos/branding-sync.sh  0755
+copy /usr/share/ifos/post-install.sh     0755
+copy /usr/share/ifos/branding-sync.sh    0755
+copy /usr/share/ifos/repair-dotfiles.sh  0755
 copy /usr/share/ifos/archinstall-preset.json
 
 # Tools
