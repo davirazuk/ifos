@@ -23,7 +23,7 @@ grep -vE '^\s*#|^\s*$' "$PROFILE/packages.x86_64" > "$tmp/iso.txt"
 
 # 2. installed system (the PACKAGES array in install-ifos)
 sed -n '/^PACKAGES=(/,/^)/p' "$PROFILE/airootfs/usr/local/bin/install-ifos" |
-    sed '1d;$d' | tr -s ' ' '\n' | grep -vE '^\s*$|^#' > "$tmp/install.txt"
+    sed '1d;$d' | sed 's/#.*//' | tr -s ' ' '\n' | grep -vE '^\s*$' > "$tmp/install.txt"
 
 # 3. archinstall preset
 python3 - "$PROFILE/airootfs/usr/share/ifos/archinstall-preset.json" > "$tmp/preset.txt" <<'PY'

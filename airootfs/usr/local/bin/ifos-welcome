@@ -51,6 +51,7 @@ menu_dialog() {
     if (( LIVE )); then
         items=(
             install  "Install IFOS on this computer"
+            launcher "Open the IFOS launcher (games, school, Moodle)"
             wifi     "Connect to a network"
             apps     "Install applications (browsers, games, drivers)"
             keys     "Keyboard shortcuts"
@@ -59,6 +60,7 @@ menu_dialog() {
         )
     else
         items=(
+            launcher "Open the IFOS launcher (games, school, Moodle)"
             apps     "Install applications (browsers, games, drivers)"
             keys     "Keyboard shortcuts"
             aur      "Enable AUR access (install yay)"
@@ -78,22 +80,24 @@ menu_plain() {
     if (( LIVE )); then
         printf '%s  Running from live media — nothing has been written to your disks.%s\n\n' "$c_dim" "$c_reset"
         printf '   1) Install IFOS on this computer\n'
-        printf '   2) Connect to a network\n'
-        printf '   3) Install applications\n'
-        printf '   4) Keyboard shortcuts\n'
-        printf '   5) Make room on a disk (GParted)\n'
-        printf '   6) Just give me a terminal\n\n'
+        printf '   2) Open the IFOS launcher\n'
+        printf '   3) Connect to a network\n'
+        printf '   4) Install applications\n'
+        printf '   5) Keyboard shortcuts\n'
+        printf '   6) Make room on a disk (GParted)\n'
+        printf '   7) Just give me a terminal\n\n'
         read -rp "  Choice: " c
-        case $c in 1) echo install;; 2) echo wifi;; 3) echo apps;; 4) echo keys;; 5) echo gparted;; *) echo shell;; esac
+        case $c in 1) echo install;; 2) echo launcher;; 3) echo wifi;; 4) echo apps;; 5) echo keys;; 6) echo gparted;; *) echo shell;; esac
     else
         printf '\n'
-        printf '   1) Install applications\n'
-        printf '   2) Keyboard shortcuts\n'
-        printf '   3) Enable AUR access (install yay)\n'
-        printf '   4) Update the system\n'
-        printf '   5) Close\n\n'
+        printf '   1) Open the IFOS launcher\n'
+        printf '   2) Install applications\n'
+        printf '   3) Keyboard shortcuts\n'
+        printf '   4) Enable AUR access (install yay)\n'
+        printf '   5) Update the system\n'
+        printf '   6) Close\n\n'
         read -rp "  Choice: " c
-        case $c in 1) echo apps;; 2) echo keys;; 3) echo aur;; 4) echo update;; *) echo shell;; esac
+        case $c in 1) echo launcher;; 2) echo apps;; 3) echo keys;; 4) echo aur;; 5) echo update;; *) echo shell;; esac
     fi
 }
 
@@ -106,6 +110,7 @@ while :; do
 
     case ${choice:-shell} in
         install) clear; sudo install-ifos; ;;
+        launcher) (ifos-launcher &) ; clear; mark_done; exit 0 ;;
         wifi)    clear; command -v nmtui >/dev/null && sudo nmtui || sudo iwctl ;;
         apps)    clear; ifos-software ;;
         keys)    clear; less -R /usr/share/ifos/keybindings.txt ;;

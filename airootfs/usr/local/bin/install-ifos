@@ -355,22 +355,53 @@ reflector --latest 20 --sort rate --protocol https --save /etc/pacman.d/mirrorli
     || warn "reflector failed; keeping the existing mirror list."
 
 PACKAGES=(
+    # ── base system ──────────────────────────────────────────────────────────
     base linux linux-firmware linux-headers mkinitcpio
+    # A second kernel to fall back on when an update breaks the first one.
+    linux-lts linux-lts-headers
     amd-ucode intel-ucode
     grub efibootmgr os-prober dosfstools
-    e2fsprogs btrfs-progs exfatprogs ntfsprogs
+    e2fsprogs btrfs-progs exfatprogs ntfs-3g
+    sudo man-db man-pages bash-completion pacman-contrib reflector
+    git vim nano openssh rsync wget curl unzip zip 7zip unrar
+
+    # ── networking ───────────────────────────────────────────────────────────
     networkmanager network-manager-applet nm-connection-editor wpa_supplicant
-    pipewire pipewire-pulse pipewire-alsa wireplumber pavucontrol pamixer
+    ufw
+
+    # ── audio and bluetooth ──────────────────────────────────────────────────
+    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber
+    pavucontrol pamixer playerctl brightnessctl
     bluez bluez-utils blueman
+
+    # ── desktop ──────────────────────────────────────────────────────────────
     xorg-server xorg-xinit xorg-xrandr xorg-xsetroot
     i3-wm i3lock polybar rofi picom dunst feh alacritty
-    thunar gvfs tumbler xarchiver mousepad
+    thunar thunar-volman thunar-archive-plugin gvfs gvfs-mtp gvfs-smb tumbler
+    xarchiver mousepad gthumb
     sddm polkit polkit-gnome plymouth
-    ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji otf-font-awesome
+    xdg-user-dirs xdg-utils xdg-desktop-portal xdg-desktop-portal-gtk
+    maim xclip xdotool arandr htop fastfetch dialog
+    webkit2gtk-4.1 python-gobject adwaita-icon-theme adwaita-cursors
+
+    # ── the applications a student actually needs on day one ─────────────────
+    firefox firefox-i18n-pt-br
+    libreoffice-fresh libreoffice-fresh-pt-br
+    evince vlc mpv
+    ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+    qalculate-gtk
+    flatpak timeshift
+
+    # ── printing and scanning ────────────────────────────────────────────────
+    cups cups-pdf system-config-printer
+
+    # ── fonts and theming ────────────────────────────────────────────────────
+    ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji noto-fonts-cjk
+    noto-fonts-extra ttf-liberation otf-font-awesome
     adw-gtk-theme papirus-icon-theme qt5ct qt6ct kvantum
-    fish git vim nano sudo man-db man-pages bash-completion
-    maim xclip xdotool arandr htop fastfetch brightnessctl playerctl
-    xdg-user-dirs xdg-utils unzip zip 7zip reflector dialog
+
+    # ── shell ────────────────────────────────────────────────────────────────
+    fish
 )
 
 info "Installing the base system — this is the long part…"
@@ -477,6 +508,12 @@ systemctl enable bluetooth.service
 systemctl enable sddm.service
 systemctl enable systemd-timesyncd.service
 systemctl enable fstrim.timer
+systemctl enable cups.service
+systemctl enable ufw.service
+systemctl enable paccache.timer
+ufw default deny incoming  || true
+ufw default allow outgoing || true
+ufw --force enable         || true
 
 if [ -d /sys/firmware/efi/efivars ]; then
     grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=IFOS
