@@ -16,7 +16,6 @@ RUN useradd -m -u 1000 build \
  && printf 'build:1:65535\n' > /etc/subgid \
  && chmod u+s /usr/bin/newuidmap /usr/bin/newgidmap
 
-COPY build-entrypoint.sh /usr/local/bin/build-entrypoint
-RUN chmod 755 /usr/local/bin/build-entrypoint
-
+# build-entrypoint.sh is bind-mounted at run time rather than copied in, so
+# editing it takes effect without rebuilding this image.
 WORKDIR /profile

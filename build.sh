@@ -95,6 +95,7 @@ podman run --rm --privileged \
     -v "$WORK":/work:z,dev,suid,exec \
     -v "$OUT":/out:z \
     -v "$CACHE":/var/cache/pacman/pkg:z,dev,suid,exec \
+    -v "$PROFILE/tools/build-entrypoint.sh":/usr/local/bin/build-entrypoint:ro,z \
     "$IMAGE" \
     build-entrypoint
 
