@@ -63,6 +63,71 @@ for arg in "$@"; do
     esac
 done
 
+# ── The login screen ─────────────────────────────────────────────────────────
+# The theme itself is copied by branding-sync, but SDDM only uses it if
+# something actually selects it - and the selection can be overridden from three
+# places. SDDM reads /usr/lib/sddm/sddm.conf.d/*, then /etc/sddm.conf.d/*, then
+# /etc/sddm.conf, and the last one wins. A stray /etc/sddm.conf therefore beats
+# our drop-in silently, and the greeter falls back to its stock look with no
+# error anywhere.
+configure_sddm() {
+    local theme_dir=/usr/share/sddm/themes/ifos
+    local drop_in=/etc/sddm.conf.d/ifos.conf
+
+    command -v sddm >/dev/null || return 0
+
+    if [[ ! -d $theme_dir ]]; then
+        warn "The IFOS login theme is missing from $theme_dir."
+        warn "Run: sudo ifos-update --ifos-only"
+        return 0
+    fi
+
+    # Make sure our drop-in exists and selects the theme.
+    if [[ ! -f $drop_in ]]; then
+        info "Restoring the IFOS login screen configuration…"
+        $SUDO install -d -m 0755 /etc/sddm.conf.d
+        $SUDO tee "$drop_in" >/dev/null <<'SDDMCFG'
+[General]
+DisplayServer=x11
+Numlock=on
+
+[Theme]
+Current=ifos
+CursorTheme=Adwaita
+CursorSize=24
+
+[Users]
+HideShells=/usr/bin/nologin,/sbin/nologin
+SDDMCFG
+        ok "Login screen configuration restored"
+    elif ! grep -qE '^[[:space:]]*Current[[:space:]]*=[[:space:]]*ifos[[:space:]]*$' "$drop_in"; then
+        info "Selecting the IFOS login theme…"
+        if grep -qE '^[[:space:]]*Current[[:space:]]*=' "$drop_in"; then
+            $SUDO sed -i 's|^[[:space:]]*Current[[:space:]]*=.*|Current=ifos|' "$drop_in"
+        elif grep -q '^\[Theme\]' "$drop_in"; then
+            $SUDO sed -i '/^\[Theme\]/a Current=ifos' "$drop_in"
+        else
+            $SUDO tee -a "$drop_in" >/dev/null <<'SDDMTHEME'
+
+[Theme]
+Current=ifos
+SDDMTHEME
+        fi
+        ok "Login theme selected"
+    fi
+
+    # A single-file /etc/sddm.conf overrides every drop-in. If one exists and
+    # points somewhere else, that is the actual reason the greeter looks stock.
+    if [[ -f /etc/sddm.conf ]] &&
+       grep -qE '^[[:space:]]*Current[[:space:]]*=' /etc/sddm.conf &&
+       ! grep -qE '^[[:space:]]*Current[[:space:]]*=[[:space:]]*ifos[[:space:]]*$' /etc/sddm.conf; then
+        warn "/etc/sddm.conf selects a different theme and overrides the drop-in."
+        info "Pointing it at the IFOS theme…"
+        $SUDO sed -i 's|^[[:space:]]*Current[[:space:]]*=.*|Current=ifos|' /etc/sddm.conf &&
+            ok "/etc/sddm.conf now selects ifos"
+    fi
+}
+
 # ── The boot menu ────────────────────────────────────────────────────────────
 # branding-sync drops the GRUB theme into /usr/share/grub/themes/ifos, but
 # /etc/default/grub is only written by install-ifos. On a machine that is
@@ -199,6 +264,7 @@ $SUDO env IFOS_SOURCE="$REPO_DIR/airootfs" "$SYNC" / || die "Applying the update
 $SUDO sh -c "printf '%s\n' '$NEW_COMMIT' > '$STATE/applied-commit'"
 ok "IFOS files updated to $NEW_COMMIT"
 
+configure_sddm
 configure_grub
 
 # ── The user's own configuration ─────────────────────────────────────────────
