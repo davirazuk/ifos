@@ -4,11 +4,5 @@
 # environment) and functions/ (prompt, `ifos` command, helpers). This file is
 # yours to change.
 
-set fish_greeting ""
-
-if status is-interactive
-    # System information on a new terminal, IFOS style.
-    if type -q fastfetch
-        fastfetch
-    end
-end
+# The greeting itself lives in functions/fish_greeting.fish: full system
+# information in the first shell of a session, one line in the rest.

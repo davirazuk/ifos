@@ -11,6 +11,19 @@ set $menu rofi -show drun
 
 font pango:JetBrainsMono Nerd Font 10
 
+# ── Behaviour ────────────────────────────────────────────────────────────────
+# New windows open as tabs rather than splitting the screen. Plain i3 tiling
+# rearranges everything you already had open every time you start an app, which
+# is disorienting if you have not used a tiling window manager before. Tabbed
+# means each app gets the whole workspace and you move between them with
+# Mod+Left/Right or Alt+Tab - closer to what people expect - while splitting is
+# still one keypress away with Mod+B / Mod+V.
+workspace_layout tabbed
+focus_follows_mouse no
+mouse_warping none
+title_align center
+popup_during_fullscreen smart
+
 # ── Autostart ────────────────────────────────────────────────────────────────
 exec --no-startup-id dunst
 exec --no-startup-id ~/.config/picom/launch.sh
@@ -32,11 +45,12 @@ bindsym $mod+e         exec thunar
 bindsym $mod+g         exec ifos-launcher
 bindsym $mod+Shift+a   exec $termrun ifos-software
 bindsym $mod+Shift+i   exec $termrun sudo install-ifos
+bindsym $mod+q         kill
 bindsym $mod+Shift+q   kill
 bindsym $mod+Shift+c   reload
 bindsym $mod+Shift+r   restart
 bindsym $mod+Shift+e   exec ~/.config/rofi/powermenu.sh
-bindsym $mod+l         exec i3lock -c 1e1e2e -e -f
+bindsym $mod+l         exec i3lock -c 10241d -e -f
 
 # Cheatsheet
 bindsym $mod+F1 exec --no-startup-id xfce4-terminal --title ifos-help -x sh -c 'cat /usr/share/ifos/keybindings.txt; read -n1 -s -p "  press any key "'
@@ -121,6 +135,8 @@ bindsym $mod+Shift+7 move container to workspace number $ws7
 bindsym $mod+Shift+8 move container to workspace number $ws8
 bindsym $mod+Shift+9 move container to workspace number $ws9
 
+# A familiar window switcher, on the key people already reach for.
+bindsym Mod1+Tab        exec --no-startup-id rofi -show window
 bindsym $mod+Tab        workspace back_and_forth
 bindsym $mod+Ctrl+Left  workspace prev
 bindsym $mod+Ctrl+Right workspace next
@@ -154,16 +170,21 @@ for_window [title="^IFOS$"]               fullscreen enable
 for_window [title="ifos-help"]            floating enable, resize set 820 640, move position center
 
 # ── Appearance ───────────────────────────────────────────────────────────────
-gaps inner 8
-gaps outer 4
+gaps inner 10
+gaps outer 6
 smart_gaps on
 smart_borders on
 default_border pixel 2
-default_floating_border pixel 2
+default_floating_border pixel 3
+title_align center
+
+# In a tabbed workspace the tab bar *is* the window decoration, so it needs to
+# be legible rather than hairline-thin.
+for_window [class=".*"] title_format "  %title  "
 
 # class                 border  backgr. text    indicator child_border
-client.focused          #89b4fa #89b4fa #1e1e2e #b4befe   #89b4fa
-client.focused_inactive #313244 #313244 #cdd6f4 #313244   #313244
-client.unfocused        #313244 #1e1e2e #6c7086 #313244   #313244
-client.urgent           #f38ba8 #f38ba8 #1e1e2e #f38ba8   #f38ba8
-client.background       #1e1e2e
+client.focused          #00a86b #00a86b #04150f #7ed957   #00a86b
+client.focused_inactive #1b3a2e #1b3a2e #e8f5e9 #1b3a2e   #1b3a2e
+client.unfocused        #1b3a2e #10241d #7fa392 #1b3a2e   #1b3a2e
+client.urgent           #f38ba8 #f38ba8 #04150f #f38ba8   #f38ba8
+client.background       #10241d

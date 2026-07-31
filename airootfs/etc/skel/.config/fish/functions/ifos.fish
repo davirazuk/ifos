@@ -22,7 +22,7 @@ function ifos --description 'IFOS control command'
         case atalhos keys teclas
             less -R /usr/share/ifos/keybindings.txt
         case update atualizar
-            sudo pacman -Syu $argv[2..-1]
+            ifos-update $argv[2..-1]
         case aur yay
             install-yay
         case info
@@ -38,7 +38,7 @@ function ifos --description 'IFOS control command'
             echo -s '   ' $light 'ifos tema      ' $reset $dim 'alternar tema (ifms | mocha)' $reset
             echo -s '   ' $light 'ifos instalar  ' $reset $dim 'instalar o IFOS no computador' $reset
             echo -s '   ' $light 'ifos atalhos   ' $reset $dim 'lista de atalhos de teclado' $reset
-            echo -s '   ' $light 'ifos update    ' $reset $dim 'atualizar o sistema' $reset
+            echo -s '   ' $light 'ifos update    ' $reset $dim 'atualizar o sistema e o próprio IFOS' $reset
             echo -s '   ' $light 'ifos aur       ' $reset $dim 'habilitar o AUR (instala o yay)' $reset
             echo -s '   ' $light 'ifos info      ' $reset $dim 'informações do sistema' $reset
             echo ''

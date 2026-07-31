@@ -16,7 +16,9 @@ for — games, music, and the rest.
   ╚═╝╚═╝      ╚═════╝ ╚══════╝
 ```
 
-* **Desktop** — i3 + polybar + rofi + picom, dark theme, JetBrains Mono Nerd Font
+* **Desktop** — i3 + polybar + rofi + picom in the IFMS green, JetBrains Mono
+  Nerd Font. New windows open as **tabs**, not splits, so starting an app never
+  rearranges what you already have open
 * **Brazilian by default** — pt-BR locale, ABNT2 keyboard, America/Campo_Grande
 * **Small ISO** — heavy applications are *not* shipped; `ifos-software` installs
   them on demand, from the official repos, the AUR or Flathub
@@ -119,11 +121,36 @@ ifos atalhos      keyboard shortcuts
 Layout: `conf.d/ifos.fish` holds colours, abbreviations and aliases;
 `functions/` holds the prompt and helpers. Both are yours to edit.
 
+## Keeping it up to date
+
+The IFOS parts of the system — the launcher, the catalog, the installer, the
+themes, the login screen — live in this repository, so an installed machine can
+pull them without reinstalling:
+
+```
+ifos-update              # update packages, then the IFOS files
+ifos-update --check      # show what changed, change nothing
+ifos-update --dotfiles   # also take the new desktop defaults (backs yours up)
+ifos-update --ifos-only  # skip pacman
+```
+
+It clones the repo to `/var/lib/ifos/repo`, applies everything under
+`airootfs/` with `branding-sync.sh`, and records the commit it applied so
+`--check` can show you the difference. Your own `~/.config` is left alone
+unless you pass `--dotfiles`.
+
+Point it at your own fork by editing `/etc/ifos/update.conf` — useful for
+running a customised IFOS across a lab of machines.
+
+> The repository has to be **public** (or the machine has to have credentials)
+> for this to work.
+
 ## Other commands
 
 | Command | Purpose |
 | --- | --- |
 | `ifos-launcher` | Full-screen launcher (`Mod+G`) |
+| `ifos-update` | Update packages and pull the latest IFOS from GitHub |
 | `ifos-theme ifms\|mocha` | Switch between the green IFMS theme and Catppuccin Mocha |
 | `install-yay` | Enable AUR access |
 | `ifos-post-install` | Re-apply IFOS defaults on an installed system |

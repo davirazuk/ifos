@@ -11,4 +11,4 @@ configuration {
     sidebar-mode:        false;
 }
 
-@theme "~/.config/rofi/catppuccin-mocha.rasi"
+@theme "~/.config/rofi/ifos.rasi"

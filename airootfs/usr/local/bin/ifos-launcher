@@ -108,6 +108,11 @@ flowboxchild:selected .tile { border-color: #00a86b;
         letter-spacing: 1px; }
 .badge-ready { color: #7ed957; font-size: 10px; letter-spacing: 1px; }
 
+.search { background-color: rgba(16,56,44,0.9); color: #e8f5e9;
+        border: 1px solid rgba(0,168,107,0.35); border-radius: 18px;
+        padding: 6px 14px; caret-color: #00a86b; }
+.search:focus { border-color: #00a86b; }
+
 .footer { background-color: rgba(4,21,15,0.92); padding: 12px 34px; }
 .hint { color: #7fa392; font-size: 12px; }
 .empty { color: #7fa392; font-size: 16px; }
@@ -291,6 +296,7 @@ class Launcher(Gtk.Window):
         self.school_links = load_school_links()
         self.section_index = 0
         self.tab_keys: list[str] = []
+        self._needle = ""
 
         display = Gdk.Display.get_default()
         if display is not None and display.get_n_monitors() > 0:
@@ -378,6 +384,17 @@ class Launcher(Gtk.Window):
         self.clockdate.get_style_context().add_class("clockdate")
         clocks.pack_start(self.clockdate, False, False, 0)
         top.pack_end(clocks, False, False, 0)
+
+        # 120 entries is too many to hunt through by eye.
+        self.search = Gtk.SearchEntry()
+        self.search.set_placeholder_text("Procurar…")
+        self.search.set_size_request(280, 34)
+        self.search.set_valign(Gtk.Align.CENTER)
+        self.search.get_style_context().add_class("search")
+        self.search.connect("search-changed", self._on_search)
+        self.search.connect("activate", self._on_search_activate)
+        top.pack_end(self.search, False, False, 18)
+
         self._tick_clock()
 
         header.pack_start(top, False, False, 0)
@@ -424,7 +441,7 @@ class Launcher(Gtk.Window):
         footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         footer.get_style_context().add_class("footer")
         self.hint = Gtk.Label(
-            label="↑↓←→ navegar    Enter abrir    Tab trocar de seção    Esc sair",
+            label="↑↓←→ navegar    Enter abrir    digite para procurar    Tab trocar de seção    Esc sair",
             xalign=0,
         )
         self.hint.get_style_context().add_class("hint")
@@ -448,8 +465,36 @@ class Launcher(Gtk.Window):
         self.flow.set_margin_end(34)
         self.flow.set_homogeneous(True)
         self.flow.connect("child-activated", self.on_activate)
+        self.flow.set_filter_func(self._filter_tile)
         scroller.add(self.flow)
         return scroller
+
+    def _filter_tile(self, child) -> bool:
+        needle = getattr(self, "_needle", "")
+        if not needle:
+            return True
+        entry = getattr(child.get_child(), "entry", None)
+        if entry is None:
+            return True
+        haystack = " ".join(
+            [entry["name"], entry.get("desc", "")] + entry.get("packages", [])
+        ).lower()
+        return all(word in haystack for word in needle.split())
+
+    def _on_search(self, entry) -> None:
+        self._needle = entry.get_text().strip().lower()
+        self.flow.invalidate_filter()
+        # Keep something selected so Enter always has a target.
+        for child in self.flow.get_children():
+            if child.get_child_visible() and child.get_mapped():
+                self.flow.select_child(child)
+                break
+
+    def _on_search_activate(self, _entry) -> None:
+        visible = [c for c in self.flow.get_children() if c.get_mapped()]
+        if visible:
+            self.flow.select_child(visible[0])
+            self.on_activate(self.flow, visible[0])
 
     def _icon_for(self, entry: dict, info) -> Gtk.Image:
         if entry.get("kind") == "action":
@@ -652,6 +697,10 @@ class Launcher(Gtk.Window):
             else:
                 context.remove_class("active")
 
+        if hasattr(self, "search"):
+            self.search.set_text("")
+            self._needle = ""
+
         if key == "escola-online":
             self.stack.set_visible_child_name("escola-online")
             self.hint.set_text(
@@ -665,7 +714,7 @@ class Launcher(Gtk.Window):
         else:
             self.stack.set_visible_child_name("apps")
             self.hint.set_text(
-                "↑↓←→ navegar    Enter abrir    Tab trocar de seção    Esc sair"
+                "↑↓←→ navegar    Enter abrir    digite para procurar    Tab trocar de seção    Esc sair"
             )
             self.populate(key)
 
@@ -736,7 +785,29 @@ class Launcher(Gtk.Window):
 
     def on_key(self, _widget, event) -> bool:
         key = event.keyval
+
+        # Type-to-search from anywhere, as long as it is a plain character and
+        # the search box does not already have focus.
+        if (self.stack.get_visible_child_name() == "apps"
+                and not self.search.has_focus()
+                and not (event.state & (Gdk.ModifierType.CONTROL_MASK
+                                        | Gdk.ModifierType.MOD1_MASK))):
+            char = Gdk.keyval_to_unicode(key)
+            if char and chr(char).isprintable() and chr(char) != " ":
+                self.search.grab_focus()
+                self.search.set_text(self.search.get_text() + chr(char))
+                self.search.set_position(-1)
+                return True
+
         if key == Gdk.KEY_Escape:
+            # Clear a search before leaving, so Esc never loses the whole view
+            # in one keypress.
+            if self.stack.get_visible_child_name() == "apps" and self.search.get_text():
+                self.search.set_text("")
+                first = self.flow.get_child_at_index(0)
+                if first is not None:
+                    first.grab_focus()
+                return True
             if self.stack.get_visible_child_name() == "escola-online" and self.web is not None:
                 if self.web.can_go_back():
                     self.web.go_back()

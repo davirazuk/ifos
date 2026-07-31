@@ -1,17 +1,18 @@
-/* IFOS — Catppuccin Mocha theme for rofi.
-   Shipped as a real file: the old config referenced @theme "catppuccin-mocha",
-   which does not exist in rofi's built-in theme set, so rofi failed to start. */
+/* IFOS theme for rofi.
+   Shipped as a real file: the config used to reference @theme "catppuccin-mocha",
+   a theme that does not exist in rofi's built-in set, so rofi failed to start.
+   Colours are swapped in place by `ifos-theme`. */
 
 * {
-    base:       #1e1e2e;
-    mantle:     #181825;
-    surface0:   #313244;
-    surface1:   #45475a;
-    text:       #cdd6f4;
-    subtext0:   #a6adc8;
-    overlay0:   #6c7086;
-    blue:       #89b4fa;
-    mauve:      #cba6f7;
+    base:       #10241d;
+    mantle:     #0a1a14;
+    surface0:   #1b3a2e;
+    surface1:   #24503f;
+    text:       #e8f5e9;
+    subtext0:   #b9d4c6;
+    overlay0:   #7fa392;
+    blue:       #00a86b;
+    mauve:      #7ed957;
     red:        #f38ba8;
 
     background-color:   transparent;

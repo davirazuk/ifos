@@ -13,7 +13,10 @@
 set -uo pipefail
 
 TARGET=${1:-/}
-SRC=/                                  # where we are copying *from*
+# Normally we copy from the running system. ifos-update sets IFOS_SOURCE to a
+# fresh git checkout's airootfs, so the same code applies an update.
+SRC="${IFOS_SOURCE:-/}"
+SRC="${SRC%/}"
 [[ -d $TARGET ]] || { echo "branding-sync: no such directory: $TARGET" >&2; exit 1; }
 
 # Resolve to avoid copying a tree onto itself.
@@ -47,6 +50,7 @@ copy /etc/sddm.conf.d/ifos.conf
 copy /usr/share/plymouth/themes/ifos
 copy /etc/plymouth/plymouthd.conf
 copy /etc/systemd/system/ifos-fontcache.service
+copy /etc/ifos/update.conf
 
 # Distribution identity
 copy /etc/os-release
@@ -60,7 +64,8 @@ copy /usr/share/ifos/branding-sync.sh  0755
 copy /usr/share/ifos/archinstall-preset.json
 
 # Tools
-for t in ifos-software ifos-welcome ifos-post-install ifos-theme ifos-launcher ifos-bigpicture install-yay; do
+for t in ifos-software ifos-welcome ifos-post-install ifos-theme ifos-launcher \
+         ifos-bigpicture ifos-update install-yay; do
     copy "/usr/local/bin/$t" 0755
 done
 

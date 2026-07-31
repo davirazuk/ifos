@@ -16,7 +16,13 @@
     Mod + F1               this cheatsheet
 
   WINDOWS
+    New windows open as TABS, not splits - opening an app never rearranges
+    what you already have open. Mod+B / Mod+V split deliberately.
+
+    Mod + q                close window
     Mod + Shift + q        close window
+    Alt + Tab              window switcher
+    Mod + ← / →            previous / next tab
     Mod + h j k ;          focus left / down / up / right   (arrows work too)
     Mod + Shift + h j k ;  move window
     Mod + f                fullscreen
@@ -63,6 +69,7 @@
     ifos-software          install browsers, games, drivers, office, dev tools
     install-ifos           install IFOS to disk (live medium)
     install-yay            enable AUR access
+    ifos-update            update the system and pull the latest IFOS from GitHub
     ifos-post-install      re-apply IFOS defaults on an installed system
     nmtui                  text-mode network configuration
     fastfetch              system information

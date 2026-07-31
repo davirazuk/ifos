@@ -3,7 +3,7 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: root
-    color: "#1e1e2e"
+    color: "#10241d"
 
     // SDDM passes the chosen session by index. This has to be a real property:
     // the previous version assigned to a bare `sessionIndex`, which is an error
@@ -39,7 +39,7 @@ Rectangle {
 
     Rectangle {
         anchors.fill: parent
-        color: "#1e1e2e"
+        color: "#10241d"
         opacity: 0.55
     }
 
@@ -50,8 +50,8 @@ Rectangle {
         width: 360
         height: 390
         radius: 16
-        color: "#1e1e2e"
-        border.color: "#313244"
+        color: "#10241d"
+        border.color: "#1b3a2e"
         border.width: 1
 
         Column {
@@ -64,14 +64,14 @@ Rectangle {
                 font.pixelSize: 38
                 font.bold: true
                 font.family: "JetBrainsMono Nerd Font"
-                color: "#89b4fa"
+                color: "#00a86b"
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
             Text {
                 text: "Welcome back"
                 font.pixelSize: 13
-                color: "#6c7086"
+                color: "#7fa392"
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
@@ -82,12 +82,12 @@ Rectangle {
                 placeholderText: "Username"
                 text: userModel.lastUser
                 font.pixelSize: 13
-                color: "#cdd6f4"
+                color: "#e8f5e9"
                 leftPadding: 14
                 background: Rectangle {
-                    color: "#313244"
+                    color: "#1b3a2e"
                     radius: 8
-                    border.color: userField.activeFocus ? "#89b4fa" : "#45475a"
+                    border.color: userField.activeFocus ? "#00a86b" : "#24503f"
                     border.width: 1
                 }
                 KeyNavigation.tab: passField
@@ -101,12 +101,12 @@ Rectangle {
                 placeholderText: "Password"
                 echoMode: TextInput.Password
                 font.pixelSize: 13
-                color: "#cdd6f4"
+                color: "#e8f5e9"
                 leftPadding: 14
                 background: Rectangle {
-                    color: "#313244"
+                    color: "#1b3a2e"
                     radius: 8
-                    border.color: passField.activeFocus ? "#89b4fa" : "#45475a"
+                    border.color: passField.activeFocus ? "#00a86b" : "#24503f"
                     border.width: 1
                 }
                 Keys.onReturnPressed: root.attemptLogin()
@@ -127,14 +127,14 @@ Rectangle {
                 width: parent.width
                 height: 42
                 radius: 8
-                color: loginMouse.pressed ? "#7ca9f0" : "#89b4fa"
+                color: loginMouse.pressed ? "#00c47d" : "#00a86b"
 
                 Text {
                     anchors.centerIn: parent
                     text: "Log in"
                     font.pixelSize: 13
                     font.bold: true
-                    color: "#1e1e2e"
+                    color: "#10241d"
                 }
 
                 MouseArea {
@@ -160,14 +160,14 @@ Rectangle {
             font.pixelSize: 42
             font.bold: true
             font.family: "JetBrainsMono Nerd Font"
-            color: "#cdd6f4"
+            color: "#e8f5e9"
         }
 
         Text {
             id: dateText
             anchors.horizontalCenter: parent.horizontalCenter
             font.pixelSize: 14
-            color: "#6c7086"
+            color: "#7fa392"
         }
     }
 
@@ -193,13 +193,13 @@ Rectangle {
         font.pixelSize: 11
 
         background: Rectangle {
-            color: "#313244"
+            color: "#1b3a2e"
             radius: 6
         }
         contentItem: Text {
             leftPadding: 10
             text: sessionSelect.displayText
-            color: "#cdd6f4"
+            color: "#e8f5e9"
             font: sessionSelect.font
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
@@ -215,7 +215,7 @@ Rectangle {
 
         Rectangle {
             width: 36; height: 36; radius: 8
-            color: shutMouse.pressed ? "#f38ba8" : "#313244"
+            color: shutMouse.pressed ? "#f38ba8" : "#1b3a2e"
             Text { anchors.centerIn: parent; text: "⏻"; color: "#f38ba8"; font.pixelSize: 16 }
             MouseArea {
                 id: shutMouse
@@ -227,7 +227,7 @@ Rectangle {
 
         Rectangle {
             width: 36; height: 36; radius: 8
-            color: rebootMouse.pressed ? "#f9e2af" : "#313244"
+            color: rebootMouse.pressed ? "#f9e2af" : "#1b3a2e"
             Text { anchors.centerIn: parent; text: "⟳"; color: "#f9e2af"; font.pixelSize: 16 }
             MouseArea {
                 id: rebootMouse

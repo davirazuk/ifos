@@ -20,13 +20,13 @@
     enable_recursive_icon_lookup = true
 
 [urgency_low]
-    background = "#1e1e2e"
-    foreground = "#cdd6f4"
+    background = "#10241d"
+    foreground = "#e8f5e9"
     timeout = 5
 
 [urgency_normal]
-    background = "#1e1e2e"
-    foreground = "#cdd6f4"
+    background = "#10241d"
+    foreground = "#e8f5e9"
     timeout = 8
 
 [urgency_critical]

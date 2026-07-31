@@ -42,6 +42,7 @@ file_permissions=(
   ["/etc/skel/.xinitrc"]="0:0:755"
   ["/usr/local/bin/ifos-theme"]="0:0:755"
   ["/usr/local/bin/ifos-launcher"]="0:0:755"
+  ["/usr/local/bin/ifos-update"]="0:0:755"
   ["/usr/local/bin/ifos-bigpicture"]="0:0:755"
   ["/etc/skel/.config/polybar/scripts/network.sh"]="0:0:755"
   ["/etc/skel/.config/polybar/scripts/battery.sh"]="0:0:755"

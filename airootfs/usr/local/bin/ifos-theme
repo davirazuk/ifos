@@ -1,86 +1,118 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  ifos-theme — switch between the IFOS colour schemes
+#  ifos-theme — switch the whole desktop between colour schemes
 #
-#      ifos-theme            show the current theme
-#      ifos-theme ifms       institutional green (default — IFMS Dourados)
-#      ifos-theme mocha      Catppuccin Mocha blue/mauve
+#      ifos-theme              show the current theme
+#      ifos-theme ifms         institutional green (default)
+#      ifos-theme mocha        Catppuccin Mocha
+#      ifos-theme ifms --system   also change the login screen (asks for sudo)
 #
-#  Swaps the wallpaper and the accent colour used by i3, polybar and rofi.
-#  Run it as your normal user; add --system (as root) to also change the login
-#  screen background for everyone.
+#  Swaps the wallpaper and every colour in the i3, polybar, rofi, dunst and
+#  terminal configuration. Works on whichever palette is currently applied, so
+#  it can be run repeatedly without drifting.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
 BG_DIR=/usr/share/backgrounds
 STAMP="$CFG/ifos/theme"
+THEMES="ifms mocha"
 
-# theme       accent   accent-dim
-declare -A ACCENT=( [ifms]="#00a86b" [mocha]="#89b4fa" )
-declare -A ACCENT2=( [ifms]="#7ed957" [mocha]="#cba6f7" )
+# Same roles in both palettes, in the same order, so switching is a positional
+# substitution: background, surface, hover, text, dim, accent, accent-2.
+#              bg       surface  hover    text     dim      accent   accent2
+# Quoted: an unquoted # starts a comment inside an array literal.
+ifms_palette=('#10241d' '#1b3a2e' '#24503f' '#e8f5e9' '#7fa392' '#00a86b' '#7ed957')
+mocha_palette=('#1e1e2e' '#313244' '#45475a' '#cdd6f4' '#6c7086' '#89b4fa' '#cba6f7')
+# Extra colours that only differ by name
+ifms_deep=('#0a1a14' '#b9d4c6' '#04150f' '#00c47d')
+mocha_deep=('#181825' '#a6adc8' '#11111b' '#7ca9f0')
 
 usage() { sed -n '3,12p' "$0" | sed 's/^# \?//'; }
+current() { [[ -f $STAMP ]] && cat "$STAMP" || echo ifms; }
 
-current() { [[ -f $STAMP ]] && cat "$STAMP" || echo "ifms"; }
+THEME=""
+SYSTEM=0
+for arg in "$@"; do
+    case $arg in
+        -h|--help) usage; exit 0 ;;
+        --system)  SYSTEM=1 ;;
+        ifms|mocha) THEME=$arg ;;
+        *) echo "ifos-theme: unknown argument '$arg' (try ifms or mocha)" >&2; exit 1 ;;
+    esac
+done
 
-if [[ $# -eq 0 ]]; then
-    echo "Current theme: $(current)"
-    echo "Available:     ${!ACCENT[*]}"
+if [[ -z $THEME ]]; then
+    printf 'Current theme: %s\nAvailable:     %s\n' "$(current)" "$THEMES"
     exit 0
 fi
 
-THEME=$1
-case $THEME in
-    -h|--help) usage; exit 0 ;;
-    ifms|mocha) ;;
-    *) echo "Unknown theme: $THEME (try ifms or mocha)" >&2; exit 1 ;;
-esac
+FROM=$(current)
+[[ $FROM == "$THEME" ]] && FROM=$( [[ $THEME == ifms ]] && echo mocha || echo ifms )
+
+# shellcheck disable=SC2178
+declare -n from_pal="${FROM}_palette"  to_pal="${THEME}_palette"
+declare -n from_deep="${FROM}_deep"    to_deep="${THEME}_deep"
 
 WALL="$BG_DIR/ifos-$THEME.png"
-[[ -f $WALL ]] || { echo "Missing wallpaper: $WALL" >&2; exit 1; }
+[[ -f $WALL ]] || { echo "ifos-theme: missing wallpaper $WALL" >&2; exit 1; }
 
-acc=${ACCENT[$THEME]}
-acc2=${ACCENT2[$THEME]}
+# ── Recolour the configuration ───────────────────────────────────────────────
+recolour() {
+    local file=$1 i expr=""
+    [[ -f $file ]] || return 0
+    for i in "${!from_pal[@]}"; do
+        expr+="s/${from_pal[i]}/${to_pal[i]}/gI;"
+        expr+="s/${from_pal[i]#\#}/${to_pal[i]#\#}/gI;"
+    done
+    for i in "${!from_deep[@]}"; do
+        expr+="s/${from_deep[i]}/${to_deep[i]}/gI;"
+        expr+="s/${from_deep[i]#\#}/${to_deep[i]#\#}/gI;"
+    done
+    sed -i "$expr" "$file"
+}
+
+for f in "$CFG/i3/config" "$CFG/polybar/config.ini" "$CFG/rofi/ifos.rasi" \
+         "$CFG/dunst/dunstrc" "$CFG/alacritty/alacritty.toml" \
+         "$CFG/xfce4/terminal/terminalrc"; do
+    recolour "$f"
+done
 
 # ── Wallpaper ────────────────────────────────────────────────────────────────
-if command -v feh >/dev/null && [[ -n ${DISPLAY:-} ]]; then
-    feh --no-fehbg --bg-fill "$WALL"
-fi
-# Make it stick across restarts of i3
 if [[ -f $CFG/i3/config ]]; then
     sed -i "s|feh --no-fehbg --bg-fill .*|feh --no-fehbg --bg-fill $WALL|" "$CFG/i3/config"
 fi
-
-# ── Accent colour ────────────────────────────────────────────────────────────
-old_accents='#89b4fa|#00a86b'
-old_accents2='#cba6f7|#7ed957'
-
-if [[ -f $CFG/i3/config ]]; then
-    sed -ri "s/($old_accents)/$acc/g; s/($old_accents2)/$acc2/g" "$CFG/i3/config"
-fi
-if [[ -f $CFG/polybar/config.ini ]]; then
-    sed -ri "s/^(blue\s*=\s*).*/\1$acc/; s/^(mauve\s*=\s*).*/\1$acc2/" "$CFG/polybar/config.ini"
-fi
-if [[ -f $CFG/rofi/catppuccin-mocha.rasi ]]; then
-    sed -ri "s/^(\s*blue:\s*).*/\1$acc;/; s/^(\s*mauve:\s*).*/\1$acc2;/" "$CFG/rofi/catppuccin-mocha.rasi"
+if command -v feh >/dev/null && [[ -n ${DISPLAY:-} ]]; then
+    feh --no-fehbg --bg-fill "$WALL"
 fi
 
 mkdir -p "$(dirname "$STAMP")"; echo "$THEME" >"$STAMP"
 
-# ── Reload ───────────────────────────────────────────────────────────────────
-command -v i3-msg >/dev/null && [[ -n ${DISPLAY:-} ]] && i3-msg reload >/dev/null 2>&1
+# ── Reload what is running ───────────────────────────────────────────────────
+if [[ -n ${DISPLAY:-} ]]; then
+    command -v i3-msg >/dev/null && i3-msg reload >/dev/null 2>&1
+    pkill -USR1 -x dunst 2>/dev/null
+    [[ -x $CFG/polybar/launch.sh ]] && "$CFG/polybar/launch.sh" >/dev/null 2>&1 &
+fi
 
-# ── Login screen (optional, needs root) ──────────────────────────────────────
-if [[ ${2:-} == --system || ${1:-} == --system ]]; then
-    if [[ $EUID -eq 0 ]]; then
-        cp "$WALL" /usr/share/sddm/themes/ifos/background.png
-        cp "$WALL" "$BG_DIR/ifos.png"
-        echo "Login screen background updated."
-    else
-        sudo cp "$WALL" /usr/share/sddm/themes/ifos/background.png
-        sudo cp "$WALL" "$BG_DIR/ifos.png"
-    fi
+# ── Login screen ─────────────────────────────────────────────────────────────
+if (( SYSTEM )); then
+    SUDO=""; [[ $EUID -ne 0 ]] && SUDO=sudo
+    $SUDO cp "$WALL" /usr/share/sddm/themes/ifos/background.png 2>/dev/null
+    $SUDO cp "$WALL" "$BG_DIR/ifos.png" 2>/dev/null
+    $SUDO env FROM="$FROM" THEME="$THEME" sh -c '
+        f=/usr/share/sddm/themes/ifos/Main.qml
+        [ -f "$f" ] || exit 0
+        if [ "$THEME" = mocha ]; then
+            sed -i "s/#10241d/#1e1e2e/g; s/#1b3a2e/#313244/g; s/#24503f/#45475a/g;
+                    s/#e8f5e9/#cdd6f4/g; s/#7fa392/#6c7086/g; s/#00a86b/#89b4fa/g;
+                    s/#00c47d/#7ca9f0/g" "$f"
+        else
+            sed -i "s/#1e1e2e/#10241d/g; s/#313244/#1b3a2e/g; s/#45475a/#24503f/g;
+                    s/#cdd6f4/#e8f5e9/g; s/#6c7086/#7fa392/g; s/#89b4fa/#00a86b/g;
+                    s/#7ca9f0/#00c47d/g" "$f"
+        fi'
+    echo "Login screen updated."
 fi
 
 echo "Theme set to $THEME."
