@@ -69,6 +69,8 @@ copy /etc/ifos/update.conf
 copy /etc/os-release
 copy /usr/share/ifos/apps.d
 copy /usr/share/ifos/keybindings.txt
+copy /usr/share/ifos/logo.txt
+copy /usr/share/icons/hicolor/scalable/apps/ifos-logo.svg
 copy /usr/share/ifos/escola.list
 copy /usr/share/ifos/i3-bigpicture.config
 copy /usr/share/xsessions/ifos-bigpicture.desktop
@@ -87,5 +89,20 @@ done
 copy /usr/share/applications/ifos-software.desktop
 copy /usr/share/applications/ifos-welcome.desktop
 copy /usr/share/applications/ifos-launcher.desktop
+
+# ── Did any of that actually land? ───────────────────────────────────────────
+# copy() hides cp's errors, so a copy that fails leaves no trace: a missing
+# login theme just turns into SDDM quietly drawing its built-in greeter, with
+# nothing on screen to say why. Name the ones worth checking.
+missing=0
+for p in /usr/share/sddm/themes/ifos/Main.qml \
+         /usr/share/sddm/themes/ifos/metadata.desktop \
+         /etc/skel/.config/rofi/ifos.rasi \
+         /etc/skel/.config/i3/config \
+         /usr/share/ifos/apps.d \
+         /usr/local/bin/ifos-software; do
+    [[ -e "$TARGET$p" ]] || { echo "  !! did not copy: $p" >&2; missing=$((missing + 1)); }
+done
+(( missing )) && echo "==> $missing expected file(s) are missing from ${TARGET:-/}" >&2
 
 echo "==> Done"
