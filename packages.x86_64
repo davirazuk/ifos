@@ -222,6 +222,10 @@ adwaita-cursors
 
 # Session management / privileges
 sddm
+# sddm-greeter links against Qt5, not qt6-declarative. Without this the ifos
+# login theme's `import QtQuick.Controls 2.15` fails to resolve and SDDM
+# silently falls back to its bundled default theme.
+qt5-quickcontrols2
 polkit
 polkit-gnome
 
