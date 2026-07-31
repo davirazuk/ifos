@@ -210,6 +210,11 @@ zip
 7zip
 xdg-user-dirs
 
+# IFOS launcher (full-screen front end, embedded Moodle view)
+webkit2gtk-4.1
+adwaita-icon-theme
+adwaita-cursors
+
 # Session management / privileges
 sddm
 polkit

@@ -1,0 +1,14 @@
+# Serviços online do IFMS mostrados na aba "Escola Online" do ifos-launcher.
+# Formato:  Nome|URL|Descrição
+#
+# O primeiro da lista é aberto automaticamente. Edite à vontade — o launcher
+# relê este arquivo a cada vez que abre.
+
+Moodle (AVEA)|https://ead.ifms.edu.br/|Ambiente Virtual de Ensino e Aprendizagem
+Sistema Acadêmico|https://academico.ifms.edu.br/|Notas, faltas, boletim e horários (login gov.br)
+SUAP|https://suap.ifms.edu.br/|Sistema Unificado de Administração Pública
+Acesso a Sistemas|https://www.ifms.edu.br/acesso-a-sistemas|Todos os sistemas do IFMS num lugar só
+Espaço do Estudante|https://www.ifms.edu.br/assuntos/estudante|Calendário, biblioteca, assistência, estágio
+Campus Dourados|https://www.ifms.edu.br/campi/campus-dourados|Notícias e informações do campus
+Webmail|https://mail.google.com/a/estudante.ifms.edu.br|E-mail institucional
+Biblioteca (Pergamum)|https://biblioteca.ifms.edu.br/|Consulta e renovação de livros

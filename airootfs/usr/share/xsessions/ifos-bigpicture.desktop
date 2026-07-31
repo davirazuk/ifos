@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=XSession
+Name=IFOS Big Picture
+Comment=Boot straight into the full-screen IFOS launcher
+Exec=/usr/local/bin/ifos-bigpicture
+DesktopNames=IFOS

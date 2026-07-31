@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IFOS Launcher
+GenericName=Full-screen launcher
+Comment=Jogos, escola e Moodle numa tela só
+Exec=ifos-launcher
+Icon=applications-other
+Terminal=false
+Categories=System;Game;Education;
+Keywords=launcher;jogos;escola;moodle;games;

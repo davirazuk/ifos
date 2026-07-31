@@ -51,17 +51,21 @@ copy /etc/plymouth/plymouthd.conf
 copy /etc/os-release
 copy /usr/share/ifos/apps.d
 copy /usr/share/ifos/keybindings.txt
+copy /usr/share/ifos/escola.list
+copy /usr/share/ifos/i3-bigpicture.config
+copy /usr/share/xsessions/ifos-bigpicture.desktop
 copy /usr/share/ifos/post-install.sh   0755
 copy /usr/share/ifos/branding-sync.sh  0755
 copy /usr/share/ifos/archinstall-preset.json
 
 # Tools
-for t in ifos-software ifos-welcome ifos-post-install install-yay; do
+for t in ifos-software ifos-welcome ifos-post-install ifos-theme ifos-launcher ifos-bigpicture install-yay; do
     copy "/usr/local/bin/$t" 0755
 done
 
 # Applications menu entries
 copy /usr/share/applications/ifos-software.desktop
 copy /usr/share/applications/ifos-welcome.desktop
+copy /usr/share/applications/ifos-launcher.desktop
 
 echo "==> Done"

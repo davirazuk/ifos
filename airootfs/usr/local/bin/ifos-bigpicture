@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+#  ifos-bigpicture — the "console" session
+#
+#  Picked from the login screen, this starts i3 with a stripped-down config
+#  whose only job is to keep the launcher fullscreen and let applications
+#  launched from it take over the screen. Closing the launcher ends the session,
+#  the way a console returns to its dashboard.
+# ─────────────────────────────────────────────────────────────────────────────
+set -u
+
+CONFIG=/usr/share/ifos/i3-bigpicture.config
+[ -r "$CONFIG" ] || CONFIG=/etc/i3/config
+
+[ -f /etc/xprofile ] && . /etc/xprofile
+[ -f "$HOME/.xprofile" ] && . "$HOME/.xprofile"
+
+exec i3 -c "$CONFIG"

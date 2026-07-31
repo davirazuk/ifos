@@ -1,53 +1,85 @@
 # IFOS software catalog — Escola / School
 #
-# Everything a technical-course student is likely to be told to install, grouped
-# so it can be pulled down in one go on the first day. Organised by subject area
-# rather than by course name, so it stays useful as the course list changes.
+# Cobertura das disciplinas técnicas: programação, web, banco de dados, redes,
+# eletrônica e automação, manutenção e suporte, desenho técnico/CAD, matemática
+# e estudo. Organizado por área, não por nome de curso, para continuar útil
+# quando a oferta mudar.
+#
+# Os "Kits" no topo instalam de uma vez tudo que uma área costuma pedir.
 
-# ── Programação / Programming ────────────────────────────────────────────────
-Programação — básico|Editor, compiladores C/C++, Python e Git (VS Code, gcc, gdb, python)|code base-devel gdb python python-pip git|repo
-Java (JDK)|OpenJDK 21 e ferramentas Java|jdk-openjdk|repo
+# ── Kits por área (instalam tudo de uma vez) ─────────────────────────────────
+Kit Informática|Tudo para as disciplinas de programação: VS Code, compiladores, Python, Java, Node e Git|code base-devel gdb python python-pip nodejs npm jdk-openjdk git|repo
+Kit Redes|Tudo para redes: Wireshark, nmap, terminal serial, DNS e testes de banda|wireshark-qt nmap traceroute openbsd-netcat iperf3 whois minicom bind net-tools|repo
+Kit Eletrônica|Tudo para eletrônica e automação: KiCad, ferramentas Arduino e terminal serial|kicad kicad-library arduino-cli avrdude minicom|repo
+Kit Manutenção e Suporte|Tudo para manutenção: diagnóstico, recuperação de dados e particionamento|hwinfo inxi lshw dmidecode smartmontools testdisk ddrescue gparted stress|repo
+Kit Banco de Dados|MariaDB, PostgreSQL, SQLite e um cliente gráfico|mariadb postgresql sqlite sqlitebrowser dbeaver|repo
+Kit Escritório (pt-BR)|LibreOffice completo em português|libreoffice-fresh libreoffice-fresh-pt-br|repo
+
+# ── Programação ──────────────────────────────────────────────────────────────
+Visual Studio Code|Editor da Microsoft, build open source|code|repo
+Compiladores C/C++|GCC, make, gdb e ferramentas de build|base-devel gdb|repo
+Python|Interpretador, pip e ambiente virtual|python python-pip python-virtualenv|repo
 Python científico|NumPy, Pandas, Matplotlib e Jupyter|python-numpy python-pandas python-matplotlib jupyterlab|repo
-Node.js e web|Node, npm e ferramentas de front-end|nodejs npm|repo
+Java (JDK)|OpenJDK e ferramentas Java|jdk-openjdk|repo
+Node.js|JavaScript no servidor, com npm|nodejs npm|repo
+C# / .NET|SDK do .NET para C#|dotnet-sdk|repo
 PHP e Apache|Stack web clássica para as aulas de Internet|php php-apache apache|repo
+Composer|Gerenciador de dependências do PHP|composer|repo
+nginx|Servidor web alternativo ao Apache|nginx|repo
+Git (ferramentas)|lazygit, delta e GitHub CLI|lazygit git-delta github-cli|repo
 IDEs JetBrains|IntelliJ, PyCharm, CLion via Toolbox|jetbrains-toolbox|aur
+Postman / Insomnia|Testar APIs REST|insomnia|aur
 
-# ── Banco de dados / Databases ───────────────────────────────────────────────
+# ── Banco de dados ───────────────────────────────────────────────────────────
 MariaDB (MySQL)|Servidor de banco de dados relacional|mariadb|repo
 PostgreSQL|Servidor de banco de dados relacional|postgresql|repo
 DBeaver|Cliente gráfico universal de banco de dados|dbeaver|repo
 SQLite Browser|Visualizador e editor de bancos SQLite|sqlitebrowser|repo
 
-# ── Redes / Networking ───────────────────────────────────────────────────────
+# ── Redes ────────────────────────────────────────────────────────────────────
 Wireshark|Analisador de tráfego de rede|wireshark-qt|repo
-Ferramentas de rede|nmap, traceroute, netcat, iperf3 e whois|nmap traceroute openbsd-netcat iperf3 whois|repo
+Ferramentas de rede|nmap, traceroute, netcat, iperf3 e whois|nmap traceroute openbsd-netcat iperf3 whois net-tools|repo
+Terminal serial|minicom e picocom para console de switches e roteadores|minicom picocom|repo
+Servidor DNS (BIND)|Laboratórios de DNS|bind|repo
+Servidor SSH|Acesso remoto por SSH|openssh|repo
+Servidor TFTP|Transferência de imagens para equipamentos de rede|tftp-hpa|repo
 GNS3|Simulador de topologias de rede|gns3-gui gns3-server|aur
 Cisco Packet Tracer|Simulador de redes da Cisco (requer conta Netacad)|packettracer|aur
-Servidor SSH|Acesso remoto por SSH|openssh|repo
 
-# ── Eletrônica e automação / Electronics ─────────────────────────────────────
+# ── Eletrônica, automação e robótica ─────────────────────────────────────────
 Arduino IDE|Programação de placas Arduino|arduino-ide|aur
+Arduino CLI|Compilar e gravar placas pela linha de comando|arduino-cli avrdude|repo
+PlatformIO|Ambiente para microcontroladores dentro do VS Code|platformio-core|repo
 KiCad|Projeto de esquemas e placas de circuito impresso|kicad kicad-library kicad-library-3d|repo
-Fritzing|Prototipagem eletrônica didática|fritzing|aur
+Simulação de circuitos|ngspice e interface gráfica|ngspice|repo
 Digital / Logisim|Simulador de circuitos lógicos|logisim-evolution|aur
+Fritzing|Prototipagem eletrônica didática|fritzing|aur
 
-# ── Manutenção e suporte / Maintenance & support ─────────────────────────────
-Diagnóstico de hardware|Informações e testes de hardware|hardinfo2 lshw dmidecode stress|repo
+# ── Desenho técnico e CAD ────────────────────────────────────────────────────
+FreeCAD|Modelagem 3D paramétrica|freecad|repo
+LibreCAD|Desenho técnico 2D, estilo AutoCAD|librecad|repo
+QGIS|Geoprocessamento e mapas|qgis|repo
+
+# ── Manutenção e suporte ─────────────────────────────────────────────────────
+Diagnóstico de hardware|Informações e testes de hardware|hwinfo inxi lshw dmidecode stress|repo
 Gravação de imagens|Ventoy e balenaEtcher para pendrives inicializáveis|ventoy balena-etcher|aur
 Acesso remoto|RustDesk e AnyDesk para suporte remoto|rustdesk-bin anydesk-bin|aur
 Recuperação de dados|TestDisk, PhotoRec e ddrescue|testdisk ddrescue|repo
+Teste de disco e memória|SMART e teste de memória|smartmontools memtest86+|repo
 
-# ── Estudo / Study ───────────────────────────────────────────────────────────
-LibreOffice (pt-BR)|Suíte de escritório com corretor ortográfico em português|libreoffice-fresh libreoffice-fresh-pt-br|repo
-Corretor ortográfico pt-BR|Dicionário Hunspell de português brasileiro|hunspell-pt-br|aur
+# ── Matemática e estudo ──────────────────────────────────────────────────────
 GeoGebra|Matemática, geometria e gráficos|org.geogebra.GeoGebra|flatpak
 Octave|Cálculo numérico, alternativa livre ao MATLAB|octave|repo
+Maxima|Álgebra simbólica (CAS)|maxima|repo
+wxMaxima|Interface gráfica para o Maxima|wxmaxima|aur
+Qalculate|Calculadora científica avançada|qalculate-gtk|repo
 Anki|Repetição espaçada para memorização|anki|repo
 Zotero|Gerenciador de referências bibliográficas|zotero|aur
 draw.io|Diagramas, fluxogramas e UML|drawio-desktop-bin|aur
 Obsidian|Cadernos e anotações em Markdown|obsidian|repo
+Corretor ortográfico pt-BR|Dicionário Hunspell de português brasileiro|hunspell-pt-br|aur
 
-# ── Virtualização / Virtualisation ───────────────────────────────────────────
+# ── Virtualização ────────────────────────────────────────────────────────────
 VirtualBox|Máquinas virtuais (usado em muitas disciplinas)|virtualbox virtualbox-host-dkms linux-headers|repo
 QEMU / KVM|Virtualização nativa com interface gráfica|qemu-desktop libvirt virt-manager dnsmasq edk2-ovmf|repo
 Docker|Contêineres|docker docker-compose|repo

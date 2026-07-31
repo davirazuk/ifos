@@ -1,0 +1,806 @@
+#!/usr/bin/env python3
+# ─────────────────────────────────────────────────────────────────────────────
+#  ifos-launcher — full-screen front end for everything on the machine
+#
+#  Gamescope puts a game in a controlled fullscreen session. This does the same
+#  for the whole purpose of IFOS: one screen, big tiles, navigable with keyboard
+#  or gamepad, covering the school software and the games equally — plus a built
+#  in Moodle front end so the AVEA is one keypress away with no browser
+#  installed at all.
+#
+#  Sections come from the same catalog ifos-software uses
+#  (/usr/share/ifos/apps.d/*.list), so anything added there appears here too.
+#  School web services come from /usr/share/ifos/escola.list.
+#
+#      ifos-launcher                    open the launcher
+#      ifos-launcher --category jogos   start on a given section
+#      ifos-launcher --no-gamepad
+#
+#  Navigation:  arrows / d-pad move · Enter or A opens · Tab or shoulder
+#               buttons change section · Esc or B goes back / closes
+# ─────────────────────────────────────────────────────────────────────────────
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+from datetime import datetime
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
+
+# WebKit is what makes the Moodle tab an actual front end rather than a
+# bookmark. It is optional: without it the school page degrades to link tiles
+# that open in whatever browser is installed.
+HAVE_WEBKIT = False
+for _api in ("4.1", "4.0"):
+    try:
+        gi.require_version("WebKit2", _api)
+        from gi.repository import WebKit2  # noqa: E402
+
+        HAVE_WEBKIT = True
+        break
+    except (ValueError, ImportError):
+        continue
+
+CATALOG_DIR = os.environ.get("IFOS_CATALOG_DIR", "/usr/share/ifos/apps.d")
+SCHOOL_LIST = os.environ.get("IFOS_SCHOOL_LIST", "/usr/share/ifos/escola.list")
+WALLPAPER = "/usr/share/backgrounds/ifos.png"
+
+SECTION_TITLES = {
+    "escola": "Escola",
+    "browsers": "Internet",
+    "gaming": "Jogos",
+    "development": "Programação",
+    "media": "Mídia",
+    "musica": "Música",
+    "office": "Escritório",
+    "utilities": "Utilitários",
+    "hardware": "Hardware",
+}
+
+SECTION_ICONS = {
+    "escola": "applications-education",
+    "browsers": "web-browser",
+    "gaming": "applications-games",
+    "development": "applications-development",
+    "media": "applications-multimedia",
+    "musica": "audio-x-generic",
+    "office": "applications-office",
+    "utilities": "applications-utilities",
+    "hardware": "preferences-desktop-peripherals",
+}
+
+CSS_TEMPLATE = """
+window { background-color: #061c15; }
+.backdrop { background-image: url("%(wallpaper)s");
+            background-size: cover; background-position: center; }
+.scrim { background: linear-gradient(rgba(5,26,20,0.72), rgba(5,26,20,0.93)); }
+
+.header { padding: 22px 34px 0 34px; }
+.brand { color: #ffffff; font-size: 30px; font-weight: bold; letter-spacing: 6px; }
+.subtitle { color: #7ed957; font-size: 12px; letter-spacing: 1px; }
+.clock { color: #e8f5e9; font-size: 22px; font-weight: bold; }
+.clockdate { color: #7fa392; font-size: 12px; }
+
+.tabs { padding: 6px 34px 16px 34px; }
+.tab { background: transparent; color: #9fbfb0; border: none; outline: none;
+       padding: 9px 18px; font-size: 14px; border-radius: 20px; }
+.tab:hover { background-color: rgba(0,168,107,0.20); color: #ffffff; }
+.tab.active { background-color: #00a86b; color: #04150f; font-weight: bold; }
+
+flowboxchild { border-radius: 16px; padding: 0; }
+.tile { background-color: rgba(16,56,44,0.82); border-radius: 16px;
+        padding: 20px 14px; border: 2px solid rgba(255,255,255,0.05); }
+.tile:hover { background-color: rgba(22,73,58,0.95); }
+flowboxchild:selected .tile { border-color: #00a86b;
+        background-color: rgba(22,73,58,0.98); }
+.tile-name { color: #ffffff; font-size: 15px; font-weight: bold; }
+.tile-desc { color: #9fbfb0; font-size: 11px; }
+.badge-install { color: #f9e2af; font-size: 10px; font-weight: bold;
+        letter-spacing: 1px; }
+.badge-ready { color: #7ed957; font-size: 10px; letter-spacing: 1px; }
+
+.footer { background-color: rgba(4,21,15,0.92); padding: 12px 34px; }
+.hint { color: #7fa392; font-size: 12px; }
+.empty { color: #7fa392; font-size: 16px; }
+
+.sidebar { background-color: rgba(4,21,15,0.92); padding: 10px; }
+.sidebar-item { background: transparent; color: #cfe4d9; border: none;
+        padding: 12px 16px; border-radius: 10px; font-size: 14px; }
+.sidebar-item:hover { background-color: rgba(0,168,107,0.22); color: #ffffff; }
+.sidebar-item.active { background-color: #00a86b; color: #04150f; font-weight: bold; }
+.sidebar-title { color: #7ed957; font-size: 11px; font-weight: bold;
+        letter-spacing: 2px; padding: 10px 16px 4px 16px; }
+.webbar { background-color: rgba(4,21,15,0.92); padding: 8px 12px; }
+.weburl { color: #7fa392; font-size: 11px; }
+"""
+
+
+def sh(cmd: list[str]) -> str:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+# ── data ─────────────────────────────────────────────────────────────────────
+class Catalog:
+    def __init__(self) -> None:
+        self.installed_pkgs = {
+            line.strip() for line in sh(["pacman", "-Qq"]).splitlines() if line.strip()
+        }
+        self.flatpaks = {
+            line.split()[0]
+            for line in sh(["flatpak", "list", "--app", "--columns=application"]).splitlines()
+            if line.strip()
+        }
+        self.appinfos = [a for a in Gio.AppInfo.get_all() if a.should_show()]
+        self.sections: list[tuple[str, str, list[dict]]] = []   # (key, title, entries)
+        self._load_catalog()
+        self._add_all_apps()
+        self._add_system()
+
+    # catalog files -----------------------------------------------------------
+    def _load_catalog(self) -> None:
+        if not os.path.isdir(CATALOG_DIR):
+            return
+        for filename in sorted(os.listdir(CATALOG_DIR)):
+            if not filename.endswith(".list"):
+                continue
+            stem = re.sub(r"^\d+-", "", filename[: -len(".list")])
+            entries = []
+            with open(os.path.join(CATALOG_DIR, filename), encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    parts = line.split("|")
+                    if len(parts) < 3:
+                        continue
+                    packages = parts[2].split()
+                    source = parts[3].strip() if len(parts) > 3 else "repo"
+                    entries.append(
+                        {
+                            "kind": "package",
+                            "name": parts[0].strip(),
+                            "desc": parts[1].strip(),
+                            "packages": packages,
+                            "source": source,
+                            "category": stem,
+                            "installed": self._is_installed(packages, source),
+                        }
+                    )
+            if entries:
+                self.sections.append((stem, SECTION_TITLES.get(stem, stem.capitalize()), entries))
+
+    def _is_installed(self, packages: list[str], source: str) -> bool:
+        if source == "flatpak":
+            return all(p in self.flatpaks for p in packages)
+        return all(p in self.installed_pkgs for p in packages)
+
+    # everything with a .desktop file, so nothing is unreachable ---------------
+    def _add_all_apps(self) -> None:
+        entries = []
+        for info in sorted(self.appinfos, key=lambda a: (a.get_display_name() or "").lower()):
+            name = info.get_display_name() or info.get_name() or ""
+            if not name:
+                continue
+            entries.append(
+                {
+                    "kind": "app",
+                    "name": name,
+                    "desc": info.get_description() or "",
+                    "appinfo": info,
+                    "category": "todos",
+                    "installed": True,
+                }
+            )
+        if entries:
+            self.sections.append(("todos", "Todos", entries))
+
+    def _add_system(self) -> None:
+        entries = [
+            ("IFOS Software", "Instalar programas, jogos e drivers",
+             "system-software-install", "ifos-software", True),
+            ("Instalar o IFOS", "Instalar o sistema neste computador",
+             "drive-harddisk", "sudo install-ifos", os.path.isdir("/run/archiso")),
+            ("Tema", "Alternar entre o tema IFMS e o Catppuccin",
+             "preferences-desktop-theme", "ifos-theme ifms", True),
+            ("Rede", "Configurar Wi-Fi e conexões",
+             "network-wireless", "nm-connection-editor", True),
+            ("Áudio", "Volume e dispositivos de som",
+             "audio-volume-high", "pavucontrol", True),
+            ("Monitores", "Resolução e disposição das telas",
+             "video-display", "arandr", True),
+            ("Arquivos", "Gerenciador de arquivos",
+             "system-file-manager", "thunar", True),
+            ("Terminal", "Linha de comando",
+             "utilities-terminal", "alacritty", True),
+            ("Bloquear tela", "Trancar a sessão",
+             "system-lock-screen", "i3lock -c 1e1e2e -e -f", True),
+            ("Reiniciar", "Reiniciar o computador",
+             "system-reboot", "systemctl reboot", True),
+            ("Desligar", "Desligar o computador",
+             "system-shutdown", "systemctl poweroff", True),
+        ]
+        items = [
+            {
+                "kind": "action",
+                "name": name,
+                "desc": desc,
+                "icon": icon,
+                "command": command,
+                "category": "sistema",
+                "installed": True,
+            }
+            for name, desc, icon, command, show in entries
+            if show
+        ]
+        self.sections.append(("sistema", "Sistema", items))
+
+    # matching ---------------------------------------------------------------
+    def find_appinfo(self, entry: dict):
+        if entry.get("kind") == "app":
+            return entry["appinfo"]
+        wanted = {p.lower() for p in entry.get("packages", [])}
+        wanted.add(entry["name"].split()[0].lower())
+        for info in self.appinfos:
+            ident = (info.get_id() or "").lower().removesuffix(".desktop")
+            executable = os.path.basename(info.get_executable() or "").lower()
+            if ident in wanted or executable in wanted:
+                return info
+        target = entry["name"].lower()
+        for info in self.appinfos:
+            if (info.get_display_name() or "").lower() == target:
+                return info
+        return None
+
+
+def load_school_links() -> list[tuple[str, str, str]]:
+    links = []
+    if os.path.exists(SCHOOL_LIST):
+        with open(SCHOOL_LIST, encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("|")
+                if len(parts) >= 2:
+                    links.append(
+                        (parts[0].strip(), parts[1].strip(),
+                         parts[2].strip() if len(parts) > 2 else "")
+                    )
+    if not links:
+        links = [("Moodle (AVEA)", "https://ead.ifms.edu.br/", "")]
+    return links
+
+
+# ── the window ───────────────────────────────────────────────────────────────
+class Launcher(Gtk.Window):
+    def __init__(self, catalog: Catalog, start: str | None, use_gamepad: bool) -> None:
+        super().__init__(title="IFOS")
+        self.catalog = catalog
+        self.school_links = load_school_links()
+        self.section_index = 0
+        self.tab_keys: list[str] = []
+
+        display = Gdk.Display.get_default()
+        if display is not None and display.get_n_monitors() > 0:
+            geometry = display.get_monitor(0).get_geometry()
+            self.set_default_size(geometry.width, geometry.height)
+        else:
+            self.set_default_size(1366, 768)
+        self.fullscreen()
+        self.connect("destroy", Gtk.main_quit)
+        self.connect("key-press-event", self.on_key)
+
+        settings = Gtk.Settings.get_default()
+        if settings is not None:
+            theme = Gtk.IconTheme.get_default()
+            current = settings.get_property("gtk-icon-theme-name") or ""
+            if not theme.has_icon("applications-education"):
+                for candidate in ("Papirus-Dark", "Papirus", "Adwaita", "hicolor"):
+                    settings.set_property("gtk-icon-theme-name", candidate)
+                    if Gtk.IconTheme.get_default().has_icon("applications-education"):
+                        break
+                else:
+                    settings.set_property("gtk-icon-theme-name", current or "Adwaita")
+
+        css = CSS_TEMPLATE % {"wallpaper": WALLPAPER if os.path.exists(WALLPAPER) else ""}
+        provider = Gtk.CssProvider()
+        provider.load_from_data(css.encode())
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        backdrop = Gtk.Box()
+        backdrop.get_style_context().add_class("backdrop")
+        self.add(backdrop)
+
+        scrim = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        scrim.get_style_context().add_class("scrim")
+        backdrop.pack_start(scrim, True, True, 0)
+
+        scrim.pack_start(self._build_header(), False, False, 0)
+
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(140)
+        scrim.pack_start(self.stack, True, True, 0)
+
+        self.stack.add_named(self._build_apps_page(), "apps")
+        self.stack.add_named(self._build_school_page(), "escola-online")
+
+        scrim.pack_start(self._build_footer(), False, False, 0)
+
+        # Section 0 is whatever the catalog put first; honour --category.
+        if start:
+            for index, key in enumerate(self.tab_keys):
+                if key.lower().startswith(start.lower()):
+                    self.section_index = index
+                    break
+        self.select_tab(self.section_index)
+
+        GLib.timeout_add_seconds(10, self._tick_clock)
+        if use_gamepad:
+            self.attach_gamepad()
+
+    # header -----------------------------------------------------------------
+    def _build_header(self) -> Gtk.Widget:
+        header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        top.get_style_context().add_class("header")
+
+        titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        brand = Gtk.Label(label="I F O S", xalign=0)
+        brand.get_style_context().add_class("brand")
+        titles.pack_start(brand, False, False, 0)
+        subtitle = Gtk.Label(label="IFMS · CAMPUS DOURADOS", xalign=0)
+        subtitle.get_style_context().add_class("subtitle")
+        titles.pack_start(subtitle, False, False, 0)
+        top.pack_start(titles, False, False, 0)
+
+        clocks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        clocks.set_halign(Gtk.Align.END)
+        self.clock = Gtk.Label(xalign=1)
+        self.clock.get_style_context().add_class("clock")
+        clocks.pack_start(self.clock, False, False, 0)
+        self.clockdate = Gtk.Label(xalign=1)
+        self.clockdate.get_style_context().add_class("clockdate")
+        clocks.pack_start(self.clockdate, False, False, 0)
+        top.pack_end(clocks, False, False, 0)
+        self._tick_clock()
+
+        header.pack_start(top, False, False, 0)
+
+        tabs_scroller = Gtk.ScrolledWindow()
+        tabs_scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        tabs.get_style_context().add_class("tabs")
+        self.tab_buttons = []
+
+        def add_tab(key: str, label: str) -> None:
+            button = Gtk.Button(label=label)
+            button.get_style_context().add_class("tab")
+            button.set_relief(Gtk.ReliefStyle.NONE)
+            button.set_can_focus(False)
+            index = len(self.tab_keys)
+            button.connect("clicked", lambda _b, i=index: self.select_tab(i))
+            tabs.pack_start(button, False, False, 0)
+            self.tab_buttons.append(button)
+            self.tab_keys.append(key)
+
+        # Escola Online sits right after Escola: school first, by design.
+        for key, title, _ in self.catalog.sections:
+            add_tab(key, title)
+            if key == "escola":
+                add_tab("escola-online", "Escola Online")
+        if "escola-online" not in self.tab_keys:
+            add_tab("escola-online", "Escola Online")
+
+        tabs_scroller.add(tabs)
+        header.pack_start(tabs_scroller, False, False, 0)
+        return header
+
+    def _tick_clock(self) -> bool:
+        now = datetime.now()
+        self.clock.set_text(now.strftime("%H:%M"))
+        try:
+            self.clockdate.set_text(now.strftime("%A, %d de %B").capitalize())
+        except ValueError:
+            self.clockdate.set_text(now.strftime("%d/%m/%Y"))
+        return True
+
+    def _build_footer(self) -> Gtk.Widget:
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        footer.get_style_context().add_class("footer")
+        self.hint = Gtk.Label(
+            label="↑↓←→ navegar    Enter abrir    Tab trocar de seção    Esc sair",
+            xalign=0,
+        )
+        self.hint.get_style_context().add_class("hint")
+        footer.pack_start(self.hint, True, True, 0)
+        return footer
+
+    # apps page --------------------------------------------------------------
+    def _build_apps_page(self) -> Gtk.Widget:
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.flow = Gtk.FlowBox()
+        self.flow.set_valign(Gtk.Align.START)
+        self.flow.set_max_children_per_line(7)
+        self.flow.set_min_children_per_line(2)
+        self.flow.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.flow.set_row_spacing(16)
+        self.flow.set_column_spacing(16)
+        self.flow.set_margin_top(10)
+        self.flow.set_margin_bottom(24)
+        self.flow.set_margin_start(34)
+        self.flow.set_margin_end(34)
+        self.flow.set_homogeneous(True)
+        self.flow.connect("child-activated", self.on_activate)
+        scroller.add(self.flow)
+        return scroller
+
+    def _icon_for(self, entry: dict, info) -> Gtk.Image:
+        if entry.get("kind") == "action":
+            image = Gtk.Image.new_from_icon_name(entry["icon"], Gtk.IconSize.DIALOG)
+            image.set_pixel_size(56)
+            return image
+        if info is not None:
+            gicon = info.get_icon()
+            if gicon is not None:
+                image = Gtk.Image.new_from_gicon(gicon, Gtk.IconSize.DIALOG)
+                image.set_pixel_size(56)
+                return image
+        theme = Gtk.IconTheme.get_default()
+        candidates = list(entry.get("packages", []))
+        candidates.append(entry["name"].split()[0].lower())
+        candidates.append(re.sub(r"[^a-z0-9]+", "-", entry["name"].lower()).strip("-"))
+        for name in candidates:
+            if name and theme.has_icon(name):
+                image = Gtk.Image.new_from_icon_name(name, Gtk.IconSize.DIALOG)
+                image.set_pixel_size(56)
+                return image
+        fallback = SECTION_ICONS.get(entry.get("category", ""), "application-x-executable")
+        image = Gtk.Image.new_from_icon_name(fallback, Gtk.IconSize.DIALOG)
+        image.set_pixel_size(56)
+        return image
+
+    def _make_tile(self, entry: dict) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        box.get_style_context().add_class("tile")
+
+        info = self.catalog.find_appinfo(entry) if entry["installed"] else None
+        box.pack_start(self._icon_for(entry, info), False, False, 0)
+
+        name = Gtk.Label(label=entry["name"])
+        name.get_style_context().add_class("tile-name")
+        name.set_line_wrap(True)
+        name.set_justify(Gtk.Justification.CENTER)
+        name.set_max_width_chars(16)
+        name.set_lines(2)
+        name.set_ellipsize(Pango.EllipsizeMode.END)
+        box.pack_start(name, False, False, 0)
+
+        if entry["desc"]:
+            desc = Gtk.Label(label=entry["desc"])
+            desc.get_style_context().add_class("tile-desc")
+            desc.set_line_wrap(True)
+            desc.set_justify(Gtk.Justification.CENTER)
+            desc.set_max_width_chars(22)
+            desc.set_lines(2)
+            desc.set_ellipsize(Pango.EllipsizeMode.END)
+            box.pack_start(desc, False, False, 0)
+
+        if entry.get("kind") == "package":
+            badge = Gtk.Label(label="PRONTO" if entry["installed"] else "INSTALAR")
+            badge.get_style_context().add_class(
+                "badge-ready" if entry["installed"] else "badge-install"
+            )
+            box.pack_start(badge, False, False, 0)
+
+        box.entry = entry
+        box.appinfo = info
+        return box
+
+    def populate(self, key: str) -> None:
+        for child in self.flow.get_children():
+            self.flow.remove(child)
+
+        entries: list[dict] = []
+        for section_key, _title, section_entries in self.catalog.sections:
+            if section_key == key:
+                entries = section_entries
+                break
+
+        if not entries:
+            label = Gtk.Label(label="Nada aqui ainda.")
+            label.get_style_context().add_class("empty")
+            self.flow.add(label)
+            self.flow.show_all()
+            return
+
+        if key in ("todos", "sistema"):
+            ordered = entries
+        else:
+            ordered = sorted(entries, key=lambda e: (not e["installed"], e["name"].lower()))
+
+        for entry in ordered:
+            self.flow.add(self._make_tile(entry))
+
+        self.flow.show_all()
+        first = self.flow.get_child_at_index(0)
+        if first is not None:
+            self.flow.select_child(first)
+            first.grab_focus()
+
+    # school page ------------------------------------------------------------
+    def _build_school_page(self) -> Gtk.Widget:
+        page = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+
+        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        sidebar.get_style_context().add_class("sidebar")
+        sidebar.set_size_request(280, -1)
+
+        title = Gtk.Label(label="SERVIÇOS DO IFMS", xalign=0)
+        title.get_style_context().add_class("sidebar-title")
+        sidebar.pack_start(title, False, False, 0)
+
+        self.school_buttons = []
+        for index, (name, url, desc) in enumerate(self.school_links):
+            button = Gtk.Button(label=name)
+            button.get_style_context().add_class("sidebar-item")
+            button.set_relief(Gtk.ReliefStyle.NONE)
+            button.set_tooltip_text(desc or url)
+            button.connect("clicked", lambda _b, i=index: self.open_school(i))
+            sidebar.pack_start(button, False, False, 0)
+            self.school_buttons.append(button)
+
+        external = Gtk.Button(label="Abrir no navegador")
+        external.get_style_context().add_class("sidebar-item")
+        external.set_relief(Gtk.ReliefStyle.NONE)
+        external.connect("clicked", self.open_in_browser)
+        sidebar.pack_end(external, False, False, 0)
+
+        page.pack_start(sidebar, False, False, 0)
+
+        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        if HAVE_WEBKIT:
+            bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            bar.get_style_context().add_class("webbar")
+            for icon, callback in (
+                ("go-previous-symbolic", lambda _b: self.web.go_back()),
+                ("go-next-symbolic", lambda _b: self.web.go_forward()),
+                ("view-refresh-symbolic", lambda _b: self.web.reload()),
+                ("go-home-symbolic", lambda _b: self.open_school(self.school_index)),
+            ):
+                button = Gtk.Button.new_from_icon_name(icon, Gtk.IconSize.BUTTON)
+                button.set_relief(Gtk.ReliefStyle.NONE)
+                button.set_can_focus(False)
+                button.connect("clicked", callback)
+                bar.pack_start(button, False, False, 0)
+            self.urllabel = Gtk.Label(xalign=0)
+            self.urllabel.get_style_context().add_class("weburl")
+            self.urllabel.set_ellipsize(Pango.EllipsizeMode.END)
+            bar.pack_start(self.urllabel, True, True, 0)
+            right.pack_start(bar, False, False, 0)
+
+            self.web = WebKit2.WebView()
+            settings = self.web.get_settings()
+            settings.set_property("enable-developer-extras", False)
+            self.web.connect(
+                "load-changed",
+                lambda view, _e: self.urllabel.set_text(view.get_uri() or ""),
+            )
+            right.pack_start(self.web, True, True, 0)
+        else:
+            self.web = None
+            notice = Gtk.Label(
+                label="O visualizador embutido não está disponível.\n"
+                      "Escolha um serviço à esquerda para abrí-lo no navegador."
+            )
+            notice.get_style_context().add_class("empty")
+            notice.set_justify(Gtk.Justification.CENTER)
+            right.pack_start(notice, True, True, 0)
+
+        page.pack_start(right, True, True, 0)
+        self.school_index = 0
+        return page
+
+    def open_school(self, index: int) -> None:
+        self.school_index = index
+        name, url, _desc = self.school_links[index]
+        for i, button in enumerate(self.school_buttons):
+            context = button.get_style_context()
+            if i == index:
+                context.add_class("active")
+            else:
+                context.remove_class("active")
+        if self.web is not None:
+            self.web.load_uri(url)
+        else:
+            Gio.AppInfo.launch_default_for_uri(url, None)
+
+    def open_in_browser(self, _button=None) -> None:
+        url = self.school_links[self.school_index][1]
+        if self.web is not None and self.web.get_uri():
+            url = self.web.get_uri()
+        Gio.AppInfo.launch_default_for_uri(url, None)
+
+    # navigation -------------------------------------------------------------
+    def select_tab(self, index: int) -> None:
+        if not self.tab_keys:
+            return
+        self.section_index = index % len(self.tab_keys)
+        key = self.tab_keys[self.section_index]
+
+        for i, button in enumerate(self.tab_buttons):
+            context = button.get_style_context()
+            if i == self.section_index:
+                context.add_class("active")
+            else:
+                context.remove_class("active")
+
+        if key == "escola-online":
+            self.stack.set_visible_child_name("escola-online")
+            self.hint.set_text(
+                "Tab trocar de seção    Esc sair    "
+                + ("navegue com o mouse ou Tab" if HAVE_WEBKIT else "")
+            )
+            if self.web is not None and not self.web.get_uri():
+                self.open_school(0)
+            elif self.web is None:
+                self.open_school(self.school_index)
+        else:
+            self.stack.set_visible_child_name("apps")
+            self.hint.set_text(
+                "↑↓←→ navegar    Enter abrir    Tab trocar de seção    Esc sair"
+            )
+            self.populate(key)
+
+    def switch_section(self, delta: int) -> None:
+        self.select_tab(self.section_index + delta)
+
+    # actions ----------------------------------------------------------------
+    def on_activate(self, _flow, child) -> None:
+        tile = child.get_child()
+        entry = getattr(tile, "entry", None)
+        if entry is None:
+            return
+
+        if entry["kind"] == "action":
+            self.spawn(entry["command"])
+            if entry["command"].startswith("systemctl") or "i3lock" in entry["command"]:
+                return
+            Gtk.main_quit()
+            return
+
+        if not entry["installed"]:
+            self.install(entry)
+            return
+
+        info = getattr(tile, "appinfo", None) or self.catalog.find_appinfo(entry)
+        if info is not None:
+            info.launch(None, None)
+            Gtk.main_quit()
+            return
+
+        command = next((p for p in entry.get("packages", []) if shutil.which(p)), None)
+        if command:
+            self.spawn(command)
+            Gtk.main_quit()
+        else:
+            self.notify("Não foi possível iniciar %s." % entry["name"])
+
+    def spawn(self, command: str) -> None:
+        try:
+            subprocess.Popen(["/bin/sh", "-c", command], start_new_session=True)
+        except OSError as exc:
+            self.notify("Falha ao executar: %s" % exc)
+
+    def install(self, entry: dict) -> None:
+        terminal = next((t for t in ("alacritty", "xterm") if shutil.which(t)), None)
+        if terminal is None:
+            self.notify("Nenhum terminal disponível para instalar.")
+            return
+        try:
+            subprocess.Popen(
+                [terminal, "-e", "ifos-software", "--install", entry["name"]],
+                start_new_session=True,
+            )
+            Gtk.main_quit()
+        except OSError as exc:
+            self.notify("Falha ao instalar: %s" % exc)
+
+    def notify(self, message: str) -> None:
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK, text=message,
+        )
+        dialog.run()
+        dialog.destroy()
+
+    def on_key(self, _widget, event) -> bool:
+        key = event.keyval
+        if key == Gdk.KEY_Escape:
+            if self.stack.get_visible_child_name() == "escola-online" and self.web is not None:
+                if self.web.can_go_back():
+                    self.web.go_back()
+                    return True
+            Gtk.main_quit()
+            return True
+        if key in (Gdk.KEY_Tab, Gdk.KEY_Page_Down):
+            self.switch_section(1)
+            return True
+        if key in (Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Page_Up):
+            self.switch_section(-1)
+            return True
+        return False
+
+    # gamepad ----------------------------------------------------------------
+    def attach_gamepad(self) -> None:
+        for index in range(4):
+            path = "/dev/input/js%d" % index
+            if not os.path.exists(path):
+                continue
+            try:
+                stream = open(path, "rb", buffering=0)
+            except OSError:
+                continue
+            GLib.io_add_watch(stream.fileno(), GLib.IO_IN, self._on_gamepad, stream)
+            return
+
+    def _on_gamepad(self, _fd, _condition, stream) -> bool:
+        data = stream.read(8)
+        if not data or len(data) < 8:
+            return True
+        _time, value, ev_type, number = struct.unpack("<IhBB", data)
+        if ev_type & 0x01 and value == 1:
+            if number == 0:
+                selected = self.flow.get_selected_children()
+                if selected:
+                    self.on_activate(self.flow, selected[0])
+            elif number == 1:
+                Gtk.main_quit()
+            elif number == 4:
+                self.switch_section(-1)
+            elif number == 5:
+                self.switch_section(1)
+        elif ev_type & 0x02 and abs(value) >= 20000:
+            if number in (0, 6):
+                self.flow.child_focus(
+                    Gtk.DirectionType.RIGHT if value > 0 else Gtk.DirectionType.LEFT
+                )
+            elif number in (1, 7):
+                self.flow.child_focus(
+                    Gtk.DirectionType.DOWN if value > 0 else Gtk.DirectionType.UP
+                )
+        return True
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="IFOS full-screen launcher")
+    parser.add_argument("--category", help="section to open on start (escola, jogos, ...)")
+    parser.add_argument("--no-gamepad", action="store_true", help="skip gamepad input")
+    args = parser.parse_args()
+
+    window = Launcher(Catalog(), args.category, not args.no_gamepad)
+    window.show_all()
+    Gtk.main()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

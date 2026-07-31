@@ -27,6 +27,7 @@ exec --no-startup-id ifos-welcome --autostart
 bindsym $mod+Return    exec $term
 bindsym $mod+d         exec $menu
 bindsym $mod+e         exec thunar
+bindsym $mod+g         exec ifos-launcher
 bindsym $mod+Shift+a   exec $term -e ifos-software
 bindsym $mod+Shift+i   exec $term -e sudo install-ifos
 bindsym $mod+Shift+q   kill
@@ -147,6 +148,7 @@ for_window [class="Arandr"]               floating enable
 for_window [class="Gparted"]              floating enable
 for_window [class="Nm-connection-editor"] floating enable
 for_window [class="ifos-welcome"]         floating enable, resize set 900 620, move position center
+for_window [title="^IFOS$"]               fullscreen enable
 for_window [class="ifos-help"]            floating enable, resize set 820 640, move position center
 
 # ── Appearance ───────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@
     Mod + Return           terminal (alacritty)
     Mod + d                application launcher
     Mod + e                file manager
+    Mod + g                IFOS Launcher — tela cheia: jogos, escola, Moodle
     Mod + Shift + a        IFOS Software — install apps on demand
     Mod + Shift + i        install IFOS to disk
     Mod + F1               this cheatsheet
@@ -47,7 +48,18 @@
     Media keys             play / pause / next / previous
     Mod + Shift + m        audio mixer (pavucontrol)
 
+  NO TERMINAL (fish)
+    ifos                   menu de comandos do IFOS
+    ifos apps              instalar programas
+    ifos escola            Moodle e sistemas do IFMS
+    ifos jogos             seção de jogos
+    ifos atalhos           esta lista
+    extract <arquivo>      extrair qualquer arquivo compactado
+    mkcd <dir>             criar um diretório e entrar nele
+    up 2                   subir dois diretórios
+
   USEFUL COMMANDS
+    ifos-launcher          full-screen launcher (games, school, Moodle)
     ifos-software          install browsers, games, drivers, office, dev tools
     install-ifos           install IFOS to disk (live medium)
     install-yay            enable AUR access

@@ -85,10 +85,45 @@ Name|Description|package1 package2|source
 (builds with yay) or `flatpak` (Flathub application id). Adding software to IFOS
 means adding a line to a text file — no code involved.
 
+## The launcher
+
+`ifos-launcher` (or `Mod+G`) is a full-screen front end over the whole system —
+big tiles, keyboard or gamepad navigation, one section per subject area. It
+reads the same catalog as `ifos-software`, so installed applications launch and
+missing ones offer to install themselves.
+
+It also carries a built-in **Moodle front end**: the *Escola Online* section
+embeds a browser pointed at the IFMS AVEA, with the academic system, SUAP, the
+library and webmail one click away in the sidebar. That works on a fresh install
+with no browser installed at all. The links live in
+`airootfs/usr/share/ifos/escola.list` — plain text, edit freely.
+
+Picking **IFOS Big Picture** at the login screen boots straight into it, console
+style: the launcher *is* the session, and closing it ends the session.
+
+## The shell
+
+fish, configured as an IFOS environment rather than left at defaults: a
+two-line prompt with git state and command timing, Catppuccin-derived colours on
+the IFOS green, abbreviations that expand as you type (`gs`, `pu`, `..`), and
+helpers — `extract`, `mkcd`, `up`. Everything is reachable through one command:
+
+```
+ifos              menu of everything
+ifos apps         install software
+ifos escola       Moodle and the IFMS systems
+ifos jogos        games
+ifos atalhos      keyboard shortcuts
+```
+
+Layout: `conf.d/ifos.fish` holds colours, abbreviations and aliases;
+`functions/` holds the prompt and helpers. Both are yours to edit.
+
 ## Other commands
 
 | Command | Purpose |
 | --- | --- |
+| `ifos-launcher` | Full-screen launcher (`Mod+G`) |
 | `ifos-theme ifms\|mocha` | Switch between the green IFMS theme and Catppuccin Mocha |
 | `install-yay` | Enable AUR access |
 | `ifos-post-install` | Re-apply IFOS defaults on an installed system |
