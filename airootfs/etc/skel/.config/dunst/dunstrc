@@ -1,18 +1,23 @@
 [global]
     monitor = 0
     follow = mouse
-    width = 300
-    height = 100
+    width = 340
+    # dunst 1.12 replaced the single-number height and NxN offset with tuples;
+    # the old forms still work but warn on every start.
+    height = (0, 180)
     origin = top-right
-    offset = 10x10
+    offset = (12, 12)
     separator_height = 2
-    padding = 10
-    horizontal_padding = 10
+    padding = 12
+    horizontal_padding = 12
     frame_width = 2
-    frame_color = "#89b4fa"
+    frame_color = "#00a86b"
     font = JetBrainsMono Nerd Font 10
     format = "<b>%s</b>\n%b"
-    corner_radius = 6
+    corner_radius = 8
+    gap_size = 6
+    icon_theme = "Papirus-Dark, Adwaita"
+    enable_recursive_icon_lookup = true
 
 [urgency_low]
     background = "#1e1e2e"
@@ -27,4 +32,5 @@
 [urgency_critical]
     background = "#f38ba8"
     foreground = "#1e1e2e"
+    frame_color = "#f38ba8"
     timeout = 0

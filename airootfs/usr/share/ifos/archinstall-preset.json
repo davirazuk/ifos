@@ -34,7 +34,7 @@
     "optional_repositories": ["multilib"]
   },
   "packages": [
-    "alacritty", "fish", "polybar", "picom", "rofi", "dunst", "feh",
+    "xfce4-terminal", "alacritty", "fish", "polybar", "picom", "rofi", "dunst", "feh",
     "i3-wm", "i3lock", "thunar", "gvfs", "tumbler", "xarchiver", "mousepad",
     "sddm", "polkit", "polkit-gnome", "plymouth",
     "networkmanager", "network-manager-applet", "nm-connection-editor",

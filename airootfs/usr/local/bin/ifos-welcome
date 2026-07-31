@@ -20,7 +20,11 @@ fi
 # i3 autostarts this with no terminal attached, so put ourselves in one.
 if [[ ! -t 1 && -z ${IFOS_WELCOME_TERM:-} ]]; then
     export IFOS_WELCOME_TERM=1
-    if command -v alacritty >/dev/null; then
+    # xfce4-terminal first: it draws with cairo, so it works on machines with
+    # no usable OpenGL where alacritty comes up blank.
+    if command -v xfce4-terminal >/dev/null; then
+        exec xfce4-terminal --title ifos-welcome --hide-menubar -x "$0" "$@"
+    elif command -v alacritty >/dev/null; then
         exec alacritty --class ifos-welcome -e "$0" "$@"
     elif command -v xterm >/dev/null; then
         exec xterm -class ifos-welcome -e "$0" "$@"
@@ -74,38 +78,66 @@ menu_dialog() {
         18 72 8 "${items[@]}" 3>&1 1>&2 2>&3
 }
 
+# Writes straight to the terminal and sets `choice` itself. It must not be run
+# inside $( ), or the whole menu is swallowed by the command substitution and
+# the script sits invisibly on the read - which is exactly what used to happen:
+# a blank window that looked like a crash.
 menu_plain() {
-    clear; banner
-    printf '\n%s  Welcome to IFOS%s\n' "$c_b" "$c_reset"
+    clear >&2
+    banner >&2
+    printf '\n%s  Welcome to IFOS%s\n' "$c_b" "$c_reset" >&2
+    local -a keys
     if (( LIVE )); then
-        printf '%s  Running from live media — nothing has been written to your disks.%s\n\n' "$c_dim" "$c_reset"
-        printf '   1) Install IFOS on this computer\n'
-        printf '   2) Open the IFOS launcher\n'
-        printf '   3) Connect to a network\n'
-        printf '   4) Install applications\n'
-        printf '   5) Keyboard shortcuts\n'
-        printf '   6) Make room on a disk (GParted)\n'
-        printf '   7) Just give me a terminal\n\n'
-        read -rp "  Choice: " c
-        case $c in 1) echo install;; 2) echo launcher;; 3) echo wifi;; 4) echo apps;; 5) echo keys;; 6) echo gparted;; *) echo shell;; esac
+        printf '%s  Running from live media — nothing has been written to your disks.%s\n\n' \
+            "$c_dim" "$c_reset" >&2
+        keys=(install launcher wifi apps keys gparted shell)
+        printf '   1) Install IFOS on this computer\n'   >&2
+        printf '   2) Open the IFOS launcher\n'          >&2
+        printf '   3) Connect to a network\n'            >&2
+        printf '   4) Install applications\n'            >&2
+        printf '   5) Keyboard shortcuts\n'              >&2
+        printf '   6) Make room on a disk (GParted)\n'   >&2
+        printf '   7) Just give me a terminal\n\n'       >&2
     else
-        printf '\n'
-        printf '   1) Open the IFOS launcher\n'
-        printf '   2) Install applications\n'
-        printf '   3) Keyboard shortcuts\n'
-        printf '   4) Enable AUR access (install yay)\n'
-        printf '   5) Update the system\n'
-        printf '   6) Close\n\n'
-        read -rp "  Choice: " c
-        case $c in 1) echo launcher;; 2) echo apps;; 3) echo keys;; 4) echo aur;; 5) echo update;; *) echo shell;; esac
+        printf '\n' >&2
+        keys=(launcher apps keys aur update shell)
+        printf '   1) Open the IFOS launcher\n'          >&2
+        printf '   2) Install applications\n'            >&2
+        printf '   3) Keyboard shortcuts\n'              >&2
+        printf '   4) Enable AUR access (install yay)\n' >&2
+        printf '   5) Update the system\n'               >&2
+        printf '   6) Close\n\n'                         >&2
+    fi
+    local reply
+    read -rp "  Choice: " reply
+    if [[ $reply =~ ^[0-9]+$ ]] && (( reply >= 1 && reply <= ${#keys[@]} )); then
+        choice=${keys[reply-1]}
+    else
+        choice=shell
     fi
 }
 
+# Decided once, in the main shell. Deciding it inside a command substitution
+# would test a pipe rather than the terminal and always fall through to the
+# text menu.
+USE_DIALOG=0
+if command -v dialog >/dev/null && [[ -t 0 && -t 2 ]]; then
+    USE_DIALOG=1
+fi
+
 while :; do
-    if command -v dialog >/dev/null && [[ -t 0 && -t 1 ]]; then
+    choice=""
+    if (( USE_DIALOG )); then
         choice=$(menu_dialog) || { clear; mark_done; exit 0; }
+        # dialog can fail at runtime (unknown TERM, tiny window). Its stderr is
+        # redirected onto our stdout by the fd swap, so a failure looks like an
+        # empty answer rather than an error - fall back instead of looping.
+        if [[ -z $choice ]]; then
+            USE_DIALOG=0
+            menu_plain
+        fi
     else
-        choice=$(menu_plain)
+        menu_plain
     fi
 
     case ${choice:-shell} in

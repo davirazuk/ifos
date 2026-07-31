@@ -184,6 +184,7 @@ xorg-xinit
 xorg-xrandr
 xorg-xsetroot
 xterm
+xfce4-terminal
 i3-wm
 i3lock
 polybar

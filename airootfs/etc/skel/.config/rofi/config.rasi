@@ -7,7 +7,7 @@ configuration {
     display-run:         " run";
     display-window:      " window";
     drun-display-format: "{name}";
-    terminal:            "alacritty";
+    terminal:            "xfce4-terminal";
     sidebar-mode:        false;
 }
 

@@ -4,14 +4,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 set $mod Mod4
-set $term alacritty
+set $term xfce4-terminal
+# xfce4-terminal needs -x (not -e) to run a command with arguments.
+set $termrun xfce4-terminal -x
 set $menu rofi -show drun
 
 font pango:JetBrainsMono Nerd Font 10
 
 # ── Autostart ────────────────────────────────────────────────────────────────
 exec --no-startup-id dunst
-exec --no-startup-id picom -b
+exec --no-startup-id ~/.config/picom/launch.sh
 exec --no-startup-id feh --no-fehbg --bg-fill /usr/share/backgrounds/ifos.png
 exec --no-startup-id nm-applet
 exec --no-startup-id blueman-applet
@@ -28,8 +30,8 @@ bindsym $mod+Return    exec $term
 bindsym $mod+d         exec $menu
 bindsym $mod+e         exec thunar
 bindsym $mod+g         exec ifos-launcher
-bindsym $mod+Shift+a   exec $term -e ifos-software
-bindsym $mod+Shift+i   exec $term -e sudo install-ifos
+bindsym $mod+Shift+a   exec $termrun ifos-software
+bindsym $mod+Shift+i   exec $termrun sudo install-ifos
 bindsym $mod+Shift+q   kill
 bindsym $mod+Shift+c   reload
 bindsym $mod+Shift+r   restart
@@ -37,7 +39,7 @@ bindsym $mod+Shift+e   exec ~/.config/rofi/powermenu.sh
 bindsym $mod+l         exec i3lock -c 1e1e2e -e -f
 
 # Cheatsheet
-bindsym $mod+F1 exec --no-startup-id $term --class ifos-help -e sh -c 'cat /usr/share/ifos/keybindings.txt; read -n1 -s -p "  press any key "'
+bindsym $mod+F1 exec --no-startup-id xfce4-terminal --title ifos-help -x sh -c 'cat /usr/share/ifos/keybindings.txt; read -n1 -s -p "  press any key "'
 
 # ── Screenshots (maim) ───────────────────────────────────────────────────────
 bindsym Print       exec --no-startup-id sh -c 'mkdir -p ~/Pictures/screenshots; f=~/Pictures/screenshots/$(date +%F_%H-%M-%S).png; maim "$f" && xclip -selection clipboard -t image/png < "$f" && notify-send "Screenshot" "Saved to $f"'
@@ -147,9 +149,9 @@ for_window [class="Blueman-manager"]      floating enable, resize set 700 500
 for_window [class="Arandr"]               floating enable
 for_window [class="Gparted"]              floating enable
 for_window [class="Nm-connection-editor"] floating enable
-for_window [class="ifos-welcome"]         floating enable, resize set 900 620, move position center
+for_window [title="ifos-welcome"]         floating enable, resize set 900 640, move position center
 for_window [title="^IFOS$"]               fullscreen enable
-for_window [class="ifos-help"]            floating enable, resize set 820 640, move position center
+for_window [title="ifos-help"]            floating enable, resize set 820 640, move position center
 
 # ── Appearance ───────────────────────────────────────────────────────────────
 gaps inner 8

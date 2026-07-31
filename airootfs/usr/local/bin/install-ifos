@@ -376,7 +376,7 @@ PACKAGES=(
 
     # ── desktop ──────────────────────────────────────────────────────────────
     xorg-server xorg-xinit xorg-xrandr xorg-xsetroot
-    i3-wm i3lock polybar rofi picom dunst feh alacritty
+    i3-wm i3lock polybar rofi picom dunst feh xfce4-terminal alacritty xterm
     thunar thunar-volman thunar-archive-plugin gvfs gvfs-mtp gvfs-smb tumbler
     xarchiver mousepad gthumb
     sddm polkit polkit-gnome plymouth

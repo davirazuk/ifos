@@ -223,7 +223,7 @@ class Catalog:
             ("Arquivos", "Gerenciador de arquivos",
              "system-file-manager", "thunar", True),
             ("Terminal", "Linha de comando",
-             "utilities-terminal", "alacritty", True),
+             "utilities-terminal", "xfce4-terminal", True),
             ("Bloquear tela", "Trancar a sessão",
              "system-lock-screen", "i3lock -c 1e1e2e -e -f", True),
             ("Reiniciar", "Reiniciar o computador",
@@ -710,13 +710,15 @@ class Launcher(Gtk.Window):
             self.notify("Falha ao executar: %s" % exc)
 
     def install(self, entry: dict) -> None:
-        terminal = next((t for t in ("alacritty", "xterm") if shutil.which(t)), None)
+        terminal = next((t for t in ("xfce4-terminal", "alacritty", "xterm")
+                         if shutil.which(t)), None)
         if terminal is None:
             self.notify("Nenhum terminal disponível para instalar.")
             return
         try:
             subprocess.Popen(
-                [terminal, "-e", "ifos-software", "--install", entry["name"]],
+                [terminal, "-x" if terminal == "xfce4-terminal" else "-e",
+                 "ifos-software", "--install", entry["name"]],
                 start_new_session=True,
             )
             Gtk.main_quit()

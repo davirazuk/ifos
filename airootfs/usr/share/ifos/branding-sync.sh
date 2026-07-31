@@ -46,6 +46,7 @@ copy /usr/share/sddm/themes/ifos
 copy /etc/sddm.conf.d/ifos.conf
 copy /usr/share/plymouth/themes/ifos
 copy /etc/plymouth/plymouthd.conf
+copy /etc/systemd/system/ifos-fontcache.service
 
 # Distribution identity
 copy /etc/os-release

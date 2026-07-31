@@ -37,6 +37,7 @@ file_permissions=(
   ["/usr/share/ifos/post-install.sh"]="0:0:755"
   ["/usr/share/ifos/branding-sync.sh"]="0:0:755"
   ["/etc/skel/.config/polybar/launch.sh"]="0:0:755"
+  ["/etc/skel/.config/picom/launch.sh"]="0:0:755"
   ["/etc/skel/.config/rofi/powermenu.sh"]="0:0:755"
   ["/etc/skel/.xinitrc"]="0:0:755"
   ["/usr/local/bin/ifos-theme"]="0:0:755"
