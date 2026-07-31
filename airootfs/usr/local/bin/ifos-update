@@ -172,24 +172,27 @@ if (( DO_DOTFILES )); then
         [[ -f /etc/skel/$f ]] && cp -a "/etc/skel/$f" "$HOME/$f"
     done
     ok "Dotfiles refreshed (your previous ones are in $BACKUP)"
-
-    # The defaults are always the green palette. The stamp lives in
-    # ~/.config/ifos, which /etc/skel does not carry, so it survived the copy -
-    # use it to paint the fresh files back in whichever theme was chosen.
-    THEME_STAMP="${XDG_CONFIG_HOME:-$HOME/.config}/ifos/theme"
-    if [[ -r $THEME_STAMP ]] && command -v ifos-theme >/dev/null; then
-        WANT=$(<"$THEME_STAMP")
-        if [[ -n $WANT && $WANT != ifms ]]; then
-            info "Re-applying your $WANT theme…"
-            ifos-theme "$WANT" >/dev/null && ok "Theme restored: $WANT"
-        fi
-    fi
-
     command -v i3-msg >/dev/null && [[ -n ${DISPLAY:-} ]] && i3-msg restart >/dev/null 2>&1
 else
     repair_dotfiles
     warn "Your ~/.config was otherwise left alone. Use --dotfiles to take the new"
     warn "defaults (your current ones get backed up first)."
+fi
+
+# ── Colours ──────────────────────────────────────────────────────────────────
+# Everything that just landed carries the green defaults - the new /etc/skel,
+# and the login screen under /usr/share/sddm, which the update overwrote. If
+# this account chose another theme, paint them back rather than leave the
+# desktop and the greeter disagreeing. The stamp lives in ~/.config/ifos, which
+# /etc/skel does not carry, so it survives even a --dotfiles refresh.
+THEME_STAMP="${XDG_CONFIG_HOME:-$HOME/.config}/ifos/theme"
+if [[ $EUID -ne 0 && -r $THEME_STAMP ]] && command -v ifos-theme >/dev/null; then
+    WANT=$(<"$THEME_STAMP")
+    if [[ -n $WANT && $WANT != ifms ]]; then
+        info "Re-applying your $WANT theme…"
+        ifos-theme "$WANT" --system >/dev/null &&
+            ok "Theme restored: $WANT (desktop and login screen)"
+    fi
 fi
 
 cat <<EOF

@@ -50,6 +50,16 @@ copy /usr/share/backgrounds/ifos-mocha.png
 copy /usr/share/ifos/lock
 copy /usr/share/sddm/themes/ifos
 copy /etc/sddm.conf.d/ifos.conf
+
+# That file autologins the live user. `ifos` exists on the ISO and nowhere else,
+# so on an installed system the greeter would try to log in as a user who is not
+# there and never show the login screen. The installer strips those two lines
+# after it runs; do it here too, or every ifos-update would put them back.
+if [[ ! -d ${TARGET}/run/archiso && -f ${TARGET}/etc/sddm.conf.d/ifos.conf ]]; then
+    sed -i '/^\[Autologin\]/,/^\[/{/^User=/d;/^Session=/d}' \
+        "${TARGET}/etc/sddm.conf.d/ifos.conf" &&
+        echo "    autologin removed from sddm.conf.d/ifos.conf (installed system)"
+fi
 copy /usr/share/plymouth/themes/ifos
 copy /etc/plymouth/plymouthd.conf
 copy /etc/systemd/system/ifos-fontcache.service
