@@ -56,7 +56,7 @@ if [[ $MODE == clean ]]; then
         rm -rf /profile/work 2>/dev/null || rm -rf "$WORK"
 fi
 
-mkdir -p "$WORK" "$OUT"
+mkdir -p "$WORK" "$OUT" "$WORK/pkgcache"
 
 if [[ $MODE == shell ]]; then
     exec podman run --rm -it --privileged \
@@ -72,6 +72,7 @@ podman run --rm --privileged \
     -v "$PROFILE":/profile:z \
     -v "$WORK":/work:z,dev,suid,exec \
     -v "$OUT":/out:z \
+    -v "$WORK/pkgcache":/var/cache/pacman/pkg:z,dev,suid,exec \
     "$IMAGE" \
     build-entrypoint
 

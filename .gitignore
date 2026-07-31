@@ -3,3 +3,4 @@
 /out/
 *.iso
 *.iso.sha256
+.claude/settings.local.json*
