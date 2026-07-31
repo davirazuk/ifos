@@ -61,6 +61,7 @@ if [[ ! -d ${TARGET}/run/archiso && -f ${TARGET}/etc/sddm.conf.d/ifos.conf ]]; t
         echo "    autologin removed from sddm.conf.d/ifos.conf (installed system)"
 fi
 copy /usr/share/plymouth/themes/ifos
+copy /usr/share/grub/themes/ifos
 copy /etc/plymouth/plymouthd.conf
 copy /etc/systemd/system/ifos-fontcache.service
 copy /etc/ifos/update.conf

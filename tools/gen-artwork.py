@@ -236,6 +236,158 @@ def lock_image(source: Image.Image, size: tuple[int, int]) -> Image.Image:
     return Image.blend(cropped, Image.new("RGB", size, (4, 21, 15)), 0.45)
 
 
+# ── Branding derived from the same glyphs as the wallpaper ───────────────────
+def ascii_logo(pixel: str = "██") -> str:
+    """The IFOS wordmark as coloured ASCII, for fastfetch.
+
+    Built from the same 4x5 glyphs the wallpaper uses, at two text rows per
+    pixel row so it stands about as tall as fastfetch's info block. $1/$2 are
+    fastfetch colour placeholders.
+    """
+    chars = "IFOS"
+    gap = 1                      # blank glyph columns between letters
+    width = len(chars) * 4 + gap * (len(chars) - 1)
+
+    rows = []
+    for py in range(5):
+        line = ""
+        for i, ch in enumerate(chars):
+            for px in range(4):
+                line += pixel if (px, py) in GLYPHS[ch] else "  "
+            if i < len(chars) - 1:
+                line += "  " * gap
+        rows.append(line.rstrip())
+
+    out = ["$1"]
+    for row in rows:
+        out.append("$1  " + row)
+        out.append("$1  " + row)          # double height
+    out.append("$1")
+    out.append("$2  " + "IFMS · Campus Dourados".center(width * 2 - 4))
+    out.append("")
+    return "\n".join(out) + "\n"
+
+
+def svg_logo(name: str) -> str:
+    """Scalable icon for os-release LOGO= and desktop about dialogs."""
+    pal = PALETTES[name]
+    chars = "IFOS"
+    gap = 1
+    cols = len(chars) * 4 + gap * (len(chars) - 1)
+    rows = 5
+    unit = 16
+    pad = unit
+    w = cols * unit + pad * 2
+    h = rows * unit + pad * 2
+    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+        f'viewBox="0 0 {w} {h}">',
+        f'  <rect width="{w}" height="{h}" rx="{unit}" fill="rgb{pal["crust"]}"/>',
+    ]
+    for i, ch in enumerate(chars):
+        ox = i * (4 + gap) * unit + pad
+        r, g, b = colours[i]
+        for px, py in sorted(GLYPHS[ch]):
+            x = ox + px * unit
+            y = py * unit + pad
+            parts.append(
+                f'  <rect x="{x}" y="{y}" width="{unit - 2}" height="{unit - 2}" '
+                f'rx="2" fill="rgb({r},{g},{b})"/>'
+            )
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
+
+
+def boot_splash(name: str, size=(640, 480)) -> Image.Image:
+    """Replaces the Arch splash behind the BIOS boot menu."""
+    pal = PALETTES[name]
+    w, h = size
+    img = Image.new("RGB", size, pal["crust"])
+    d = ImageDraw.Draw(img)
+    for y in range(h):
+        t = y / h
+        d.line([(0, y), (w, y)],
+               fill=tuple(int(pal["crust"][i] + (pal["base"][i] - pal["crust"][i]) * t)
+                          for i in range(3)))
+
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.ellipse([w // 2 - 220, h // 2 - 220, w // 2 + 220, h // 2 + 220],
+               fill=(*pal["accent"], 45))
+    layer = layer.filter(ImageFilter.GaussianBlur(90))
+    img = Image.alpha_composite(img.convert("RGBA"), layer)
+    d = ImageDraw.Draw(img)
+
+    scale = 9
+    chars = "IFOS"
+    step = 4 * scale + 6
+    total = len(chars) * step - 6
+    x0 = (w - total) // 2
+    y0 = 40
+    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
+    for i, ch in enumerate(chars):
+        ox = x0 + i * step
+        for px, py in GLYPHS[ch]:
+            x = ox + px * scale
+            y = y0 + py * scale
+            d.rectangle([x, y, x + scale - 2, y + scale - 2], fill=(*colours[i], 255))
+
+    font = load_font(15)
+    if font:
+        caption = pal["caption"]
+        bbox = d.textbbox((0, 0), caption, font=font)
+        d.text(((w - (bbox[2] - bbox[0])) // 2, y0 + 5 * scale + 12), caption,
+               font=font, fill=(*pal["text"], 200))
+    return img.convert("RGB")
+
+
+def grub_background(name: str, size=(1920, 1080)) -> Image.Image:
+    """Background for the GRUB theme on installed systems - the menu a
+    dual-booting student sees every single time the machine starts."""
+    pal = PALETTES[name]
+    w, h = size
+    img = Image.new("RGB", size, pal["crust"])
+    d = ImageDraw.Draw(img)
+    for y in range(h):
+        t = y / h
+        d.line([(0, y), (w, y)],
+               fill=tuple(int(pal["crust"][i] + (pal["base"][i] - pal["crust"][i]) * t)
+                          for i in range(3)))
+
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.ellipse([w // 2 - 520, h // 2 - 420, w // 2 + 520, h // 2 + 620],
+               fill=(*pal["accent"], 40))
+    layer = layer.filter(ImageFilter.GaussianBlur(200))
+    img = Image.alpha_composite(img.convert("RGBA"), layer)
+    d = ImageDraw.Draw(img)
+
+    # Wordmark near the top, leaving the middle clear for the menu.
+    scale = 16
+    chars = "IFOS"
+    step = 4 * scale + 10
+    total = len(chars) * step - 10
+    x0 = (w - total) // 2
+    y0 = int(h * 0.10)
+    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
+    for i, ch in enumerate(chars):
+        ox = x0 + i * step
+        for px, py in GLYPHS[ch]:
+            x = ox + px * scale
+            y = y0 + py * scale
+            d.rectangle([x, y, x + scale - 3, y + scale - 3], fill=(*colours[i], 255))
+
+    font = load_font(22)
+    if font:
+        caption = pal["caption"]
+        bbox = d.textbbox((0, 0), caption, font=font)
+        d.text(((w - (bbox[2] - bbox[0])) // 2, y0 + 5 * scale + 18), caption,
+               font=font, fill=(*pal["text"], 190))
+    return img.convert("RGB")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     default_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "airootfs")
@@ -270,6 +422,34 @@ def main() -> int:
         target = os.path.join(lock_dir, "ifos-%dx%d.png" % size)
         lock_image(base, size).save(target, "PNG", optimize=True)
     print("  lock        %d screens in %s" % (len(LOCK_SIZES), lock_dir))
+
+    # fastfetch logo, replacing the Arch one
+    share = os.path.join(args.out, "usr/share/ifos")
+    os.makedirs(share, exist_ok=True)
+    with open(os.path.join(share, "logo.txt"), "w", encoding="utf-8") as fh:
+        fh.write(ascii_logo())
+    print("  ascii logo %s" % os.path.join(share, "logo.txt"))
+
+    # Icon for os-release LOGO= and about dialogs
+    icons = os.path.join(args.out, "usr/share/icons/hicolor/scalable/apps")
+    os.makedirs(icons, exist_ok=True)
+    with open(os.path.join(icons, "ifos-logo.svg"), "w", encoding="utf-8") as fh:
+        fh.write(svg_logo(args.default_theme))
+    print("  icon       %s" % os.path.join(icons, "ifos-logo.svg"))
+
+    # GRUB theme background for installed systems
+    grub_dir = os.path.join(args.out, "usr/share/grub/themes/ifos")
+    os.makedirs(grub_dir, exist_ok=True)
+    grub_background(args.default_theme).save(
+        os.path.join(grub_dir, "background.png"), "PNG", optimize=True)
+    print("  grub bg    %s" % os.path.join(grub_dir, "background.png"))
+
+    # BIOS boot menu splash, replacing the Arch one
+    splash_dir = os.path.join(os.path.dirname(args.out.rstrip("/")), "syslinux")
+    if os.path.isdir(splash_dir):
+        target = os.path.join(splash_dir, "splash.png")
+        boot_splash(args.default_theme).save(target, "PNG", optimize=True)
+        print("  splash     %s" % target)
 
     logo = boot_logo(args.default_theme)
     logo_path = os.path.join(plymouth, "logo.png")

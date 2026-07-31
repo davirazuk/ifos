@@ -526,6 +526,18 @@ grep -q '^GRUB_DISABLE_OS_PROBER' /etc/default/grub || echo 'GRUB_DISABLE_OS_PRO
 sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet splash"/' /etc/default/grub
 sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="IFOS"/' /etc/default/grub
 grep -q '^GRUB_DISTRIBUTOR' /etc/default/grub || echo 'GRUB_DISTRIBUTOR="IFOS"' >> /etc/default/grub
+
+# The IFOS boot menu. gfxterm is what makes a theme render at all; without an
+# explicit GFXMODE some firmware drops to 640x480 and the theme looks cramped.
+if [ -f /usr/share/grub/themes/ifos/theme.txt ]; then
+    sed -i '/^GRUB_THEME=/d; /^GRUB_GFXMODE=/d; /^GRUB_TERMINAL_OUTPUT=/d; /^GRUB_GFXPAYLOAD_LINUX=/d' /etc/default/grub
+    {
+        echo 'GRUB_THEME="/usr/share/grub/themes/ifos/theme.txt"'
+        echo 'GRUB_GFXMODE="1920x1080,1366x768,auto"'
+        echo 'GRUB_GFXPAYLOAD_LINUX="keep"'
+        echo 'GRUB_TERMINAL_OUTPUT="gfxterm"'
+    } >> /etc/default/grub
+fi
 grub-mkconfig -o /boot/grub/grub.cfg
 
 cp -rn /etc/skel/. "/home/${IFOS_USERNAME}/" 2>/dev/null || true
