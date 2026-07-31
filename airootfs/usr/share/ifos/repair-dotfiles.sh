@@ -80,6 +80,31 @@ rofi_highlight() {
     fi
 }
 
+# ── Repair: fastfetch still shows the Arch logo ──────────────────────────────
+#  The logo moved from the built-in "arch" art to the IFOS wordmark in
+#  /usr/share/ifos/logo.txt. branding-sync updates /etc/skel, but a home
+#  directory created before that keeps its own copy - so the machine goes on
+#  introducing itself as Arch in every new terminal.
+fastfetch_logo() {
+    local cfg="$1/.config/fastfetch/config.jsonc"
+    [[ -f $cfg ]] || return 0
+    [[ -f /usr/share/ifos/logo.txt ]] || return 0
+    grep -qE '"source"[[:space:]]*:[[:space:]]*"arch"' "$cfg" || return 0
+
+    found "$cfg — fastfetch is still drawing the Arch logo"
+    (( CHECK )) && return 0
+
+    # Narrow edits: the logo source and the two colours that feed its $1/$2
+    # placeholders. Everything else in the file - modules, keys, ordering - is
+    # whatever the account chose.
+    edit "$cfg" '
+        s|"type"[[:space:]]*:[[:space:]]*"builtin"|"type": "file"|
+        s|"source"[[:space:]]*:[[:space:]]*"arch"|"source": "/usr/share/ifos/logo.txt"|
+        s|"1"[[:space:]]*:[[:space:]]*"blue"|"1": "green"|
+        s|"2"[[:space:]]*:[[:space:]]*"cyan"|"2": "white"|
+    ' && fixed "fastfetch now uses the IFOS logo"
+}
+
 # rofi falls back to its default theme rather than failing, so the exit status
 # says nothing; the warning on stderr is the only evidence.
 verify_rofi() {
@@ -96,6 +121,7 @@ repair_home() {
     local home=$1
     [[ -d $home ]] || return 0
     rofi_highlight "$home"
+    fastfetch_logo "$home"
     (( CHECK )) || verify_rofi "$home"
 }
 

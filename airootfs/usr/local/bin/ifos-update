@@ -20,6 +20,10 @@
 #  repair-dotfiles.sh against your ~/.config. Those keep your colours; only
 #  --dotfiles replaces your configuration outright.
 #
+#  System-level settings that only install-ifos used to write - the GRUB theme
+#  among them - are applied here too, so an already-installed machine picks them
+#  up rather than waiting for a reinstall.
+#
 #  Package updates come from Arch as usual; this does not hold anything back.
 #
 #  Configuration: /etc/ifos/update.conf
@@ -58,6 +62,43 @@ for arg in "$@"; do
         *) die "unknown option '$arg' (try --help)" ;;
     esac
 done
+
+# ── The boot menu ────────────────────────────────────────────────────────────
+# branding-sync drops the GRUB theme into /usr/share/grub/themes/ifos, but
+# /etc/default/grub is only written by install-ifos. On a machine that is
+# already installed the theme would therefore sit there unused, and the boot
+# menu would stay stock blue-on-black. Wire it up here instead.
+configure_grub() {
+    local theme=/usr/share/grub/themes/ifos/theme.txt
+    local cfg=/etc/default/grub
+
+    [[ -f $theme ]] || return 0
+    [[ -f $cfg   ]] || return 0
+    command -v grub-mkconfig >/dev/null || return 0
+    # Only touch machines that actually boot through GRUB.
+    [[ -f /boot/grub/grub.cfg ]] || return 0
+
+    if grep -qF "GRUB_THEME=\"$theme\"" "$cfg"; then
+        return 0                      # already ours; do not rewrite every update
+    fi
+
+    info "Applying the IFOS boot menu theme…"
+    $SUDO sed -i '/^GRUB_THEME=/d; /^GRUB_GFXMODE=/d; /^GRUB_GFXPAYLOAD_LINUX=/d; /^GRUB_TERMINAL_OUTPUT=/d' "$cfg"
+    # gfxterm is what makes a theme render at all, and without an explicit
+    # GFXMODE some firmware drops to 640x480 and the theme looks cramped.
+    $SUDO tee -a "$cfg" >/dev/null <<GRUBCFG
+GRUB_THEME="$theme"
+GRUB_GFXMODE="1920x1080,1366x768,auto"
+GRUB_GFXPAYLOAD_LINUX="keep"
+GRUB_TERMINAL_OUTPUT="gfxterm"
+GRUBCFG
+
+    if $SUDO grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1; then
+        ok "Boot menu themed - you will see it on the next restart"
+    else
+        warn "grub-mkconfig failed. Run it by hand: sudo grub-mkconfig -o /boot/grub/grub.cfg"
+    fi
+}
 
 # ── Repairs for home directories that already exist ──────────────────────────
 # Prefer the copy in the fresh checkout: on a machine whose ifos-update is a
@@ -157,6 +198,8 @@ $SUDO env IFOS_SOURCE="$REPO_DIR/airootfs" "$SYNC" / || die "Applying the update
 
 $SUDO sh -c "printf '%s\n' '$NEW_COMMIT' > '$STATE/applied-commit'"
 ok "IFOS files updated to $NEW_COMMIT"
+
+configure_grub
 
 # ── The user's own configuration ─────────────────────────────────────────────
 if (( DO_DOTFILES )); then
