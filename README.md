@@ -174,8 +174,14 @@ Later builds reuse the pacman cache in `./work`.
 Write the result to a USB stick:
 
 ```
-sudo dd if=out/ifos-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo ./tools/flash-usb.sh --list      # find the stick
+sudo ./tools/flash-usb.sh /dev/sdX    # write and verify it
 ```
+
+It refuses to touch the disk holding `/` or `/home`, refuses non-removable
+disks without `--force`, refuses a partition where a whole disk was meant, and
+verifies the written bytes against the image afterwards rather than trusting
+that `dd` succeeded.
 
 Or try it without a USB stick:
 
