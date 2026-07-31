@@ -212,6 +212,30 @@ def boot_logo(name: str) -> Image.Image:
     return img
 
 
+# i3lock does not scale images, so a wallpaper only fills the screen if it
+# already matches the resolution exactly. Rendering the common ones at build
+# time gives a proper lock screen without putting ImageMagick on the ISO.
+LOCK_SIZES = [
+    (1920, 1080), (1366, 768), (1280, 1024), (1280, 800), (1440, 900),
+    (1600, 900), (1680, 1050), (1920, 1200), (2560, 1440), (2560, 1600),
+    (3440, 1440), (3840, 2160),
+]
+
+
+def lock_image(source: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Cover-fit the wallpaper to the screen, then darken it for legibility."""
+    target_w, target_h = size
+    scale = max(target_w / source.width, target_h / source.height)
+    resized = source.resize(
+        (max(1, round(source.width * scale)), max(1, round(source.height * scale))),
+        Image.LANCZOS,
+    )
+    left = (resized.width - target_w) // 2
+    top = (resized.height - target_h) // 2
+    cropped = resized.crop((left, top, left + target_w, top + target_h))
+    return Image.blend(cropped, Image.new("RGB", size, (4, 21, 15)), 0.45)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     default_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "airootfs")
@@ -238,6 +262,14 @@ def main() -> int:
                    os.path.join(sddm_theme, "background.png")):
         Image.open(chosen).save(target, "PNG", optimize=True)
         print(f"  default    {target}")
+
+    lock_dir = os.path.join(args.out, "usr/share/ifos/lock")
+    os.makedirs(lock_dir, exist_ok=True)
+    base = Image.open(chosen).convert("RGB")
+    for size in LOCK_SIZES:
+        target = os.path.join(lock_dir, "ifos-%dx%d.png" % size)
+        lock_image(base, size).save(target, "PNG", optimize=True)
+    print("  lock        %d screens in %s" % (len(LOCK_SIZES), lock_dir))
 
     logo = boot_logo(args.default_theme)
     logo_path = os.path.join(plymouth, "logo.png")

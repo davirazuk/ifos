@@ -38,7 +38,7 @@
     Mod + Ctrl + ← / →     previous / next workspace
 
   SESSION
-    Mod + l                lock the screen
+    Mod + l                lock the screen (auto-locks after 10 min idle)
     Mod + Shift + e        power menu (lock, log out, suspend, restart, shut down)
     Mod + Shift + c        reload i3 configuration
     Mod + Shift + r        restart i3 in place
@@ -49,8 +49,8 @@
     Ctrl + Print           select a region → clipboard only
 
   HARDWARE KEYS
-    Volume / mute keys     PipeWire volume
-    Brightness keys        backlight
+    Volume / mute keys     PipeWire volume, with an on-screen indicator
+    Brightness keys        backlight, with an on-screen indicator
     Media keys             play / pause / next / previous
     Mod + Shift + m        audio mixer (pavucontrol)
 

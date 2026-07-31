@@ -45,6 +45,9 @@ copy /etc/skel
 
 # Look and feel
 copy /usr/share/backgrounds/ifos.png
+copy /usr/share/backgrounds/ifos-ifms.png
+copy /usr/share/backgrounds/ifos-mocha.png
+copy /usr/share/ifos/lock
 copy /usr/share/sddm/themes/ifos
 copy /etc/sddm.conf.d/ifos.conf
 copy /usr/share/plymouth/themes/ifos

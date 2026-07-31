@@ -187,6 +187,10 @@ xterm
 xfce4-terminal
 i3-wm
 i3lock
+xss-lock
+libnotify
+thunar-volman
+thunar-archive-plugin
 polybar
 rofi
 picom

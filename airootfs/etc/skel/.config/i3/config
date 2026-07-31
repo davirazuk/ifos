@@ -32,6 +32,12 @@ exec --no-startup-id nm-applet
 exec --no-startup-id blueman-applet
 exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec --no-startup-id xdg-user-dirs-update
+
+# Lock after 10 minutes idle, blank the screen after 12. xss-lock also locks on
+# suspend, so closing a laptop lid does the right thing.
+exec --no-startup-id xset s 600 && xset dpms 0 0 720
+exec --no-startup-id xss-lock --transfer-sleep-lock -- ~/.config/i3/scripts/lock.sh
+exec --no-startup-id ~/.config/i3/scripts/battery-watch.sh
 exec_always --no-startup-id ~/.config/polybar/launch.sh
 
 # Welcome screen: offers the installer on live media, first-run tips once on an
@@ -50,7 +56,7 @@ bindsym $mod+Shift+q   kill
 bindsym $mod+Shift+c   reload
 bindsym $mod+Shift+r   restart
 bindsym $mod+Shift+e   exec ~/.config/rofi/powermenu.sh
-bindsym $mod+l         exec i3lock -c 10241d -e -f
+bindsym $mod+l         exec --no-startup-id ~/.config/i3/scripts/lock.sh
 
 # Cheatsheet
 bindsym $mod+F1 exec --no-startup-id xfce4-terminal --title ifos-help -x sh -c 'cat /usr/share/ifos/keybindings.txt; read -n1 -s -p "  press any key "'
@@ -61,12 +67,13 @@ bindsym Shift+Print exec --no-startup-id sh -c 'mkdir -p ~/Pictures/screenshots;
 bindsym Ctrl+Print  exec --no-startup-id sh -c 'maim -s | xclip -selection clipboard -t image/png && notify-send "Screenshot" "Copied to clipboard"'
 
 # ── Media / hardware keys ────────────────────────────────────────────────────
-bindsym XF86AudioRaiseVolume  exec --no-startup-id pamixer -i 5
-bindsym XF86AudioLowerVolume  exec --no-startup-id pamixer -d 5
-bindsym XF86AudioMute         exec --no-startup-id pamixer -t
-bindsym XF86AudioMicMute      exec --no-startup-id pamixer --default-source -t
-bindsym XF86MonBrightnessUp   exec --no-startup-id brightnessctl set 5%+
-bindsym XF86MonBrightnessDown exec --no-startup-id brightnessctl set 5%-
+set $osd ~/.config/i3/scripts/osd.sh
+bindsym XF86AudioRaiseVolume  exec --no-startup-id $osd vol-up
+bindsym XF86AudioLowerVolume  exec --no-startup-id $osd vol-down
+bindsym XF86AudioMute         exec --no-startup-id $osd vol-mute
+bindsym XF86AudioMicMute      exec --no-startup-id $osd mic-mute
+bindsym XF86MonBrightnessUp   exec --no-startup-id $osd bright-up
+bindsym XF86MonBrightnessDown exec --no-startup-id $osd bright-down
 bindsym XF86AudioPlay         exec --no-startup-id playerctl play-pause
 bindsym XF86AudioNext         exec --no-startup-id playerctl next
 bindsym XF86AudioPrev         exec --no-startup-id playerctl previous

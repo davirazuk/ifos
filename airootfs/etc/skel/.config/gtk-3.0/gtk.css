@@ -1,0 +1,71 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   IFOS — GTK accent override
+
+   adw-gtk3-dark gives a good dark base but keeps Adwaita's blue accent, so
+   Thunar, GParted, pavucontrol and every other GTK application looked like a
+   different distribution to the rest of the desktop. This repaints only the
+   accent, leaving the theme's shading alone.
+
+   ifos-theme rewrites the colours here when you switch schemes.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@define-color accent_color #00a86b;
+@define-color accent_bg_color #00a86b;
+@define-color accent_fg_color #04150f;
+@define-color theme_selected_bg_color #00a86b;
+@define-color theme_selected_fg_color #04150f;
+
+/* Selections, checkboxes, switches, progress */
+selection,
+:selected,
+*:selected:focus {
+    background-color: #00a86b;
+    color: #04150f;
+}
+
+check:checked,
+radio:checked,
+checkbutton check:checked,
+radiobutton radio:checked {
+    background-color: #00a86b;
+    border-color: #00a86b;
+    color: #04150f;
+}
+
+switch:checked {
+    background-color: #00a86b;
+}
+
+progressbar progress,
+levelbar block.filled,
+scale highlight {
+    background-color: #00a86b;
+}
+
+entry:focus,
+entry:focus-within,
+spinbutton:focus {
+    border-color: #00a86b;
+    box-shadow: inset 0 0 0 1px #00a86b;
+}
+
+button.suggested-action {
+    background-color: #00a86b;
+    color: #04150f;
+}
+
+notebook > header > tabs > tab:checked {
+    box-shadow: inset 0 -3px #00a86b;
+    color: #e8f5e9;
+}
+
+/* Sidebars and file lists read better a touch darker than the theme default */
+placessidebar row:selected,
+list row:selected {
+    background-color: #00a86b;
+    color: #04150f;
+}
+
+*:link, button.link {
+    color: #7ed957;
+}

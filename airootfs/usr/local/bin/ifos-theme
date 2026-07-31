@@ -74,7 +74,8 @@ recolour() {
 
 for f in "$CFG/i3/config" "$CFG/polybar/config.ini" "$CFG/rofi/ifos.rasi" \
          "$CFG/dunst/dunstrc" "$CFG/alacritty/alacritty.toml" \
-         "$CFG/xfce4/terminal/terminalrc"; do
+         "$CFG/xfce4/terminal/terminalrc" "$CFG/gtk-3.0/gtk.css" \
+         "$CFG/gtk-4.0/gtk.css"; do
     recolour "$f"
 done
 
