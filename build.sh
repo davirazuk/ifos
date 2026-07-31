@@ -6,18 +6,35 @@
 #  container. Works from any distribution; no sudo required.
 #
 #      ./build.sh              build the ISO into ./out
-#      ./build.sh --clean      throw away the work directory first
+#      ./build.sh --clean      also discard the cached packages
 #      ./build.sh --shell      drop into the build container to poke around
 #
 #  Expect roughly 15 GB of scratch space and a long first run while packages
-#  download. Subsequent builds reuse the pacman cache in ./work.
+#  download. Later builds reuse the package cache in ./.pkgcache, so they only
+#  re-download what actually changed upstream.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 PROFILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="${IFOS_WORK:-$PROFILE/work}"
 OUT="${IFOS_OUT:-$PROFILE/out}"
+# Kept outside WORK so wiping the work directory does not throw away ~2.5 GB of
+# downloaded packages.
+CACHE="${IFOS_CACHE:-$PROFILE/.pkgcache}"
 IMAGE="${IFOS_IMAGE:-ifos-builder}"
+
+# The build runs as an unprivileged user inside the container, so parts of the
+# work directory end up owned by mapped subordinate uids that the host user
+# cannot delete. Removing it has to happen as root *inside* a container.
+wipe_work() {
+    [[ -e $WORK ]] || return 0
+    podman run --rm --privileged -v "$PROFILE":/profile:z "$IMAGE" \
+        rm -rf /profile/work >/dev/null 2>&1 || true
+    rm -rf "$WORK" 2>/dev/null || true
+    if [[ -e $WORK ]]; then
+        die "Could not remove $WORK. Try: podman unshare rm -rf '$WORK'"
+    fi
+}
 
 c_reset=$'\033[0m'; c_blue=$'\033[1;34m'; c_grn=$'\033[1;32m'; c_red=$'\033[1;31m'
 info() { printf '%s==>%s %s\n' "$c_blue" "$c_reset" "$*"; }
@@ -27,7 +44,7 @@ MODE=build
 case ${1:-} in
     --clean) MODE=clean ;;
     --shell) MODE=shell ;;
-    -h|--help) sed -n '3,14p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) sed -n '3,15p' "$0" | sed 's/^# \?//'; exit 0 ;;
     "") ;;
     *) die "Unknown option: $1" ;;
 esac
@@ -50,13 +67,18 @@ if [[ ${IFOS_SKIP_PKG_CHECK:-0} != 1 ]]; then
     "$PROFILE/tools/check-packages.sh" || die "Fix the package names above, or set IFOS_SKIP_PKG_CHECK=1 to build anyway."
 fi
 
+# mkarchiso tracks completed stages with marker files in the work directory, so
+# a leftover tree from an earlier run makes pacstrap collide with a root that is
+# already populated. Always start from a clean one; the package cache survives.
+info "Preparing a clean work directory…"
+wipe_work
+
 if [[ $MODE == clean ]]; then
-    info "Removing $WORK…"
-    podman run --rm --privileged -v "$PROFILE":/profile:z "$IMAGE" \
-        rm -rf /profile/work 2>/dev/null || rm -rf "$WORK"
+    info "Discarding the package cache too…"
+    rm -rf "$CACHE"
 fi
 
-mkdir -p "$WORK" "$OUT" "$WORK/pkgcache"
+mkdir -p "$WORK" "$OUT" "$CACHE"
 
 if [[ $MODE == shell ]]; then
     exec podman run --rm -it --privileged \
@@ -72,7 +94,7 @@ podman run --rm --privileged \
     -v "$PROFILE":/profile:z \
     -v "$WORK":/work:z,dev,suid,exec \
     -v "$OUT":/out:z \
-    -v "$WORK/pkgcache":/var/cache/pacman/pkg:z,dev,suid,exec \
+    -v "$CACHE":/var/cache/pacman/pkg:z,dev,suid,exec \
     "$IMAGE" \
     build-entrypoint
 

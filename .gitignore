@@ -1,5 +1,6 @@
 # build artefacts
 /work/
+/.pkgcache/
 /out/
 *.iso
 *.iso.sha256

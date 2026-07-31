@@ -405,34 +405,53 @@ XKB_LAYOUT=${KEYMAP%%-*}
 XKB_MODEL=pc105
 [[ $KEYMAP == *abnt2* ]] && XKB_MODEL=abnt2
 
-cat >"$MNT/root/ifos-configure.sh" <<CHROOT
+# The answers are handed over in a file rather than interpolated into the
+# script. Writing them inline would let a password containing $ or a backtick
+# be expanded - or executed - by the shell that generates this.
+{
+    printf 'IFOS_TIMEZONE=%q\n'   "$TIMEZONE"
+    printf 'IFOS_LOCALE=%q\n'     "$LOCALE"
+    printf 'IFOS_KEYMAP=%q\n'     "$KEYMAP"
+    printf 'IFOS_XKB_LAYOUT=%q\n' "$XKB_LAYOUT"
+    printf 'IFOS_XKB_MODEL=%q\n'  "$XKB_MODEL"
+    printf 'IFOS_HOSTNAME=%q\n'   "$HOSTNAME"
+    printf 'IFOS_USERNAME=%q\n'   "$USERNAME"
+    printf 'IFOS_USERPASS=%q\n'   "$USERPASS"
+    printf 'IFOS_ROOTPASS=%q\n'   "$ROOTPASS"
+    printf 'IFOS_DISK=%q\n'       "$DISK"
+} > "$MNT/root/.ifos-answers"
+chmod 600 "$MNT/root/.ifos-answers"
+
+# Quoted delimiter: this heredoc is written out verbatim.
+cat >"$MNT/root/ifos-configure.sh" <<'CHROOT'
 #!/usr/bin/env bash
 set -euo pipefail
+. /root/.ifos-answers
 
-ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
+ln -sf "/usr/share/zoneinfo/${IFOS_TIMEZONE}" /etc/localtime
 hwclock --systohc || true
 
-grep -q "^${LOCALE}" /etc/locale.gen || echo "${LOCALE} UTF-8" >> /etc/locale.gen
-sed -i "s/^#${LOCALE}/${LOCALE}/" /etc/locale.gen
+grep -q "^${IFOS_LOCALE}" /etc/locale.gen || echo "${IFOS_LOCALE} UTF-8" >> /etc/locale.gen
+sed -i "s/^#${IFOS_LOCALE}/${IFOS_LOCALE}/" /etc/locale.gen
 locale-gen
-echo "LANG=${LOCALE}" > /etc/locale.conf
-echo "KEYMAP=${KEYMAP}" > /etc/vconsole.conf
+echo "LANG=${IFOS_LOCALE}" > /etc/locale.conf
+echo "KEYMAP=${IFOS_KEYMAP}" > /etc/vconsole.conf
 
 mkdir -p /etc/X11/xorg.conf.d
 cat > /etc/X11/xorg.conf.d/00-keyboard.conf <<XKB
 Section "InputClass"
     Identifier "system-keyboard"
     MatchIsKeyboard "on"
-    Option "XkbLayout" "${XKB_LAYOUT}"
-    Option "XkbModel" "${XKB_MODEL}"
+    Option "XkbLayout" "${IFOS_XKB_LAYOUT}"
+    Option "XkbModel" "${IFOS_XKB_MODEL}"
 EndSection
 XKB
 
-echo "${HOSTNAME}" > /etc/hostname
+echo "${IFOS_HOSTNAME}" > /etc/hostname
 cat > /etc/hosts <<HOSTS
 127.0.0.1   localhost
 ::1         localhost
-127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}
+127.0.1.1   ${IFOS_HOSTNAME}.localdomain ${IFOS_HOSTNAME}
 HOSTS
 
 mkdir -p /etc/mkinitcpio.conf.d
@@ -441,10 +460,10 @@ HOOKS=(base udev plymouth autodetect microcode modconf kms keyboard keymap conso
 MKI
 mkinitcpio -P
 
-useradd -m -G wheel,audio,video,input,storage,network,lp -s /usr/bin/fish "${USERNAME}"
-echo "${USERNAME}:${USERPASS}" | chpasswd
-if [ -n "${ROOTPASS}" ]; then
-    echo "root:${ROOTPASS}" | chpasswd
+useradd -m -G wheel,audio,video,input,storage,network,lp -s /usr/bin/fish "${IFOS_USERNAME}"
+echo "${IFOS_USERNAME}:${IFOS_USERPASS}" | chpasswd
+if [ -n "${IFOS_ROOTPASS}" ]; then
+    echo "root:${IFOS_ROOTPASS}" | chpasswd
 else
     passwd -l root
 fi
@@ -462,7 +481,7 @@ systemctl enable fstrim.timer
 if [ -d /sys/firmware/efi/efivars ]; then
     grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=IFOS
 else
-    grub-install --target=i386-pc "${DISK}"
+    grub-install --target=i386-pc "${IFOS_DISK}"
 fi
 sed -i 's/^#\?GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
 grep -q '^GRUB_DISABLE_OS_PROBER' /etc/default/grub || echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
@@ -471,15 +490,13 @@ sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="IFOS"/' /etc/default/grub
 grep -q '^GRUB_DISTRIBUTOR' /etc/default/grub || echo 'GRUB_DISTRIBUTOR="IFOS"' >> /etc/default/grub
 grub-mkconfig -o /boot/grub/grub.cfg
 
-command -v >/dev/null && -C blue --theme Papirus-Dark || true
-
-cp -rn /etc/skel/. "/home/${USERNAME}/" 2>/dev/null || true
-chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
+cp -rn /etc/skel/. "/home/${IFOS_USERNAME}/" 2>/dev/null || true
+chown -R "${IFOS_USERNAME}:${IFOS_USERNAME}" "/home/${IFOS_USERNAME}"
 CHROOT
 
 chmod +x "$MNT/root/ifos-configure.sh"
 arch-chroot "$MNT" /root/ifos-configure.sh || die "Configuring the new system failed. See $LOG"
-rm -f "$MNT/root/ifos-configure.sh"
+rm -f "$MNT/root/ifos-configure.sh" "$MNT/root/.ifos-answers"
 
 # The live medium autologins; a real installation must not.
 rm -f "$MNT/etc/sudoers.d/10-ifos-live"

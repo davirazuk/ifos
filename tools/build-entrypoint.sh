@@ -4,7 +4,10 @@
 # back so they are owned by the person who started the build.
 set -uo pipefail
 
-chown -R build:build /work /out
+# The package cache is bind-mounted from the host and owned by container uid 0,
+# which the nested user namespace sees as nobody - pacman silently falls back to
+# a temporary directory and every build re-downloads everything.
+chown -R build:build /work /out /var/cache/pacman/pkg 2>/dev/null || true
 
 runuser -u build -- env HOME=/home/build mkarchiso -v -w /work -o /out /profile
 rc=$?
