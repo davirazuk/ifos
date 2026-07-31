@@ -28,6 +28,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import urllib.parse
 from datetime import datetime
 
 import gi
@@ -53,6 +54,13 @@ for _api in ("4.1", "4.0"):
 CATALOG_DIR = os.environ.get("IFOS_CATALOG_DIR", "/usr/share/ifos/apps.d")
 SCHOOL_LIST = os.environ.get("IFOS_SCHOOL_LIST", "/usr/share/ifos/escola.list")
 WALLPAPER = "/usr/share/backgrounds/ifos.png"
+
+# Google refuses to complete sign-in inside any embedded/non-standard browser,
+# WebKitGTK included - it shows its own dead-end block page rather than the
+# login form, and no amount of user-agent spoofing changes that. IFMS Moodle
+# uses Google as its identity provider, so the only way in is to kick that one
+# navigation out to the user's real system browser.
+SSO_HOSTS = {"accounts.google.com"}
 
 SECTION_TITLES = {
     "escola": "Escola",
@@ -648,6 +656,7 @@ class Launcher(Gtk.Window):
                 "load-changed",
                 lambda view, _e: self.urllabel.set_text(view.get_uri() or ""),
             )
+            self.web.connect("decide-policy", self._decide_policy)
             right.pack_start(self.web, True, True, 0)
         else:
             self.web = None
@@ -682,6 +691,20 @@ class Launcher(Gtk.Window):
         if self.web is not None and self.web.get_uri():
             url = self.web.get_uri()
         Gio.AppInfo.launch_default_for_uri(url, None)
+
+    def _decide_policy(self, _view, decision, decision_type) -> bool:
+        if decision_type != WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+            return False
+        uri = decision.get_navigation_action().get_request().get_uri() or ""
+        if urllib.parse.urlsplit(uri).hostname in SSO_HOSTS:
+            decision.ignore()
+            Gio.AppInfo.launch_default_for_uri(uri, None)
+            self.notify(
+                "O login do Google não funciona dentro do visualizador embutido.\n"
+                "Continue no navegador que acabou de abrir e depois volte para cá."
+            )
+            return True
+        return False
 
     # navigation -------------------------------------------------------------
     def select_tab(self, index: int) -> None:
