@@ -1,0 +1,15 @@
+# IFOS software catalog — Música / Music
+Spotify|Streaming de música|spotify|aur
+Strawberry|Tocador e organizador de biblioteca musical|strawberry|repo
+Rhythmbox|Tocador de música simples|rhythmbox|repo
+Amberol|Tocador minimalista e bonito|amberol|repo
+cmus|Tocador de música no terminal|cmus|repo
+EasyEffects|Equalizador e efeitos de áudio para PipeWire|easyeffects|repo
+cava|Visualizador de áudio no terminal|cava|repo
+yt-dlp|Baixar áudio e vídeo da internet|yt-dlp ffmpeg|repo
+Audacity|Gravação e edição de áudio|audacity|repo
+LMMS|Produção musical, sequenciador e sintetizadores|lmms|repo
+Ardour|Estação de trabalho de áudio digital (DAW)|ardour|repo
+MuseScore|Escrita de partituras|musescore|repo
+Picard|Organiza e etiqueta sua coleção (MusicBrainz)|picard|repo
+Nuclear|Tocador de streaming livre|nuclear-player-bin|aur

@@ -1,0 +1,8 @@
+# IFOS software catalog — Web browsers
+# Format:  Name|Description|packages|source        source = repo | multilib | aur
+Firefox|Mozilla's browser, open source and privacy-respecting|firefox|repo
+Chromium|Google's browser, without the Google branding|chromium|repo
+Brave|Chromium-based browser with a built-in ad blocker|brave-bin|aur
+LibreWolf|Hardened Firefox fork, telemetry stripped out|librewolf-bin|aur
+Vivaldi|Highly customisable browser for power users|vivaldi|repo
+Tor Browser|Anonymous browsing over the Tor network|torbrowser-launcher|repo

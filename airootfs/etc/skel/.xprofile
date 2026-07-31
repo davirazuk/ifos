@@ -1,0 +1,12 @@
+# Sourced by SDDM's Xsession (and by ~/.xinitrc) before the window manager
+# starts, so these apply to every graphical application, not just ones launched
+# from a terminal.
+
+export QT_QPA_PLATFORMTHEME=qt5ct
+export QT_AUTO_SCREEN_SCALE_FACTOR=0
+export XCURSOR_THEME=Adwaita
+export XCURSOR_SIZE=24
+export EDITOR=vim
+export VISUAL=vim
+export BROWSER=xdg-open
+export _JAVA_AWT_WM_NONREPARENTING=1

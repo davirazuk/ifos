@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Thin wrapper so the post-install helper is on PATH.
+exec /usr/share/ifos/post-install.sh "$@"

@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+#  ifos-welcome — the first thing you see
+#
+#  On live media it puts the installer one keypress away. On an installed
+#  system it appears once, then marks itself done and stays out of the way.
+#  --autostart makes it self-suppressing; running it by hand always shows it.
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+STAMP="${XDG_CONFIG_HOME:-$HOME/.config}/ifos/welcome-done"
+LIVE=0
+[[ -d /run/archiso ]] && LIVE=1
+
+# Live media always shows it; an installed system shows it once.
+if [[ ${1:-} == --autostart ]] && (( ! LIVE )) && [[ -e $STAMP ]]; then
+    exit 0
+fi
+
+# i3 autostarts this with no terminal attached, so put ourselves in one.
+if [[ ! -t 1 && -z ${IFOS_WELCOME_TERM:-} ]]; then
+    export IFOS_WELCOME_TERM=1
+    if command -v alacritty >/dev/null; then
+        exec alacritty --class ifos-welcome -e "$0" "$@"
+    elif command -v xterm >/dev/null; then
+        exec xterm -class ifos-welcome -e "$0" "$@"
+    fi
+    exit 0
+fi
+
+c_reset=$'\033[0m'; c_b=$'\033[1m'; c_blue=$'\033[1;34m'; c_dim=$'\033[2m'
+
+banner() {
+cat <<'EOF'
+
+    ██╗███████╗ ██████╗ ███████╗
+    ██║██╔════╝██╔═══██╗██╔════╝
+    ██║█████╗  ██║   ██║███████╗
+    ██║██╔══╝  ██║   ██║╚════██║
+    ██║██║     ╚██████╔╝███████║
+    ╚═╝╚═╝      ╚═════╝ ╚══════╝
+EOF
+}
+
+mark_done() {
+    mkdir -p "$(dirname "$STAMP")" 2>/dev/null && : >"$STAMP" 2>/dev/null
+}
+
+menu_dialog() {
+    local -a items
+    if (( LIVE )); then
+        items=(
+            install  "Install IFOS on this computer"
+            wifi     "Connect to a network"
+            apps     "Install applications (browsers, games, drivers)"
+            keys     "Keyboard shortcuts"
+            gparted  "Make room on a disk (GParted)"
+            shell    "Just give me a terminal"
+        )
+    else
+        items=(
+            apps     "Install applications (browsers, games, drivers)"
+            keys     "Keyboard shortcuts"
+            aur      "Enable AUR access (install yay)"
+            update   "Update the system now"
+            shell    "Close"
+        )
+    fi
+    dialog --clear --backtitle "IFOS" --title " Welcome to IFOS " \
+        --cancel-label "Close" \
+        --menu "\n$( (( LIVE )) && echo 'You are running IFOS from the live medium — nothing has been written to your disks.' || echo 'A few things you might want to set up.' )\n" \
+        18 72 8 "${items[@]}" 3>&1 1>&2 2>&3
+}
+
+menu_plain() {
+    clear; banner
+    printf '\n%s  Welcome to IFOS%s\n' "$c_b" "$c_reset"
+    if (( LIVE )); then
+        printf '%s  Running from live media — nothing has been written to your disks.%s\n\n' "$c_dim" "$c_reset"
+        printf '   1) Install IFOS on this computer\n'
+        printf '   2) Connect to a network\n'
+        printf '   3) Install applications\n'
+        printf '   4) Keyboard shortcuts\n'
+        printf '   5) Make room on a disk (GParted)\n'
+        printf '   6) Just give me a terminal\n\n'
+        read -rp "  Choice: " c
+        case $c in 1) echo install;; 2) echo wifi;; 3) echo apps;; 4) echo keys;; 5) echo gparted;; *) echo shell;; esac
+    else
+        printf '\n'
+        printf '   1) Install applications\n'
+        printf '   2) Keyboard shortcuts\n'
+        printf '   3) Enable AUR access (install yay)\n'
+        printf '   4) Update the system\n'
+        printf '   5) Close\n\n'
+        read -rp "  Choice: " c
+        case $c in 1) echo apps;; 2) echo keys;; 3) echo aur;; 4) echo update;; *) echo shell;; esac
+    fi
+}
+
+while :; do
+    if command -v dialog >/dev/null && [[ -t 0 && -t 1 ]]; then
+        choice=$(menu_dialog) || { clear; mark_done; exit 0; }
+    else
+        choice=$(menu_plain)
+    fi
+
+    case ${choice:-shell} in
+        install) clear; sudo install-ifos; ;;
+        wifi)    clear; command -v nmtui >/dev/null && sudo nmtui || sudo iwctl ;;
+        apps)    clear; ifos-software ;;
+        keys)    clear; less -R /usr/share/ifos/keybindings.txt ;;
+        gparted) (sudo gparted &) ; clear ;;
+        aur)     clear; install-yay; read -rp "  Press Enter… " ;;
+        update)  clear; sudo pacman -Syu; read -rp "  Press Enter… " ;;
+        shell|*) clear; mark_done; exit 0 ;;
+    esac
+done

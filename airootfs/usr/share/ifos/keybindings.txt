@@ -1,0 +1,56 @@
+
+  ██╗███████╗ ██████╗ ███████╗     keyboard shortcuts
+  ██║██╔════╝██╔═══██╗██╔════╝     Mod = the Super / Windows key
+  ██║█████╗  ██║   ██║███████╗
+  ██║██╔══╝  ██║   ██║╚════██║
+  ██║██║     ╚██████╔╝███████║
+  ╚═╝╚═╝      ╚═════╝ ╚══════╝
+
+  LAUNCHING
+    Mod + Return           terminal (alacritty)
+    Mod + d                application launcher
+    Mod + e                file manager
+    Mod + Shift + a        IFOS Software — install apps on demand
+    Mod + Shift + i        install IFOS to disk
+    Mod + F1               this cheatsheet
+
+  WINDOWS
+    Mod + Shift + q        close window
+    Mod + h j k ;          focus left / down / up / right   (arrows work too)
+    Mod + Shift + h j k ;  move window
+    Mod + f                fullscreen
+    Mod + Shift + space    float / unfloat
+    Mod + r                resize mode (Enter or Esc to leave)
+    Mod + b / Mod + v      split horizontal / vertical
+    Mod + s / w / t        stacking / tabbed / toggle split
+
+  WORKSPACES
+    Mod + 1..9             go to workspace
+    Mod + Shift + 1..9     move window to workspace
+    Mod + Tab              back and forth
+    Mod + Ctrl + ← / →     previous / next workspace
+
+  SESSION
+    Mod + l                lock the screen
+    Mod + Shift + e        power menu (lock, log out, suspend, restart, shut down)
+    Mod + Shift + c        reload i3 configuration
+    Mod + Shift + r        restart i3 in place
+
+  SCREENSHOTS
+    Print                  whole screen  → ~/Pictures/screenshots + clipboard
+    Shift + Print          select a region → file + clipboard
+    Ctrl + Print           select a region → clipboard only
+
+  HARDWARE KEYS
+    Volume / mute keys     PipeWire volume
+    Brightness keys        backlight
+    Media keys             play / pause / next / previous
+    Mod + Shift + m        audio mixer (pavucontrol)
+
+  USEFUL COMMANDS
+    ifos-software          install browsers, games, drivers, office, dev tools
+    install-ifos           install IFOS to disk (live medium)
+    install-yay            enable AUR access
+    ifos-post-install      re-apply IFOS defaults on an installed system
+    nmtui                  text-mode network configuration
+    fastfetch              system information

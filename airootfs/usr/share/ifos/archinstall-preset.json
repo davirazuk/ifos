@@ -1,0 +1,54 @@
+{
+  "_comment": [
+    "Preset for `install-ifos --advanced`, which hands over to upstream",
+    "archinstall. It deliberately contains no disk_config: archinstall still",
+    "asks you about disks and accounts, and this file only pre-fills the IFOS",
+    "package set, profile and services.",
+    "Schema follows archinstall 4.x (examples/config-sample.json)."
+  ],
+  "archinstall-language": "English",
+  "audio_config": { "audio": "pipewire" },
+  "bootloader_config": {
+    "bootloader": "Grub",
+    "uki": false,
+    "removable": false
+  },
+  "hostname": "ifos",
+  "kernels": ["linux"],
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_enc": "UTF-8",
+    "sys_lang": "en_US"
+  },
+  "network_config": { "type": "nm" },
+  "ntp": true,
+  "profile_config": {
+    "gfx_driver": "All open-source (default)",
+    "greeter": "sddm",
+    "profile": {
+      "main": "Desktop",
+      "details": ["i3"]
+    }
+  },
+  "mirror_config": {
+    "optional_repositories": ["multilib"]
+  },
+  "packages": [
+    "alacritty", "fish", "polybar", "picom", "rofi", "dunst", "feh",
+    "i3-wm", "i3lock", "thunar", "gvfs", "tumbler", "xarchiver", "mousepad",
+    "sddm", "polkit", "polkit-gnome", "plymouth",
+    "networkmanager", "network-manager-applet", "nm-connection-editor",
+    "pipewire", "pipewire-pulse", "pipewire-alsa", "wireplumber",
+    "pavucontrol", "pamixer", "playerctl", "brightnessctl",
+    "bluez", "bluez-utils", "blueman",
+    "ttf-jetbrains-mono-nerd", "noto-fonts", "noto-fonts-emoji",
+    "otf-font-awesome", "papirus-icon-theme",
+    "adw-gtk-theme", "qt5ct", "qt6ct", "kvantum",
+    "fastfetch", "git", "vim", "htop", "arandr", "dialog",
+    "maim", "xclip", "xdotool", "xdg-user-dirs", "xdg-utils",
+    "unzip", "zip", "7zip", "bash-completion",
+    "os-prober", "reflector", "sudo"
+  ],
+  "swap": { "enabled": true, "algorithm": "zstd" },
+  "timezone": "UTC"
+}

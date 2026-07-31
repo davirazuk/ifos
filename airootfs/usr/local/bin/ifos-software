@@ -1,0 +1,348 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+#  ifos-software — install applications on demand
+#
+#  IFOS ships a deliberately small ISO. Everything heavy (browsers, games,
+#  IDEs, office suites, proprietary drivers) lives in the catalog under
+#  /usr/share/ifos/apps.d/ and is installed from here instead - in the live
+#  session or on an installed system.
+#
+#  The catalog is plain text. To add an entry, drop a line into any .list file:
+#      Name|Description|package1 package2|repo
+#  Sources: repo (official), multilib (32-bit, enables the repo automatically),
+#           aur (built with yay), flatpak (Flathub application ids)
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+CATALOG_DIR="${IFOS_CATALOG_DIR:-/usr/share/ifos/apps.d}"
+PACMAN_CONF=/etc/pacman.conf
+
+c_reset=$'\033[0m'; c_blue=$'\033[1;34m'; c_grn=$'\033[1;32m'
+c_yel=$'\033[1;33m'; c_red=$'\033[1;31m'; c_dim=$'\033[2m'
+
+die()  { printf '%s==>%s %s\n' "$c_red" "$c_reset" "$*" >&2; exit 1; }
+info() { printf '%s==>%s %s\n' "$c_blue" "$c_reset" "$*"; }
+ok()   { printf '%s  ✓%s %s\n' "$c_grn" "$c_reset" "$*"; }
+warn() { printf '%s  !%s %s\n' "$c_yel" "$c_reset" "$*"; }
+
+[[ -d $CATALOG_DIR ]] || die "Catalog not found at $CATALOG_DIR"
+
+if [[ $EUID -eq 0 ]]; then
+    SUDO=""
+    RUNNING_AS_ROOT=1
+else
+    command -v sudo >/dev/null || die "sudo is required when not running as root."
+    SUDO="sudo"
+    RUNNING_AS_ROOT=0
+fi
+
+have_dialog() { command -v dialog >/dev/null && [[ -t 0 && -t 1 ]]; }
+
+# ── Catalog loading ──────────────────────────────────────────────────────────
+# Category label = the .list filename with its numeric sort prefix stripped.
+category_label() {
+    local f=${1##*/}
+    f=${f%.list}; f=${f#*-}
+    printf '%s' "${f^}"
+}
+
+list_categories() {
+    local f
+    for f in "$CATALOG_DIR"/*.list; do
+        [[ -e $f ]] || continue
+        printf '%s\n' "$f"
+    done | sort
+}
+
+# Emits: name<TAB>description<TAB>packages<TAB>source
+read_category() {
+    local file=$1 line name desc pkgs src
+    while IFS= read -r line; do
+        [[ -z $line || $line == \#* ]] && continue
+        IFS='|' read -r name desc pkgs src <<<"$line"
+        [[ -n ${name:-} && -n ${pkgs:-} ]] || continue
+        printf '%s\t%s\t%s\t%s\n' "$name" "${desc:-}" "$pkgs" "${src:-repo}"
+    done <"$file"
+}
+
+is_installed() {    # is_installed <packages> [source]
+    local p
+    if [[ ${2:-} == flatpak ]]; then
+        command -v flatpak >/dev/null || return 1
+        for p in $1; do
+            flatpak info "$p" &>/dev/null || return 1
+        done
+        return 0
+    fi
+    for p in $1; do
+        pacman -Qq -- "$p" &>/dev/null || return 1
+    done
+    return 0
+}
+
+ensure_flatpak() {
+    command -v flatpak >/dev/null || {
+        info "Installing flatpak first…"
+        $SUDO pacman -S --needed --noconfirm flatpak || return 1
+    }
+    $SUDO flatpak remote-add --if-not-exists flathub \
+        https://dl.flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1
+    return 0
+}
+
+# ── multilib / AUR prerequisites ─────────────────────────────────────────────
+multilib_enabled() { pacman-conf --repo-list 2>/dev/null | grep -qx multilib; }
+
+enable_multilib() {
+    multilib_enabled && return 0
+    info "Enabling the multilib repository (needed for 32-bit game libraries)…"
+    $SUDO sed -i '/^#\[multilib\]/,/^#Include = .*mirrorlist/ s/^#//' "$PACMAN_CONF"
+    if ! multilib_enabled; then
+        printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' | $SUDO tee -a "$PACMAN_CONF" >/dev/null
+    fi
+    $SUDO pacman -Sy --noconfirm >/dev/null || true
+    multilib_enabled && ok "multilib enabled" || die "Could not enable multilib."
+}
+
+aur_helper() {
+    local h
+    for h in yay paru; do command -v "$h" >/dev/null && { printf '%s' "$h"; return 0; }; done
+    return 1
+}
+
+ensure_aur() {
+    aur_helper >/dev/null && return 0
+    if (( RUNNING_AS_ROOT )); then
+        warn "AUR packages cannot be built as root. Re-run ifos-software as your normal user."
+        return 1
+    fi
+    printf '\n%sSome of your choices come from the AUR, which needs a helper (yay).%s\n' "$c_yel" "$c_reset"
+    read -rp "  Install yay now? [Y/n] " a
+    [[ ${a,,} == n* ]] && return 1
+    install-yay || return 1
+    aur_helper >/dev/null
+}
+
+# ── Installation ─────────────────────────────────────────────────────────────
+# A few packages are inert until a service is running or the user is in a group.
+post_install_hint() {
+    case $1 in
+        docker)     $SUDO systemctl enable --now docker.service 2>/dev/null
+                    $SUDO usermod -aG docker "${SUDO_USER:-$USER}" 2>/dev/null
+                    warn "Log out and back in for Docker group membership to apply." ;;
+        libvirt)    $SUDO systemctl enable --now libvirtd.socket 2>/dev/null
+                    $SUDO usermod -aG libvirt "${SUDO_USER:-$USER}" 2>/dev/null
+                    warn "Log out and back in for libvirt group membership to apply." ;;
+        cups)       $SUDO systemctl enable --now cups.service 2>/dev/null ;;
+        tlp)        $SUDO systemctl enable --now tlp.service 2>/dev/null ;;
+        flatpak)    $SUDO flatpak remote-add --if-not-exists flathub \
+                        https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null ;;
+        syncthing)  systemctl --user enable --now syncthing.service 2>/dev/null ;;
+        nvidia|nvidia-open)
+                    warn "Reboot after installing graphics drivers." ;;
+    esac
+}
+
+install_selection() {
+    local -a repo_pkgs=() aur_pkgs=() flatpak_ids=()
+    local need_multilib=0 entry name pkgs src
+
+    for entry in "$@"; do
+        IFS=$'\t' read -r name _ pkgs src <<<"$entry"
+        case $src in
+            aur)      aur_pkgs+=($pkgs) ;;
+            flatpak)  flatpak_ids+=($pkgs) ;;
+            multilib) need_multilib=1; repo_pkgs+=($pkgs) ;;
+            *)        repo_pkgs+=($pkgs) ;;
+        esac
+    done
+
+    clear
+    printf '%s\n  IFOS — installing %d selection(s)\n%s\n\n' "$c_blue" "$#" "$c_reset"
+
+    (( need_multilib )) && enable_multilib
+
+    if (( ${#repo_pkgs[@]} )); then
+        info "Installing from the official repositories:"
+        printf '    %s\n' "${repo_pkgs[*]}"
+        $SUDO pacman -S --needed "${repo_pkgs[@]}" || {
+            warn "pacman did not complete successfully."
+            read -rp "  Press Enter to continue… "; return 1
+        }
+    fi
+
+    if (( ${#aur_pkgs[@]} )); then
+        if ensure_aur; then
+            local helper; helper=$(aur_helper)
+            info "Installing from the AUR with $helper:"
+            printf '    %s\n' "${aur_pkgs[*]}"
+            "$helper" -S --needed "${aur_pkgs[@]}" || warn "Some AUR builds failed."
+        else
+            warn "Skipped AUR packages: ${aur_pkgs[*]}"
+        fi
+    fi
+
+    if (( ${#flatpak_ids[@]} )); then
+        if ensure_flatpak; then
+            info "Installing from Flathub:"
+            printf '    %s\n' "${flatpak_ids[*]}"
+            $SUDO flatpak install -y flathub "${flatpak_ids[@]}" || warn "Some Flatpak installs failed."
+        else
+            warn "Skipped Flatpak packages: ${flatpak_ids[*]}"
+        fi
+    fi
+
+    local p
+    for p in "${repo_pkgs[@]}" "${aur_pkgs[@]}"; do post_install_hint "$p"; done
+
+    printf '\n'; ok "Done."
+    read -rp "  Press Enter to return to the menu… "
+}
+
+# ── Text-mode UI (used when dialog is unavailable) ───────────────────────────
+text_ui() {
+    local -a files; mapfile -t files < <(list_categories)
+    while :; do
+        clear
+        printf '%s\n  IFOS Software\n%s  %s\n\n' "$c_blue" "$c_reset" \
+            "$c_dim Install applications on demand.$c_reset"
+        local i=1 f
+        for f in "${files[@]}"; do
+            printf '   %2d) %s\n' "$i" "$(category_label "$f")"; ((i++))
+        done
+        printf '    q) quit\n\n'
+        read -rp "  Category: " choice
+        [[ ${choice,,} == q* || -z $choice ]] && return 0
+        [[ $choice =~ ^[0-9]+$ ]] || continue
+        (( choice >= 1 && choice <= ${#files[@]} )) || continue
+
+        local -a entries; mapfile -t entries < <(read_category "${files[choice-1]}")
+        clear
+        printf '%s  %s%s\n\n' "$c_blue" "$(category_label "${files[choice-1]}")" "$c_reset"
+        local n=1 e nm ds pk sc mark
+        for e in "${entries[@]}"; do
+            IFS=$'\t' read -r nm ds pk sc <<<"$e"
+            mark=" "; is_installed "$pk" "$sc" && mark="✓"
+            printf '   %s %2d) %-28s %s%s%s\n' "$mark" "$n" "$nm" "$c_dim" "$ds" "$c_reset"
+            ((n++))
+        done
+        printf '\n  Enter numbers separated by spaces (blank to go back)\n'
+        read -rp "  Install: " -a picks
+        (( ${#picks[@]} )) || continue
+        local -a sel=()
+        for p in "${picks[@]}"; do
+            [[ $p =~ ^[0-9]+$ ]] || continue
+            (( p >= 1 && p <= ${#entries[@]} )) && sel+=("${entries[p-1]}")
+        done
+        (( ${#sel[@]} )) && install_selection "${sel[@]}"
+    done
+}
+
+# ── dialog UI ────────────────────────────────────────────────────────────────
+dialog_ui() {
+    local -a files; mapfile -t files < <(list_categories)
+    local tmp; tmp=$(mktemp); trap 'rm -f "$tmp"' RETURN
+
+    while :; do
+        local -a menu=()
+        local i=1 f
+        for f in "${files[@]}"; do menu+=("$i" "$(category_label "$f")"); ((i++)); done
+
+        dialog --clear --backtitle "IFOS Software" \
+               --title " Categories " \
+               --cancel-label "Quit" \
+               --menu "\nInstall applications on demand.\nIFOS keeps the ISO small by not shipping these." \
+               18 62 10 "${menu[@]}" 2>"$tmp" || { clear; return 0; }
+
+        local choice; choice=$(<"$tmp")
+        [[ -n $choice ]] || { clear; return 0; }
+
+        local -a entries; mapfile -t entries < <(read_category "${files[choice-1]}")
+        local -a check=()
+        local n=1 e nm ds pk sc state
+        for e in "${entries[@]}"; do
+            IFS=$'\t' read -r nm ds pk sc <<<"$e"
+            state=off; is_installed "$pk" "$sc" && { state=on; ds="[installed] $ds"; }
+            [[ $sc == aur ]] && ds="$ds (AUR)"; [[ $sc == flatpak ]] && ds="$ds (Flathub)"
+            check+=("$n" "$nm — $ds" "$state")
+            ((n++))
+        done
+
+        dialog --clear --backtitle "IFOS Software" \
+               --title " $(category_label "${files[choice-1]}") " \
+               --ok-label "Install" --cancel-label "Back" \
+               --checklist "\nSpace selects, Enter confirms. Already-installed items are pre-ticked." \
+               22 96 12 "${check[@]}" 2>"$tmp" || continue
+
+        local -a picks; read -ra picks <<<"$(<"$tmp")"
+        local -a sel=()
+        for p in "${picks[@]}"; do
+            p=${p//\"/}
+            [[ $p =~ ^[0-9]+$ ]] || continue
+            local pk_check sc_check; IFS=$'\t' read -r _ _ pk_check sc_check <<<"${entries[p-1]}"
+            is_installed "$pk_check" "$sc_check" && continue      # already there, nothing to do
+            sel+=("${entries[p-1]}")
+        done
+
+        if (( ${#sel[@]} == 0 )); then
+            dialog --backtitle "IFOS Software" --msgbox \
+                   "\nNothing new selected." 7 40
+            continue
+        fi
+        install_selection "${sel[@]}"
+    done
+}
+
+# ── Non-interactive interface ────────────────────────────────────────────────
+usage() {
+    cat <<EOF
+Usage: ifos-software [options]
+
+  (no options)        open the interactive catalog
+  -l, --list          list every catalog entry
+  -i, --install NAME  install a catalog entry by name (repeatable)
+  -h, --help          this message
+
+The catalog lives in $CATALOG_DIR - it is plain text, edit it freely.
+EOF
+}
+
+main() {
+    local -a wanted=()
+    while (( $# )); do
+        case $1 in
+            -h|--help) usage; return 0 ;;
+            -l|--list)
+                local f e nm ds pk sc
+                for f in $(list_categories); do
+                    printf '\n%s%s%s\n' "$c_blue" "$(category_label "$f")" "$c_reset"
+                    while IFS=$'\t' read -r nm ds pk sc; do
+                        printf '  %-30s %s%s%s\n' "$nm" "$c_dim" "$ds" "$c_reset"
+                    done < <(read_category "$f")
+                done
+                return 0 ;;
+            -i|--install) shift; wanted+=("${1:-}") ;;
+            *) usage; return 1 ;;
+        esac
+        shift
+    done
+
+    if (( ${#wanted[@]} )); then
+        local -a sel=() f e nm
+        for f in $(list_categories); do
+            while IFS= read -r e; do
+                nm=${e%%$'\t'*}
+                for w in "${wanted[@]}"; do
+                    [[ ${nm,,} == "${w,,}" ]] && sel+=("$e")
+                done
+            done < <(read_category "$f")
+        done
+        (( ${#sel[@]} )) || die "No catalog entry matched: ${wanted[*]}"
+        install_selection "${sel[@]}"
+        return $?
+    fi
+
+    if have_dialog; then dialog_ui; else text_ui; fi
+}
+
+main "$@"

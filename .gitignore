@@ -1,0 +1,5 @@
+# build artefacts
+/work/
+/out/
+*.iso
+*.iso.sha256

@@ -1,0 +1,13 @@
+# IFOS software catalog — System utilities
+Papirus folder colours|Recolour Papirus folder icons (IFOS uses blue)|papirus-folders|aur
+Ark|KDE archive manager|ark|repo
+Timeshift|System snapshots and rollback|timeshift|repo
+Flatpak|Extra app store, sandboxed applications|flatpak|repo
+Bottles|Run Windows software in managed prefixes|bottles|aur
+btop|Good-looking resource monitor|btop|repo
+Stacer|Graphical system optimiser|stacer|aur
+BleachBit|Disk cleaner|bleachbit|repo
+Syncthing|Peer-to-peer file sync|syncthing|repo
+Input Leap|Share one keyboard and mouse across machines (was Barrier)|input-leap|repo
+CPU-X|Hardware information, like CPU-Z|cpu-x|repo
+Fonts (extended)|CJK, emoji and Microsoft-compatible fonts|noto-fonts-cjk noto-fonts-extra ttf-liberation|repo

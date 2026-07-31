@@ -1,0 +1,10 @@
+# IFOS software catalog — Office and productivity
+LibreOffice|Full office suite|libreoffice-fresh|repo
+OnlyOffice|Office suite with strong MS Office compatibility|onlyoffice-bin|aur
+Thunderbird|Email client|thunderbird|repo
+Obsidian|Markdown knowledge base|obsidian|repo
+Zathura|Keyboard-driven PDF reader|zathura zathura-pdf-mupdf|repo
+Evince|Traditional document viewer|evince|repo
+Calibre|E-book library manager|calibre|repo
+Nextcloud client|Sync files with a Nextcloud server|nextcloud-client|repo
+KeePassXC|Offline password manager|keepassxc|repo

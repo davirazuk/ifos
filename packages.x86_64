@@ -1,0 +1,253 @@
+# IFOS live medium package list
+#
+# Design rule: the ISO stays small. Heavy end-user applications (browsers,
+# games, IDEs, office suites) are NOT shipped here - they are offered by
+# `ifos-software`, which installs them on demand in the live session and on the
+# installed system. Nothing was dropped from the distro, only moved behind an
+# installer. See airootfs/usr/share/ifos/apps.d/.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Base system (upstream archiso releng set - keep in sync when rebasing)
+# ─────────────────────────────────────────────────────────────────────────────
+base
+linux
+linux-headers
+linux-firmware
+linux-firmware-marvell
+linux-atm
+amd-ucode
+intel-ucode
+mkinitcpio
+mkinitcpio-archiso
+mkinitcpio-nfs-utils
+sudo
+diffutils
+less
+man-db
+man-pages
+nano
+vim
+rsync
+pv
+screen
+tmux
+mc
+squashfs-tools
+xdg-utils
+zsh
+grml-zsh-config
+
+# Terminfo for terminals that may connect to the live system
+foot-terminfo
+ghostty-terminfo
+kitty-terminfo
+kmscon-terminfo
+rxvt-unicode-terminfo
+terminus-font
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Storage, partitioning and filesystems
+#   These are what make the installer able to actually format a disk.
+#   setup_ifos2.sh had deleted this entire block, which is why installing failed.
+# ─────────────────────────────────────────────────────────────────────────────
+parted
+gptfdisk
+fatresize
+dosfstools
+e2fsprogs
+btrfs-progs
+xfsprogs
+f2fs-tools
+exfatprogs
+ntfsprogs
+jfsutils
+nilfs-utils
+udftools
+bcachefs-tools
+mtools
+lvm2
+mdadm
+dmraid
+cryptsetup
+open-iscsi
+nbd
+lsscsi
+sdparm
+sg3_utils
+hdparm
+smartmontools
+nvme-cli
+mmc-utils
+usbutils
+usb_modeswitch
+usbmuxd
+libusb-compat
+bolt
+dmidecode
+
+# Rescue / recovery tooling
+clonezilla
+partclone
+partimage
+fsarchiver
+ddrescue
+gpart
+testdisk
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Networking
+# ─────────────────────────────────────────────────────────────────────────────
+networkmanager
+network-manager-applet
+nm-connection-editor
+wpa_supplicant
+iwd
+iw
+wireless_tools
+wireless-regdb
+b43-fwcutter
+broadcom-wl
+modemmanager
+dhcpcd
+systemd-resolvconf
+bind
+ldns
+ndisc6
+dnsmasq
+darkhttpd
+nfs-utils
+openssh
+openvpn
+openconnect
+vpnc
+ppp
+pptpclient
+xl2tpd
+wvdial
+ethtool
+tcpdump
+nmap
+lftp
+irssi
+lynx
+
+# Smartcards / security tokens
+pcsclite
+libfido2
+openpgp-card-tools
+sequoia-sq
+tpm2-tools
+tpm2-tss
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Boot / firmware
+# ─────────────────────────────────────────────────────────────────────────────
+grub
+efibootmgr
+edk2-shell
+refind
+syslinux
+memtest86+
+memtest86+-efi
+os-prober
+plymouth
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Virtual machine guest support
+# ─────────────────────────────────────────────────────────────────────────────
+hyperv
+open-vm-tools
+qemu-guest-agent
+virtualbox-guest-utils-nox
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Accessibility (the boot menu advertises a speech option - keep it working)
+# ─────────────────────────────────────────────────────────────────────────────
+brltty
+espeakup
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Installation tooling
+# ─────────────────────────────────────────────────────────────────────────────
+arch-install-scripts
+archinstall
+reflector
+dialog
+gparted
+git
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Xorg + i3 desktop
+# ─────────────────────────────────────────────────────────────────────────────
+xorg-server
+xorg-xinit
+xorg-xrandr
+xorg-xsetroot
+xterm
+i3-wm
+i3lock
+polybar
+rofi
+picom
+dunst
+feh
+alacritty
+thunar
+gvfs
+tumbler
+xarchiver
+mousepad
+maim
+xclip
+xdotool
+arandr
+htop
+fastfetch
+fish
+bash-completion
+unzip
+zip
+7zip
+xdg-user-dirs
+
+# Session management / privileges
+sddm
+polkit
+polkit-gnome
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Audio
+# ─────────────────────────────────────────────────────────────────────────────
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+alsa-utils
+livecd-sounds
+sof-firmware
+pavucontrol
+pamixer
+playerctl
+brightnessctl
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bluetooth
+# ─────────────────────────────────────────────────────────────────────────────
+bluez
+bluez-utils
+blueman
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fonts and theming
+# ─────────────────────────────────────────────────────────────────────────────
+ttf-jetbrains-mono-nerd
+noto-fonts
+noto-fonts-emoji
+otf-font-awesome
+adw-gtk-theme
+papirus-icon-theme
+qt5ct
+qt6ct
+kvantum
+xsettingsd
+python-gobject

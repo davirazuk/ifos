@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IFOS Software
+GenericName=Application installer
+Comment=Install browsers, games, drivers and more
+Exec=ifos-software
+Icon=system-software-install
+Terminal=true
+Categories=System;PackageManager;Settings;
+Keywords=install;software;apps;packages;store;

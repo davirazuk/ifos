@@ -1,0 +1,97 @@
+/* IFOS — Catppuccin Mocha theme for rofi.
+   Shipped as a real file: the old config referenced @theme "catppuccin-mocha",
+   which does not exist in rofi's built-in theme set, so rofi failed to start. */
+
+* {
+    base:       #1e1e2e;
+    mantle:     #181825;
+    surface0:   #313244;
+    surface1:   #45475a;
+    text:       #cdd6f4;
+    subtext0:   #a6adc8;
+    overlay0:   #6c7086;
+    blue:       #89b4fa;
+    mauve:      #cba6f7;
+    red:        #f38ba8;
+
+    background-color:   transparent;
+    text-color:         @text;
+    margin:             0;
+    padding:            0;
+    spacing:            0;
+}
+
+window {
+    background-color:   @base;
+    border:             2px;
+    border-color:       @blue;
+    border-radius:      12px;
+    width:              620px;
+    padding:            0;
+}
+
+mainbox {
+    padding:            14px;
+    spacing:            12px;
+}
+
+inputbar {
+    background-color:   @surface0;
+    border-radius:      8px;
+    padding:            10px 14px;
+    spacing:            10px;
+    children:           [ prompt, entry ];
+}
+
+prompt {
+    text-color:         @blue;
+    vertical-align:     0.5;
+}
+
+entry {
+    placeholder:        "search…";
+    placeholder-color:  @overlay0;
+    vertical-align:     0.5;
+}
+
+listview {
+    columns:            1;
+    lines:              9;
+    fixed-height:       false;
+    scrollbar:          false;
+    spacing:            4px;
+}
+
+element {
+    padding:            9px 12px;
+    border-radius:      8px;
+    spacing:            12px;
+}
+
+element normal.normal   { text-color: @text; }
+element alternate.normal { text-color: @text; }
+element selected.normal {
+    background-color:   @blue;
+    text-color:         @base;
+}
+element urgent.normal   { text-color: @red; }
+
+element-icon {
+    size:               1.15em;
+    vertical-align:     0.5;
+}
+
+element-text {
+    vertical-align:     0.5;
+    highlight:          bold @mauve;
+}
+
+message {
+    background-color:   @surface0;
+    border-radius:      8px;
+    padding:            10px;
+}
+
+textbox {
+    text-color:         @subtext0;
+}

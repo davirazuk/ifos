@@ -1,0 +1,11 @@
+# IFOS software catalog — Drivers and hardware support
+NVIDIA|NVIDIA driver (open kernel modules — the only branch Arch ships now), with 32-bit libraries|nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
+NVIDIA (DKMS)|NVIDIA driver built against custom or LTS kernels|nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
+AMD / Intel graphics (Vulkan)|Vulkan drivers plus 32-bit libraries for games|vulkan-radeon vulkan-intel lib32-vulkan-radeon lib32-vulkan-intel mesa lib32-mesa|multilib
+Printing|CUPS with a configuration GUI and common drivers|cups cups-pdf system-config-printer gutenprint|repo
+Scanning|SANE with a scanning GUI|sane simple-scan|repo
+Bluetooth audio codecs|AAC, LDAC and aptX support for headsets|libfreeaptx sbc|repo
+Laptop power management|TLP battery and thermal tuning|tlp tlp-rdw|repo
+Fingerprint reader|fprintd with PAM integration|fprintd|repo
+Xbox controller|xpadneo driver for Xbox wireless controllers|xpadneo-dkms|aur
+Firmware updates|fwupd, vendor firmware over LVFS|fwupd|repo

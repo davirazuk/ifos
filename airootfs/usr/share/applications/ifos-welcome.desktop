@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to IFOS
+Comment=Getting started with IFOS
+Exec=ifos-welcome
+Icon=help-about
+Terminal=true
+Categories=System;
+Keywords=welcome;help;start;

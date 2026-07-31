@@ -1,0 +1,10 @@
+NAME=IFOS
+PRETTY_NAME="IFOS Linux"
+ID=ifos
+ID_LIKE=arch
+BUILD_ID=rolling
+LOGO=archlinux-logo
+HOME_URL="https://github.com/davirazuk"
+DOCUMENTATION_URL="https://wiki.archlinux.org/"
+SUPPORT_URL="https://bbs.archlinux.org/"
+BUG_REPORT_URL="https://github.com/davirazuk/ifos/issues"

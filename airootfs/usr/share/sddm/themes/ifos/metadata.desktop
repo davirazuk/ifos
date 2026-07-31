@@ -1,0 +1,11 @@
+[SddmGreeterTheme]
+Name=IFOS
+Description=IFOS login theme
+Author=davirazuk
+Version=1.1
+License=MIT
+Type=sddm-theme
+MainScript=Main.qml
+ConfigFile=theme.conf
+Website=https://github.com/davirazuk/ifos
+Screenshot=background.png

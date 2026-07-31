@@ -1,0 +1,22 @@
+# Build environment for IFOS.
+# archiso only runs on Arch, so the ISO is built inside this container - the
+# host can be any distribution with podman, and no sudo is required.
+FROM docker.io/library/archlinux:latest
+
+RUN pacman -Syu --noconfirm archiso && pacman -Scc --noconfirm
+
+# mkarchiso only takes its unprivileged code path (pacstrap -N, which bind-mounts
+# /dev instead of mounting devtmpfs) when it is *not* run as root - no user
+# namespace may mount devtmpfs, so running the build as root inside a rootless
+# container fails. That path needs working newuidmap/newgidmap, and the upstream
+# container image ships them stripped of file capabilities, so grant setuid
+# instead. The subid range has to stay inside the 65536 ids podman maps in.
+RUN useradd -m -u 1000 build \
+ && printf 'build:1:65535\n' > /etc/subuid \
+ && printf 'build:1:65535\n' > /etc/subgid \
+ && chmod u+s /usr/bin/newuidmap /usr/bin/newgidmap
+
+COPY build-entrypoint.sh /usr/local/bin/build-entrypoint
+RUN chmod 755 /usr/local/bin/build-entrypoint
+
+WORKDIR /profile

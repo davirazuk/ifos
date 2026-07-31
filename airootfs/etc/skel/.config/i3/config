@@ -1,0 +1,165 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  IFOS — i3 configuration
+#  Docs: https://i3wm.org/docs/userguide.html      Cheatsheet: $mod+F1
+# ─────────────────────────────────────────────────────────────────────────────
+
+set $mod Mod4
+set $term alacritty
+set $menu rofi -show drun
+
+font pango:JetBrainsMono Nerd Font 10
+
+# ── Autostart ────────────────────────────────────────────────────────────────
+exec --no-startup-id dunst
+exec --no-startup-id picom -b
+exec --no-startup-id feh --no-fehbg --bg-fill /usr/share/backgrounds/ifos.png
+exec --no-startup-id nm-applet
+exec --no-startup-id blueman-applet
+exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+exec --no-startup-id xdg-user-dirs-update
+exec_always --no-startup-id ~/.config/polybar/launch.sh
+
+# Welcome screen: offers the installer on live media, first-run tips once on an
+# installed system, then never again.
+exec --no-startup-id ifos-welcome --autostart
+
+# ── Applications ─────────────────────────────────────────────────────────────
+bindsym $mod+Return    exec $term
+bindsym $mod+d         exec $menu
+bindsym $mod+e         exec thunar
+bindsym $mod+Shift+a   exec $term -e ifos-software
+bindsym $mod+Shift+i   exec $term -e sudo install-ifos
+bindsym $mod+Shift+q   kill
+bindsym $mod+Shift+c   reload
+bindsym $mod+Shift+r   restart
+bindsym $mod+Shift+e   exec ~/.config/rofi/powermenu.sh
+bindsym $mod+l         exec i3lock -c 1e1e2e -e -f
+
+# Cheatsheet
+bindsym $mod+F1 exec --no-startup-id $term --class ifos-help -e sh -c 'cat /usr/share/ifos/keybindings.txt; read -n1 -s -p "  press any key "'
+
+# ── Screenshots (maim) ───────────────────────────────────────────────────────
+bindsym Print       exec --no-startup-id sh -c 'mkdir -p ~/Pictures/screenshots; f=~/Pictures/screenshots/$(date +%F_%H-%M-%S).png; maim "$f" && xclip -selection clipboard -t image/png < "$f" && notify-send "Screenshot" "Saved to $f"'
+bindsym Shift+Print exec --no-startup-id sh -c 'mkdir -p ~/Pictures/screenshots; f=~/Pictures/screenshots/$(date +%F_%H-%M-%S).png; maim -s "$f" && xclip -selection clipboard -t image/png < "$f" && notify-send "Screenshot" "Selection saved"'
+bindsym Ctrl+Print  exec --no-startup-id sh -c 'maim -s | xclip -selection clipboard -t image/png && notify-send "Screenshot" "Copied to clipboard"'
+
+# ── Media / hardware keys ────────────────────────────────────────────────────
+bindsym XF86AudioRaiseVolume  exec --no-startup-id pamixer -i 5
+bindsym XF86AudioLowerVolume  exec --no-startup-id pamixer -d 5
+bindsym XF86AudioMute         exec --no-startup-id pamixer -t
+bindsym XF86AudioMicMute      exec --no-startup-id pamixer --default-source -t
+bindsym XF86MonBrightnessUp   exec --no-startup-id brightnessctl set 5%+
+bindsym XF86MonBrightnessDown exec --no-startup-id brightnessctl set 5%-
+bindsym XF86AudioPlay         exec --no-startup-id playerctl play-pause
+bindsym XF86AudioNext         exec --no-startup-id playerctl next
+bindsym XF86AudioPrev         exec --no-startup-id playerctl previous
+bindsym $mod+Shift+m          exec --no-startup-id pavucontrol
+
+# ── Focus ────────────────────────────────────────────────────────────────────
+bindsym $mod+h focus left
+bindsym $mod+j focus down
+bindsym $mod+k focus up
+bindsym $mod+semicolon focus right
+bindsym $mod+Left  focus left
+bindsym $mod+Down  focus down
+bindsym $mod+Up    focus up
+bindsym $mod+Right focus right
+
+# ── Move ─────────────────────────────────────────────────────────────────────
+bindsym $mod+Shift+h move left
+bindsym $mod+Shift+j move down
+bindsym $mod+Shift+k move up
+bindsym $mod+Shift+semicolon move right
+bindsym $mod+Shift+Left  move left
+bindsym $mod+Shift+Down  move down
+bindsym $mod+Shift+Up    move up
+bindsym $mod+Shift+Right move right
+
+# ── Layout ───────────────────────────────────────────────────────────────────
+bindsym $mod+b split h
+bindsym $mod+v split v
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+t layout toggle split
+bindsym $mod+f fullscreen toggle
+bindsym $mod+Shift+space floating toggle
+bindsym $mod+space focus mode_toggle
+bindsym $mod+a focus parent
+floating_modifier $mod
+
+# ── Workspaces ───────────────────────────────────────────────────────────────
+set $ws1 "1"
+set $ws2 "2"
+set $ws3 "3"
+set $ws4 "4"
+set $ws5 "5"
+set $ws6 "6"
+set $ws7 "7"
+set $ws8 "8"
+set $ws9 "9"
+
+bindsym $mod+1 workspace number $ws1
+bindsym $mod+2 workspace number $ws2
+bindsym $mod+3 workspace number $ws3
+bindsym $mod+4 workspace number $ws4
+bindsym $mod+5 workspace number $ws5
+bindsym $mod+6 workspace number $ws6
+bindsym $mod+7 workspace number $ws7
+bindsym $mod+8 workspace number $ws8
+bindsym $mod+9 workspace number $ws9
+
+bindsym $mod+Shift+1 move container to workspace number $ws1
+bindsym $mod+Shift+2 move container to workspace number $ws2
+bindsym $mod+Shift+3 move container to workspace number $ws3
+bindsym $mod+Shift+4 move container to workspace number $ws4
+bindsym $mod+Shift+5 move container to workspace number $ws5
+bindsym $mod+Shift+6 move container to workspace number $ws6
+bindsym $mod+Shift+7 move container to workspace number $ws7
+bindsym $mod+Shift+8 move container to workspace number $ws8
+bindsym $mod+Shift+9 move container to workspace number $ws9
+
+bindsym $mod+Tab        workspace back_and_forth
+bindsym $mod+Ctrl+Left  workspace prev
+bindsym $mod+Ctrl+Right workspace next
+
+# ── Resize ───────────────────────────────────────────────────────────────────
+mode "resize" {
+    bindsym h resize shrink width 10 px or 10 ppt
+    bindsym j resize grow height 10 px or 10 ppt
+    bindsym k resize shrink height 10 px or 10 ppt
+    bindsym semicolon resize grow width 10 px or 10 ppt
+    bindsym Left  resize shrink width 10 px or 10 ppt
+    bindsym Down  resize grow height 10 px or 10 ppt
+    bindsym Up    resize shrink height 10 px or 10 ppt
+    bindsym Right resize grow width 10 px or 10 ppt
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
+bindsym $mod+r mode "resize"
+
+# ── Window rules ─────────────────────────────────────────────────────────────
+for_window [window_role="pop-up"]         floating enable
+for_window [window_role="task_dialog"]    floating enable
+for_window [window_type="dialog"]         floating enable
+for_window [class="Pavucontrol"]          floating enable, resize set 800 550
+for_window [class="Blueman-manager"]      floating enable, resize set 700 500
+for_window [class="Arandr"]               floating enable
+for_window [class="Gparted"]              floating enable
+for_window [class="Nm-connection-editor"] floating enable
+for_window [class="ifos-welcome"]         floating enable, resize set 900 620, move position center
+for_window [class="ifos-help"]            floating enable, resize set 820 640, move position center
+
+# ── Appearance ───────────────────────────────────────────────────────────────
+gaps inner 8
+gaps outer 4
+smart_gaps on
+smart_borders on
+default_border pixel 2
+default_floating_border pixel 2
+
+# class                 border  backgr. text    indicator child_border
+client.focused          #89b4fa #89b4fa #1e1e2e #b4befe   #89b4fa
+client.focused_inactive #313244 #313244 #cdd6f4 #313244   #313244
+client.unfocused        #313244 #1e1e2e #6c7086 #313244   #313244
+client.urgent           #f38ba8 #f38ba8 #1e1e2e #f38ba8   #f38ba8
+client.background       #1e1e2e

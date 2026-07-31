@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install IFOS
+GenericName=System installer
+Comment=Install IFOS to this computer, optionally alongside your current system
+Exec=sudo install-ifos
+Icon=system-software-install
+Terminal=true
+Categories=System;
+Keywords=install;installer;setup;

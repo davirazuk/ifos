@@ -1,0 +1,20 @@
+
+  ██╗███████╗ ██████╗ ███████╗
+  ██║██╔════╝██╔═══██╗██╔════╝
+  ██║█████╗  ██║   ██║███████╗
+  ██║██╔══╝  ██║   ██║╚════██║
+  ██║██║     ╚██████╔╝███████║
+  ╚═╝╚═╝      ╚═════╝ ╚══════╝
+       IFOS Linux — rolling
+
+  You are running IFOS from live media. Nothing has been written to your disks.
+
+  • Install IFOS:          install-ifos      (guided; can install alongside
+                                              an existing system)
+  • Install applications:  ifos-software
+  • Connect to a network:  nmtui
+  • Keyboard shortcuts:    Mod+F1 in the desktop
+  • System info:           fastfetch
+
+  Live desktop login: ifos / ifos      (this console is already root)
+

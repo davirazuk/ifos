@@ -1,0 +1,30 @@
+[global]
+    monitor = 0
+    follow = mouse
+    width = 300
+    height = 100
+    origin = top-right
+    offset = 10x10
+    separator_height = 2
+    padding = 10
+    horizontal_padding = 10
+    frame_width = 2
+    frame_color = "#89b4fa"
+    font = JetBrainsMono Nerd Font 10
+    format = "<b>%s</b>\n%b"
+    corner_radius = 6
+
+[urgency_low]
+    background = "#1e1e2e"
+    foreground = "#cdd6f4"
+    timeout = 5
+
+[urgency_normal]
+    background = "#1e1e2e"
+    foreground = "#cdd6f4"
+    timeout = 8
+
+[urgency_critical]
+    background = "#f38ba8"
+    foreground = "#1e1e2e"
+    timeout = 0

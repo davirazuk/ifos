@@ -1,0 +1,53 @@
+# IFOS software catalog — Escola / School
+#
+# Everything a technical-course student is likely to be told to install, grouped
+# so it can be pulled down in one go on the first day. Organised by subject area
+# rather than by course name, so it stays useful as the course list changes.
+
+# ── Programação / Programming ────────────────────────────────────────────────
+Programação — básico|Editor, compiladores C/C++, Python e Git (VS Code, gcc, gdb, python)|code base-devel gdb python python-pip git|repo
+Java (JDK)|OpenJDK 21 e ferramentas Java|jdk-openjdk|repo
+Python científico|NumPy, Pandas, Matplotlib e Jupyter|python-numpy python-pandas python-matplotlib jupyterlab|repo
+Node.js e web|Node, npm e ferramentas de front-end|nodejs npm|repo
+PHP e Apache|Stack web clássica para as aulas de Internet|php php-apache apache|repo
+IDEs JetBrains|IntelliJ, PyCharm, CLion via Toolbox|jetbrains-toolbox|aur
+
+# ── Banco de dados / Databases ───────────────────────────────────────────────
+MariaDB (MySQL)|Servidor de banco de dados relacional|mariadb|repo
+PostgreSQL|Servidor de banco de dados relacional|postgresql|repo
+DBeaver|Cliente gráfico universal de banco de dados|dbeaver|repo
+SQLite Browser|Visualizador e editor de bancos SQLite|sqlitebrowser|repo
+
+# ── Redes / Networking ───────────────────────────────────────────────────────
+Wireshark|Analisador de tráfego de rede|wireshark-qt|repo
+Ferramentas de rede|nmap, traceroute, netcat, iperf3 e whois|nmap traceroute openbsd-netcat iperf3 whois|repo
+GNS3|Simulador de topologias de rede|gns3-gui gns3-server|aur
+Cisco Packet Tracer|Simulador de redes da Cisco (requer conta Netacad)|packettracer|aur
+Servidor SSH|Acesso remoto por SSH|openssh|repo
+
+# ── Eletrônica e automação / Electronics ─────────────────────────────────────
+Arduino IDE|Programação de placas Arduino|arduino-ide|aur
+KiCad|Projeto de esquemas e placas de circuito impresso|kicad kicad-library kicad-library-3d|repo
+Fritzing|Prototipagem eletrônica didática|fritzing|aur
+Digital / Logisim|Simulador de circuitos lógicos|logisim-evolution|aur
+
+# ── Manutenção e suporte / Maintenance & support ─────────────────────────────
+Diagnóstico de hardware|Informações e testes de hardware|hardinfo2 lshw dmidecode stress|repo
+Gravação de imagens|Ventoy e balenaEtcher para pendrives inicializáveis|ventoy balena-etcher|aur
+Acesso remoto|RustDesk e AnyDesk para suporte remoto|rustdesk-bin anydesk-bin|aur
+Recuperação de dados|TestDisk, PhotoRec e ddrescue|testdisk ddrescue|repo
+
+# ── Estudo / Study ───────────────────────────────────────────────────────────
+LibreOffice (pt-BR)|Suíte de escritório com corretor ortográfico em português|libreoffice-fresh libreoffice-fresh-pt-br|repo
+Corretor ortográfico pt-BR|Dicionário Hunspell de português brasileiro|hunspell-pt-br|aur
+GeoGebra|Matemática, geometria e gráficos|org.geogebra.GeoGebra|flatpak
+Octave|Cálculo numérico, alternativa livre ao MATLAB|octave|repo
+Anki|Repetição espaçada para memorização|anki|repo
+Zotero|Gerenciador de referências bibliográficas|zotero|aur
+draw.io|Diagramas, fluxogramas e UML|drawio-desktop-bin|aur
+Obsidian|Cadernos e anotações em Markdown|obsidian|repo
+
+# ── Virtualização / Virtualisation ───────────────────────────────────────────
+VirtualBox|Máquinas virtuais (usado em muitas disciplinas)|virtualbox virtualbox-host-dkms linux-headers|repo
+QEMU / KVM|Virtualização nativa com interface gráfica|qemu-desktop libvirt virt-manager dnsmasq edk2-ovmf|repo
+Docker|Contêineres|docker docker-compose|repo

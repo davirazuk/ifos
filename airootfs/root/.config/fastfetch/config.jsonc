@@ -1,0 +1,34 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "builtin",
+    "source": "arch",
+    "color": {
+      "1": "blue",
+      "2": "cyan"
+    },
+    "padding": { "top": 1, "left": 2 }
+  },
+  "display": {
+    "separator": "  ",
+    "color": { "keys": "blue" }
+  },
+  "modules": [
+    { "type": "title", "fqdn": false },
+    "separator",
+    { "type": "os",     "key": " OS",      "keyColor": "blue" },
+    { "type": "kernel", "key": " Kernel",  "keyColor": "blue" },
+    { "type": "uptime", "key": "󱑍 Uptime",  "keyColor": "blue" },
+    { "type": "shell",  "key": " Shell",   "keyColor": "mauve" },
+    { "type": "wm",     "key": " WM",      "keyColor": "mauve" },
+    { "type": "terminal","key": " Term",   "keyColor": "mauve" },
+    { "type": "cpu",    "key": " CPU",     "keyColor": "green" },
+    { "type": "gpu",    "key": "󰍹 GPU",    "keyColor": "green" },
+    { "type": "memory", "key": " RAM",     "keyColor": "green" },
+    { "type": "disk",   "key": "󰋊 Disk",   "keyColor": "yellow",
+      "folders": "/" },
+    { "type": "localip","key": "󰩠 IP",     "keyColor": "yellow" },
+    "separator",
+    { "type": "colors", "symbol": "circle", "paddingLeft": 1 }
+  ]
+}
