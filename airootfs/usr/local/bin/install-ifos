@@ -247,6 +247,85 @@ SWAP_DEFAULT=$(( RAM_MIB > 8192 ? 8192 : RAM_MIB ))
 SWAP_MIB=$(ask_input "Swap file size in MiB (0 for none)" "$SWAP_DEFAULT") || exit 1
 [[ $SWAP_MIB =~ ^[0-9]+$ ]] || SWAP_MIB=0
 
+# ── Graphics driver ──────────────────────────────────────────────────────────
+# Nothing installed a graphics driver. Intel and AMD survived that because mesa
+# arrives as a dependency, but an NVIDIA machine came up on nouveau or on
+# software rendering - which is also why the desktop's compositor has a check
+# for whether a render node exists at all. A machine whose whole selling point
+# includes games should not need a trip to the software catalog before it can
+# draw one.
+GPU_PKGS=()
+ENABLE_MULTILIB=0
+
+detect_gpus() {
+    local line out=""
+    while IFS= read -r line; do
+        case ${line,,} in
+            *nvidia*)                                   out+="nvidia "  ;;
+            *"advanced micro devices"*|*"amd/ati"*|*radeon*) out+="amd " ;;
+            *intel*)                                    out+="intel "   ;;
+        esac
+    done < <(lspci 2>/dev/null | grep -Ei 'vga|3d controller|display controller')
+    printf '%s' "$out"
+}
+
+GPUS=$(detect_gpus)
+GPU_SEEN=$(lspci 2>/dev/null | grep -Ei 'vga|3d controller|display controller' |
+           sed 's/^[0-9a-f:.]* //' | head -3)
+[[ -n $GPU_SEEN ]] || GPU_SEEN="(none detected)"
+
+# Mesa and its 32-bit half are wanted in every case: they drive Intel and AMD,
+# and on a hybrid laptop they still drive the integrated chip that everything
+# except games runs on.
+MESA_SET="mesa lib32-mesa"
+[[ $GPUS == *intel* ]] && MESA_SET+=" vulkan-intel lib32-vulkan-intel"
+[[ $GPUS == *amd*   ]] && MESA_SET+=" vulkan-radeon lib32-vulkan-radeon"
+
+if [[ $GPUS == *nvidia* ]]; then
+    nv_label="NVIDIA driver + 32-bit libraries (recommended)"
+    [[ $GPUS == *intel* || $GPUS == *amd* ]] &&
+        nv_label="NVIDIA + integrated graphics, with prime-run (recommended)"
+
+    GPU_CHOICE=$(ask_menu "Graphics detected:
+
+$GPU_SEEN
+
+Which driver should be installed?
+
+The NVIDIA driver here is the open kernel module branch, which supports
+GTX 16-series, RTX and newer. On a card older than that - GTX 900 or 1000 -
+choose nouveau instead; it is slower but it will actually start." \
+        nvidia  "$nv_label" \
+        nouveau "Open source driver, for NVIDIA cards older than GTX 16xx" \
+        skip    "Install a driver later with ifos-software") || exit 1
+else
+    GPU_CHOICE=$( [[ -n $GPUS ]] && echo mesa || echo skip )
+    if [[ $GPU_CHOICE == mesa ]]; then
+        ask_yesno "Graphics detected:
+
+$GPU_SEEN
+
+Install the open source drivers and 32-bit game libraries for it?" || GPU_CHOICE=skip
+    fi
+fi
+
+case $GPU_CHOICE in
+    nvidia)
+        # shellcheck disable=SC2206
+        GPU_PKGS=(nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils $MESA_SET)
+        # A hybrid laptop needs prime-run to send a game to the discrete chip;
+        # without it every game runs on the integrated one and nobody can tell
+        # why the machine is slow.
+        [[ $GPUS == *intel* || $GPUS == *amd* ]] && GPU_PKGS+=(nvidia-prime)
+        ENABLE_MULTILIB=1 ;;
+    nouveau|mesa)
+        # shellcheck disable=SC2206
+        GPU_PKGS=($MESA_SET)
+        ENABLE_MULTILIB=1 ;;
+    skip)
+        GPU_PKGS=() ;;
+esac
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 case $MODE in
   alongside) plan="Create a new $(( (FREE_END-FREE_START)/1024 )) GiB $FSTYPE partition in the free space on $DISK.
@@ -267,6 +346,7 @@ ${c_b}  IFOS is about to install with these settings${c_reset}
     Disk           $DISK
     Filesystem     $FSTYPE
     Swap file      $SWAP_MIB MiB
+    Graphics       $( (( ${#GPU_PKGS[@]} )) && echo "${GPU_PKGS[*]}" || echo 'none (install later with ifos-software)' )
     Firmware       $FIRMWARE
     Hostname       $HOSTNAME
     User           $USERNAME $( [[ -n $ROOTPASS ]] && echo '(+ separate root password)' || echo '(root locked, sudo only)' )
@@ -413,6 +493,8 @@ PACKAGES=(
 )
 
 info "Installing the base system — this is the long part…"
+(( ${#GPU_PKGS[@]} )) && PACKAGES+=("${GPU_PKGS[@]}")
+
 pacstrap -K "$MNT" "${PACKAGES[@]}" || die "pacstrap failed. See $LOG"
 ok "Packages installed"
 
@@ -458,6 +540,7 @@ XKB_MODEL=pc105
     printf 'IFOS_USERPASS=%q\n'   "$USERPASS"
     printf 'IFOS_ROOTPASS=%q\n'   "$ROOTPASS"
     printf 'IFOS_DISK=%q\n'       "$DISK"
+    printf 'IFOS_MULTILIB=%q\n'   "$ENABLE_MULTILIB"
 } > "$MNT/root/.ifos-answers"
 chmod 600 "$MNT/root/.ifos-answers"
 
@@ -469,6 +552,18 @@ set -euo pipefail
 
 ln -sf "/usr/share/zoneinfo/${IFOS_TIMEZONE}" /etc/localtime
 hwclock --systohc || true
+
+# The live medium has multilib enabled, so pacstrap could install the 32-bit
+# graphics libraries; a freshly installed system has it commented out. Left
+# that way, those packages would belong to no repository at all - pacman would
+# never update them again and would warn about them on every upgrade. Enable it
+# here so what was just installed stays installed.
+if [[ ${IFOS_MULTILIB:-0} == 1 ]] && ! pacman-conf --repo-list | grep -qx multilib; then
+    sed -i '/^#\[multilib\]/,/^#Include = .*mirrorlist/ s/^#//' /etc/pacman.conf
+    pacman-conf --repo-list | grep -qx multilib ||
+        printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+    pacman -Sy --noconfirm >/dev/null 2>&1 || true
+fi
 
 grep -q "^${IFOS_LOCALE}" /etc/locale.gen || echo "${IFOS_LOCALE} UTF-8" >> /etc/locale.gen
 sed -i "s/^#${IFOS_LOCALE}/${IFOS_LOCALE}/" /etc/locale.gen
