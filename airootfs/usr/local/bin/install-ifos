@@ -371,7 +371,7 @@ PACKAGES=(
 
     # ── audio and bluetooth ──────────────────────────────────────────────────
     pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber
-    pavucontrol pamixer playerctl brightnessctl
+    pavucontrol pamixer playerctl brightnessctl power-profiles-daemon
     bluez bluez-utils blueman
 
     # ── desktop ──────────────────────────────────────────────────────────────
@@ -515,6 +515,9 @@ systemctl enable fstrim.timer
 systemctl enable cups.service
 systemctl enable ufw.service
 systemctl enable paccache.timer
+# Without this the bar's power profile module has nothing to talk to and stays
+# blank, since powerprofilesctl reaches the daemon over D-Bus.
+systemctl enable power-profiles-daemon.service
 ufw default deny incoming  || true
 ufw default allow outgoing || true
 ufw --force enable         || true

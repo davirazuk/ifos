@@ -247,6 +247,10 @@ pavucontrol
 pamixer
 playerctl
 brightnessctl
+# Power profiles, switchable from the bar. Deliberately not tlp: the two
+# conflict, and tlp has no equivalent of a profile you can change from the
+# desktop without a root shell.
+power-profiles-daemon
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bluetooth
