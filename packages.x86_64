@@ -203,6 +203,12 @@ feh
 alacritty
 thunar
 gvfs
+# Removable media. thunar-volman only acts while Thunar is open - it is a
+# Thunar plugin - so on the plain desktop a pendrive did nothing at all when
+# plugged in: no mount, no notification, nothing to click. udiskie mounts it
+# and says so, which on a school machine is most of what storage means.
+udisks2
+udiskie
 tumbler
 xarchiver
 mousepad
@@ -210,6 +216,9 @@ maim
 xclip
 xdotool
 arandr
+# Warms the screen after sunset. Coordinates are pinned to Dourados in
+# /etc/skel, so this needs no geolocation service and works offline.
+gammastep
 htop
 # A task manager you can read without knowing htop's keys: process list, and
 # CPU / memory / network graphs. GTK, so the IFOS theme already covers it, and

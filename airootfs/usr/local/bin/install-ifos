@@ -379,13 +379,16 @@ PACKAGES=(
     i3-wm i3lock xss-lock libnotify polybar rofi picom dunst feh
     xfce4-terminal alacritty xterm
     thunar thunar-volman thunar-archive-plugin gvfs gvfs-mtp gvfs-smb tumbler
+    # thunar-volman only automounts while Thunar is running; udiskie does it
+    # for the desktop itself, which is where a pendrive is actually plugged in.
+    udisks2 udiskie
     xarchiver mousepad gthumb
     # sddm-greeter links against Qt5, not qt6-declarative; without this the
     # ifos login theme's `import QtQuick.Controls 2.15` fails to resolve and
     # SDDM silently falls back to its stock theme.
     sddm qt5-quickcontrols2 polkit polkit-gnome plymouth
     xdg-user-dirs xdg-utils xdg-desktop-portal xdg-desktop-portal-gtk
-    maim xclip xdotool arandr htop xfce4-taskmanager fastfetch dialog
+    maim xclip xdotool arandr htop xfce4-taskmanager fastfetch dialog gammastep
     webkit2gtk-4.1 python-gobject adwaita-icon-theme adwaita-cursors
 
     # ── the applications a student actually needs on day one ─────────────────
