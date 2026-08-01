@@ -277,9 +277,9 @@ install_missing_packages() {
     done
     (( ${#missing[@]} )) || return 0
 
-    info "Installing packages new to IFOS: ${missing[*]}"
+    info "Instalando pacotes novos do IFOS: ${missing[*]}"
     $SUDO pacman -S --needed --noconfirm "${missing[@]}" \
-        || warn "Some new packages failed to install."
+        || warn "Alguns pacotes novos falharam ao instalar."
 }
 
 # ── Repairs for home directories that already exist ──────────────────────────
