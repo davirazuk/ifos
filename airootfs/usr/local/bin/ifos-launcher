@@ -331,6 +331,23 @@ class Catalog:
             if entries:
                 self.sections.append((stem, SECTION_TITLES.get(stem, stem.capitalize()), entries))
 
+    def refresh_installed(self) -> None:
+        """Re-ask what is installed, after something has been installed."""
+        self.installed_pkgs = {
+            line.strip() for line in sh(["pacman", "-Qq"]).splitlines() if line.strip()
+        }
+        self.flatpaks = {
+            line.split()[0]
+            for line in sh(["flatpak", "list", "--app", "--columns=application"]).splitlines()
+            if line.strip()
+        }
+        for _key, _title, entries in self.sections:
+            for entry in entries:
+                if entry.get("kind") == "package":
+                    entry["installed"] = self._is_installed(
+                        entry["packages"], entry.get("source", "repo")
+                    )
+
     def _is_installed(self, packages: list[str], source: str) -> bool:
         if source == "flatpak":
             return all(p in self.flatpaks for p in packages)
@@ -1067,14 +1084,33 @@ class Launcher(Gtk.Window):
             self.notify("Nenhum terminal disponível para instalar.")
             return
         try:
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 [terminal, "-x" if terminal == "xfce4-terminal" else "-e",
                  "ifos-software", "--install", entry["name"]],
                 start_new_session=True,
             )
-            Gtk.main_quit()
         except OSError as exc:
             self.notify("Falha ao instalar: %s" % exc)
+            return
+
+        # Deliberately NOT quitting here. In the Big Picture session the
+        # launcher is the session - i3 runs `ifos-launcher; i3-msg exit` - so
+        # closing it took the whole session down and killed the install
+        # terminal along with it, part way through installing. The same shape
+        # of bug as locking the screen from here used to be.
+        #
+        # Waiting for the terminal also means the tile can stop saying INSTALAR
+        # once the thing is actually installed, instead of until the launcher is
+        # next opened.
+        GLib.timeout_add_seconds(2, self._watch_install, proc)
+
+    def _watch_install(self, proc) -> bool:
+        if proc.poll() is None:
+            return True                      # still installing
+        self.catalog.refresh_installed()
+        if not self._searching:
+            self.populate(self.tab_keys[self.section_index])
+        return False
 
     def notify(self, message: str) -> None:
         dialog = Gtk.MessageDialog(
@@ -1125,22 +1161,92 @@ class Launcher(Gtk.Window):
         return False
 
     # gamepad ----------------------------------------------------------------
+    #  Three things were wrong with reading the pad, and all of them show up in
+    #  the Big Picture session, where the launcher *is* the session:
+    #
+    #  It looked for a controller once, at startup. Plugging one in afterwards -
+    #  which is the normal order, since the session starts when the machine does
+    #  - was never noticed. It is polled for now.
+    #
+    #  Unplugging one left the watch in place on a dead descriptor, which then
+    #  reported readable forever and returned nothing: a core spinning at 100%
+    #  until the launcher was closed. The watch is dropped and the search for a
+    #  controller resumes.
+    #
+    #  And events were read one fixed-size block at a time with a short read
+    #  silently discarded. A read that returned part of an event threw the
+    #  stream out of alignment permanently - every later event decoded as
+    #  garbage, so the pad appeared to work and then stopped. Bytes are buffered
+    #  and consumed eight at a time instead.
+    GAMEPAD_EVENT = 8               # struct js_event: __u32, __s16, __u8, __u8
+    GAMEPAD_POLL_SECONDS = 3
+
     def attach_gamepad(self) -> None:
+        self._pad_stream = None
+        self._pad_watch = 0
+        self._pad_buf = b""
+        self._open_gamepad()
+        GLib.timeout_add_seconds(self.GAMEPAD_POLL_SECONDS, self._poll_gamepad)
+
+    def _poll_gamepad(self) -> bool:
+        if self._pad_stream is None:
+            self._open_gamepad()
+        return True                 # keep looking, for as long as we are open
+
+    def _open_gamepad(self) -> None:
         for index in range(4):
             path = "/dev/input/js%d" % index
             if not os.path.exists(path):
                 continue
             try:
                 stream = open(path, "rb", buffering=0)
+                os.set_blocking(stream.fileno(), False)
             except OSError:
                 continue
-            GLib.io_add_watch(stream.fileno(), GLib.IO_IN, self._on_gamepad, stream)
+            self._pad_stream = stream
+            self._pad_buf = b""
+            self._pad_watch = GLib.io_add_watch(
+                stream.fileno(),
+                GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR | GLib.IO_NVAL,
+                self._on_gamepad, stream,
+            )
             return
 
-    def _on_gamepad(self, _fd, _condition, stream) -> bool:
-        data = stream.read(8)
-        if not data or len(data) < 8:
+    def _drop_gamepad(self) -> None:
+        if self._pad_stream is not None:
+            try:
+                self._pad_stream.close()
+            except OSError:
+                pass
+        self._pad_stream = None
+        self._pad_watch = 0
+        self._pad_buf = b""
+
+    def _on_gamepad(self, _fd, condition, stream) -> bool:
+        if condition & (GLib.IO_HUP | GLib.IO_ERR | GLib.IO_NVAL):
+            self._drop_gamepad()
+            return False            # removing the watch is what stops the spin
+
+        try:
+            chunk = stream.read(self.GAMEPAD_EVENT * 16)
+        except (BlockingIOError, InterruptedError):
             return True
+        except OSError:
+            self._drop_gamepad()
+            return False
+
+        if not chunk:               # end of file: the controller is gone
+            self._drop_gamepad()
+            return False
+
+        self._pad_buf += chunk
+        while len(self._pad_buf) >= self.GAMEPAD_EVENT:
+            event = self._pad_buf[: self.GAMEPAD_EVENT]
+            self._pad_buf = self._pad_buf[self.GAMEPAD_EVENT :]
+            self._handle_gamepad_event(event)
+        return True
+
+    def _handle_gamepad_event(self, data: bytes) -> None:
         _time, value, ev_type, number = struct.unpack("<IhBB", data)
         if ev_type & 0x01 and value == 1:
             if number == 0:
@@ -1162,7 +1268,6 @@ class Launcher(Gtk.Window):
                 self.flow.child_focus(
                     Gtk.DirectionType.DOWN if value > 0 else Gtk.DirectionType.UP
                 )
-        return True
 
 
 def main() -> int:
