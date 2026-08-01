@@ -2,44 +2,61 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  The power profile, in the bar. Click it to move to the next one.
 #
-#  Switching by hand means knowing the command and remembering the profile
-#  names, which is no way to ask someone to save their battery on the way to a
-#  lecture. This shows the current profile and cycles on a click.
+#  Event-driven. This used to be polled every thirty seconds, which meant that
+#  after clicking to change profile the bar went on showing the old one for up
+#  to half a minute - long enough to click again thinking it had not worked.
+#  power-profiles-daemon emits PropertiesChanged the moment the profile
+#  changes, and that signal carries the new value with it, so the bar updates
+#  as fast as the click and nothing is polled at all.
 #
-#  Silent on machines with no power profiles at all, the same way battery.sh is
-#  silent on a desktop - polybar simply shows nothing rather than an error.
+#  Reading goes over D-Bus rather than through powerprofilesctl, which is a
+#  Python script: starting an interpreter to read one word was the reason
+#  polling it was expensive in the first place. Setting still goes through
+#  powerprofilesctl, because that happens once per click and it is the
+#  supported interface.
 #
-#  The list of profiles is read from the daemon rather than hardcoded: what is
-#  offered depends on the hardware. A laptop on the intel_pstate or amd_pstate
-#  driver usually has all three, while one falling back to the placeholder
-#  driver has only balanced and power-saver, and cycling through a profile that
-#  does not exist would fail silently.
+#  Silent on machines with no power profiles, the same way battery.sh is silent
+#  on a desktop.
 # ─────────────────────────────────────────────────────────────────────────────
 set -u
 
-command -v powerprofilesctl >/dev/null 2>&1 || exit 0
-
-# Profile lines look like "* balanced:" or "  power-saver:" - a name on its own
-# followed by a colon. The indented detail lines underneath ("PlatformDriver:
-# placeholder") carry a value after the colon, so anchoring at end of line is
-# what separates them.
-profiles() {
-    powerprofilesctl list 2>/dev/null |
-        sed -n 's/^[ *]*\([a-z][a-z-]*\):[[:space:]]*$/\1/p'
-}
+# The daemon renamed its bus from net.hadess to org.freedesktop.UPower in 0.20
+# and still answers to both, but an older one only knows the first and a newer
+# one may eventually drop it. Ask for whichever replies.
+BUS=""
+for candidate in org.freedesktop.UPower.PowerProfiles net.hadess.PowerProfiles; do
+    if busctl --system status "$candidate" >/dev/null 2>&1; then
+        BUS=$candidate
+        break
+    fi
+done
+PATHNAME="/${BUS//.//}"
 
 label_for() {
     case $1 in
-        power-saver) printf '󰌪 Economia'    ;;
-        balanced)    printf '󰾅 Equilibrado' ;;
-        performance) printf '󰓅 Desempenho'  ;;
-        *)           printf '󰾆 %s' "$1"     ;;
+        power-saver) printf '%%{F#7ed957}󰌪%%{F-} Economia'    ;;
+        balanced)    printf '%%{F#7ed957}󰾅%%{F-} Equilibrado' ;;
+        performance) printf '%%{F#7ed957}󰓅%%{F-} Desempenho'  ;;
+        *)           printf '%%{F#7ed957}󰾆%%{F-} %s' "$1"     ;;
     esac
 }
 
+current_profile() {
+    [[ -n $BUS ]] || return 1
+    busctl --system get-property "$BUS" "$PATHNAME" "$BUS" ActiveProfile 2>/dev/null |
+        sed -n 's/^s "\(.*\)"$/\1/p'
+}
+
+# ── Click: move to the next profile ──────────────────────────────────────────
 if [[ ${1:-} == --cycle ]]; then
+    command -v powerprofilesctl >/dev/null 2>&1 || exit 0
     current=$(powerprofilesctl get 2>/dev/null) || exit 0
-    mapfile -t all < <(profiles)
+
+    # Read the list from the daemon rather than hardcoding three: what a machine
+    # offers depends on its hardware, and a laptop on the placeholder driver has
+    # only balanced and power-saver.
+    mapfile -t all < <(powerprofilesctl list 2>/dev/null |
+        sed -n 's/^[ *]*\([a-z][a-z-]*\):[[:space:]]*$/\1/p')
     (( ${#all[@]} )) || exit 0
 
     next=${all[0]}
@@ -57,7 +74,26 @@ if [[ ${1:-} == --cycle ]]; then
     exit 0
 fi
 
-current=$(powerprofilesctl get 2>/dev/null) || exit 0
-[[ -n $current ]] || exit 0
-label_for "$current"
-printf '\n'
+# ── Display: print now, then on every change ─────────────────────────────────
+[[ -n $BUS ]] || exit 0
+
+last=""
+emit() {
+    [[ -n ${1:-} ]] || return 0
+    [[ $1 == "$last" ]] && return 0     # the daemon owns two bus names and
+    last=$1                             # signals each, so changes arrive twice
+    label_for "$1"
+    printf '\n'
+}
+
+emit "$(current_profile)"
+
+# Without gdbus there is nothing to listen with; print the one value and let
+# polybar's interval take over.
+command -v gdbus >/dev/null 2>&1 || exit 0
+
+gdbus monitor --system --dest "$BUS" 2>/dev/null |
+while IFS= read -r line; do
+    [[ $line == *ActiveProfile* ]] || continue
+    emit "$(sed -n "s/.*'ActiveProfile': <'\([a-z-]*\)'>.*/\1/p" <<<"$line")"
+done

@@ -83,6 +83,13 @@ EXPR=$(build_expr)
 recolour()        { [[ -f $1 ]] && sed -i "$EXPR" "$1"; return 0; }
 recolour_system() { [[ -f $1 ]] && $SUDO sed -i "$EXPR" "$1"; return 0; }
 
+# The bar's scripts colour their own icons with polybar %{F...} tags, so they
+# carry palette hexes of their own and have to be repainted along with the
+# configuration files.
+for f in "$CFG"/polybar/scripts/*.sh; do
+    recolour "$f"
+done
+
 for f in "$CFG/i3/config" "$CFG/polybar/config.ini" "$CFG/rofi/ifos.rasi" \
          "$CFG/dunst/dunstrc" "$CFG/alacritty/alacritty.toml" \
          "$CFG/xfce4/terminal/terminalrc" "$CFG/gtk-3.0/gtk.css" \

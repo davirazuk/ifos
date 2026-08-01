@@ -21,4 +21,4 @@ case "$status" in
         ;;
 esac
 
-printf '%s %s%%\n' "$icon" "$cap"
+printf '%%{F#7ed957}%s%%{F-} %s%%\n' "$icon" "$cap"
