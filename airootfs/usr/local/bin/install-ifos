@@ -375,7 +375,7 @@ PACKAGES=(
     bluez bluez-utils blueman
 
     # ── desktop ──────────────────────────────────────────────────────────────
-    xorg-server xorg-xinit xorg-xrandr xorg-xsetroot
+    xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xf86-input-libinput
     i3-wm i3lock xss-lock libnotify polybar rofi picom dunst feh
     xfce4-terminal alacritty xterm
     thunar thunar-volman thunar-archive-plugin gvfs gvfs-mtp gvfs-smb tumbler
