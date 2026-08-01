@@ -84,6 +84,13 @@ usbmuxd
 libusb-compat
 bolt
 dmidecode
+# lspci. Three things read it and all three fail quietly without it: the
+# installer's graphics menu, which is what decides whether any GPU driver gets
+# installed at all; the installer's check for a Broadcom wireless chip, which
+# is what decides whether that laptop has Wi-Fi after the reboot; and
+# ifos-gpu, which is how the launcher knows to run games on the dedicated card.
+# It was arriving only as somebody else's dependency, which is not a guarantee.
+pciutils
 
 # Rescue / recovery tooling
 clonezilla
@@ -183,6 +190,12 @@ xorg-server
 xorg-xinit
 xorg-xrandr
 xorg-xsetroot
+# The i3 config runs `xset s 600` and `xset dpms 0 0 720` at login. Without
+# this package that line simply fails, and the two things it was there to do -
+# blank the screen after ten minutes, and hand xss-lock its cue to lock - never
+# happen. A school laptop then sits unlocked with the backlight on until the
+# battery gives out, which is the opposite of both intentions.
+xorg-xset
 # The X input driver. It is only an optional dependency of xorg-server, so it
 # was arriving by chance as something else's dependency - and nothing that
 # 30-touchpad.conf configures applies without it being the driver in use.

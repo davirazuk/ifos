@@ -50,13 +50,81 @@ PALETTES = {
     },
 }
 
-# 4x5 pixel-art glyphs, so no font file is needed for the wordmark.
+# Pixel-art glyphs, five rows tall, so no font file is needed for the wordmark.
+#
+# The blocks are drawn with a gutter between them, which means a stroke only
+# reads as a stroke where blocks touch edge to edge - diagonally adjacent
+# blocks read as two separate dots. The S used to have a middle bar of
+# `.XX.` that touched nothing: the left stroke above it and the right stroke
+# below it were both diagonal neighbours, so at wallpaper size the letter came
+# apart into scattered squares and looked more like a 5 with a piece missing.
+# Its middle bar spans the full width now, so it meets the stroke above on the
+# left and the one below on the right.
 GLYPHS = {
     "I": [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (0, 0), (2, 0), (0, 4), (2, 4)],
     "F": [(0, 0), (1, 0), (2, 0), (0, 1), (0, 2), (1, 2), (0, 3), (0, 4)],
     "O": [(1, 0), (2, 0), (0, 1), (3, 1), (0, 2), (3, 2), (0, 3), (3, 3), (1, 4), (2, 4)],
-    "S": [(1, 0), (2, 0), (3, 0), (0, 1), (1, 2), (2, 2), (3, 3), (0, 4), (1, 4), (2, 4)],
+    "S": [(1, 0), (2, 0), (3, 0), (0, 1), (0, 2), (1, 2), (2, 2), (3, 2), (3, 3),
+          (0, 4), (1, 4), (2, 4)],
 }
+# How many columns each glyph actually occupies. I and F are three wide; a
+# fixed four-column advance left them floating with a blank column each, so
+# "IF" sat noticeably looser than "OS" in the same word.
+GLYPH_W = {ch: max(px for px, _py in cells) + 1 for ch, cells in GLYPHS.items()}
+GLYPH_H = 5
+
+
+def wordmark_colours(pal) -> dict[str, tuple[int, int, int]]:
+    """IF in the institutional green, OS in the lighter one.
+
+    Every piece of artwork used to colour the four letters
+    accent / accent2 / accent3 / accent, which put a near-white O between two
+    greens for no reason anyone could name - it read as a mistake rather than
+    a design. Splitting it IF | OS matches how the mark is already stacked in
+    the fastfetch logo, and it means the same two colours everywhere.
+    """
+    return {"I": pal["accent"], "F": pal["accent"],
+            "O": pal["accent2"], "S": pal["accent2"]}
+
+
+# Space between letters, in glyph columns. One column is barely wider than the
+# gutter between two blocks inside a letter, which ran the four letters
+# together into one shape; 1.6 reads as a word.
+LETTER_GAP = 1.6
+
+
+def draw_wordmark_glyphs(draw, chars: str, x0: int, y0: int, scale: int,
+                         colours, gutter: int = 3, gap: float = LETTER_GAP,
+                         shadow: tuple[int, int] | None = None) -> int:
+    """Draw `chars` as pixel blocks. Returns the total width drawn.
+
+    One implementation for the wallpaper, the boot logo, the BIOS splash and
+    the GRUB background, which each had their own copy of this loop and had
+    already drifted apart on spacing.
+    """
+    radius = max(1, scale // 6)
+    passes = []
+    if shadow is not None:
+        passes.append((shadow[0], shadow[1], None))
+    passes.append((0, 0, colours))
+
+    for dx, dy, palette in passes:
+        x = float(x0)
+        for i, ch in enumerate(chars):
+            for px, py in GLYPHS[ch]:
+                left = round(x) + px * scale + dx
+                top = y0 + py * scale + dy
+                fill = (0, 0, 0, 110) if palette is None else (*palette[ch], 255)
+                draw.rounded_rectangle(
+                    [left, top, left + scale - gutter, top + scale - gutter],
+                    radius=radius, fill=fill,
+                )
+            x += (GLYPH_W[ch] + gap) * scale
+    return wordmark_width(chars, scale, gap)
+
+
+def wordmark_width(chars: str, scale: int, gap: float = LETTER_GAP) -> int:
+    return round((sum(GLYPH_W[c] for c in chars) + gap * (len(chars) - 1)) * scale)
 
 FONT_CANDIDATES = [
     "/usr/share/fonts/jetbrains-mono-nerd/JetBrainsMonoNerdFont-Regular.ttf",
@@ -136,22 +204,13 @@ def draw_wordmark(img: Image.Image, pal, scale: int = 26) -> Image.Image:
     d = ImageDraw.Draw(layer)
 
     chars = "IFOS"
-    step = 4 * scale + 10
-    total = len(chars) * step - 10
+    total = wordmark_width(chars, scale)
     x0 = (W - total) // 2
     y0 = H // 2 - 2 * scale
-    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
-
-    for i, ch in enumerate(chars):
-        ox = x0 + i * step
-        for dx, dy, colour in ((4, 4, (0, 0, 0, 110)), (0, 0, (*colours[i], 255))):
-            for px, py in GLYPHS[ch]:
-                x = ox + px * scale + dx
-                y = y0 + py * scale + dy
-                d.rectangle([x, y, x + scale - 3, y + scale - 3], fill=colour)
+    draw_wordmark_glyphs(d, chars, x0, y0, scale, wordmark_colours(pal), shadow=(4, 4))
 
     # Accent dots under the wordmark
-    dots = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"], pal["accent2"]]
+    dots = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent2"], pal["accent"]]
     for i, colour in enumerate(dots):
         x = W // 2 - 40 + i * 20
         y = y0 + 6 * scale + 12
@@ -197,18 +256,11 @@ def boot_logo(name: str) -> Image.Image:
     pal = PALETTES[name]
     scale = 18
     chars = "IFOS"
-    step = 4 * scale + 8
-    width = len(chars) * step - 8
-    height = 5 * scale
+    width = wordmark_width(chars, scale)
+    height = GLYPH_H * scale
     img = Image.new("RGBA", (width, height + 4), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
-    for i, ch in enumerate(chars):
-        ox = i * step
-        for px, py in GLYPHS[ch]:
-            x = ox + px * scale
-            y = py * scale
-            d.rectangle([x, y, x + scale - 3, y + scale - 3], fill=(*colours[i], 255))
+    draw_wordmark_glyphs(d, chars, 0, 0, scale, wordmark_colours(pal))
     return img
 
 
@@ -259,10 +311,13 @@ def ascii_logo(pixel: str = "██") -> str:
 
     def render(chars: str) -> list[str]:
         out = []
-        for py in range(5):
+        for py in range(GLYPH_H):
             line = ""
             for i, ch in enumerate(chars):
-                for px in range(4):
+                # The glyph's own width, not a fixed four: I and F are three
+                # columns, and padding them to four put a blank column inside
+                # the word.
+                for px in range(GLYPH_W[ch]):
                     line += pixel if (px, py) in GLYPHS[ch] else " " * cell
                 if i < len(chars) - 1:
                     line += " " * (cell * gap)
@@ -290,22 +345,21 @@ def svg_logo(name: str) -> str:
     pal = PALETTES[name]
     chars = "IFOS"
     gap = 1
-    cols = len(chars) * 4 + gap * (len(chars) - 1)
-    rows = 5
+    cols = sum(GLYPH_W[c] for c in chars) + gap * (len(chars) - 1)
     unit = 16
     pad = unit
     w = cols * unit + pad * 2
-    h = rows * unit + pad * 2
-    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
+    h = GLYPH_H * unit + pad * 2
+    colours = wordmark_colours(pal)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
         f'viewBox="0 0 {w} {h}">',
         f'  <rect width="{w}" height="{h}" rx="{unit}" fill="rgb{pal["crust"]}"/>',
     ]
-    for i, ch in enumerate(chars):
-        ox = i * (4 + gap) * unit + pad
-        r, g, b = colours[i]
+    ox = pad
+    for ch in chars:
+        r, g, b = colours[ch]
         for px, py in sorted(GLYPHS[ch]):
             x = ox + px * unit
             y = py * unit + pad
@@ -313,6 +367,7 @@ def svg_logo(name: str) -> str:
                 f'  <rect x="{x}" y="{y}" width="{unit - 2}" height="{unit - 2}" '
                 f'rx="2" fill="rgb({r},{g},{b})"/>'
             )
+        ox += (GLYPH_W[ch] + gap) * unit
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
 
@@ -339,23 +394,15 @@ def boot_splash(name: str, size=(640, 480)) -> Image.Image:
 
     scale = 9
     chars = "IFOS"
-    step = 4 * scale + 6
-    total = len(chars) * step - 6
-    x0 = (w - total) // 2
+    x0 = (w - wordmark_width(chars, scale)) // 2
     y0 = 40
-    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
-    for i, ch in enumerate(chars):
-        ox = x0 + i * step
-        for px, py in GLYPHS[ch]:
-            x = ox + px * scale
-            y = y0 + py * scale
-            d.rectangle([x, y, x + scale - 2, y + scale - 2], fill=(*colours[i], 255))
+    draw_wordmark_glyphs(d, chars, x0, y0, scale, wordmark_colours(pal), gutter=2)
 
     font = load_font(15)
     if font:
         caption = pal["caption"]
         bbox = d.textbbox((0, 0), caption, font=font)
-        d.text(((w - (bbox[2] - bbox[0])) // 2, y0 + 5 * scale + 12), caption,
+        d.text(((w - (bbox[2] - bbox[0])) // 2, y0 + GLYPH_H * scale + 12), caption,
                font=font, fill=(*pal["text"], 200))
     return img.convert("RGB")
 
@@ -384,23 +431,15 @@ def grub_background(name: str, size=(1920, 1080)) -> Image.Image:
     # Wordmark near the top, leaving the middle clear for the menu.
     scale = 16
     chars = "IFOS"
-    step = 4 * scale + 10
-    total = len(chars) * step - 10
-    x0 = (w - total) // 2
+    x0 = (w - wordmark_width(chars, scale)) // 2
     y0 = int(h * 0.10)
-    colours = [pal["accent"], pal["accent2"], pal["accent3"], pal["accent"]]
-    for i, ch in enumerate(chars):
-        ox = x0 + i * step
-        for px, py in GLYPHS[ch]:
-            x = ox + px * scale
-            y = y0 + py * scale
-            d.rectangle([x, y, x + scale - 3, y + scale - 3], fill=(*colours[i], 255))
+    draw_wordmark_glyphs(d, chars, x0, y0, scale, wordmark_colours(pal))
 
     font = load_font(22)
     if font:
         caption = pal["caption"]
         bbox = d.textbbox((0, 0), caption, font=font)
-        d.text(((w - (bbox[2] - bbox[0])) // 2, y0 + 5 * scale + 18), caption,
+        d.text(((w - (bbox[2] - bbox[0])) // 2, y0 + GLYPH_H * scale + 18), caption,
                font=font, fill=(*pal["text"], 190))
     return img.convert("RGB")
 

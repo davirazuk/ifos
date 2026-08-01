@@ -49,6 +49,13 @@ copy /etc/X11/xorg.conf.d/30-touchpad.conf
 # Compressed swap in RAM, so machines installed before this reach it too.
 copy /etc/systemd/zram-generator.conf
 
+# Kernel tuning: vm.max_map_count for games under Proton, vm.swappiness for
+# zram. This was only ever on the live ISO - nothing copied it to /mnt and
+# nothing recreated it in the chroot - so every installed system ran with the
+# stock 65530 map limit, and the games that need more failed to start with
+# nothing to explain why.
+copy /etc/sysctl.d/99-ifos.conf
+
 # Look and feel
 copy /usr/share/backgrounds/ifos.png
 copy /usr/share/backgrounds/ifos-ifms.png
