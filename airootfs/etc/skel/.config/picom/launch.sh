@@ -13,7 +13,16 @@
 #  software, slower, and works everywhere.
 # ─────────────────────────────────────────────────────────────────────────────
 
+#  The same test decides whether the desktop animates. Animations are drawn per
+#  frame, so on the xrender path - where that work lands on the CPU - they cost
+#  exactly the machines that can least afford it. Those get the still config.
+
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}/picom"
+
 if [ -e /dev/dri/renderD128 ]; then
+    if [ -f "$CFG/picom-animated.conf" ]; then
+        exec picom -b --config "$CFG/picom-animated.conf"
+    fi
     exec picom -b
 else
     exec picom -b --backend xrender

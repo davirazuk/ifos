@@ -211,6 +211,10 @@ xclip
 xdotool
 arandr
 htop
+# A task manager you can read without knowing htop's keys: process list, and
+# CPU / memory / network graphs. GTK, so the IFOS theme already covers it, and
+# small enough not to be a joke on the hardware this runs on.
+xfce4-taskmanager
 fastfetch
 fish
 bash-completion
