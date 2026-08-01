@@ -51,6 +51,16 @@ for _api in ("4.1", "4.0"):
     except (ValueError, ImportError):
         continue
 
+# What this account has opened, most recent first. Lives in ~/.config/ifos
+# rather than anywhere under the launcher's own configuration, because that
+# directory is not part of /etc/skel and so survives `ifos-update --dotfiles`,
+# which replaces the rest of ~/.config wholesale.
+RECENT_FILE = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "ifos", "recent",
+)
+RECENT_MAX = 12
+
 CATALOG_DIR = os.environ.get("IFOS_CATALOG_DIR", "/usr/share/ifos/apps.d")
 SCHOOL_LIST = os.environ.get("IFOS_SCHOOL_LIST", "/usr/share/ifos/escola.list")
 WALLPAPER = "/usr/share/backgrounds/ifos.png"
@@ -223,6 +233,70 @@ class Catalog:
         self._load_catalog()
         self._add_all_apps()
         self._add_system()
+        self._add_recent()
+
+    # what this account actually opens ----------------------------------------
+    @staticmethod
+    def entry_key(entry: dict) -> str | None:
+        """A stable name for an entry, or None for things not worth recording.
+
+        System actions are deliberately excluded: "Bloquear tela" and "Desligar"
+        would otherwise crowd out the applications, and nobody needs a shortcut
+        to the thing they just used to shut the machine down.
+        """
+        if entry.get("kind") == "app":
+            info = entry.get("appinfo")
+            ident = info.get_id() if info is not None else None
+            return "app:" + (ident or entry["name"])
+        if entry.get("kind") == "package":
+            return "pkg:" + entry["name"]
+        return None
+
+    @staticmethod
+    def _read_recent() -> list[str]:
+        try:
+            with open(RECENT_FILE, encoding="utf-8") as handle:
+                return [line.strip() for line in handle if line.strip()]
+        except OSError:
+            return []
+
+    def remember(self, entry: dict) -> None:
+        key = self.entry_key(entry)
+        if key is None:
+            return
+        keys = [k for k in self._read_recent() if k != key]
+        keys.insert(0, key)
+        del keys[RECENT_MAX:]
+        try:
+            os.makedirs(os.path.dirname(RECENT_FILE), exist_ok=True)
+            # Written through a temporary file so that a launcher killed
+            # mid-write cannot leave a half-written history behind.
+            tmp = RECENT_FILE + ".new"
+            with open(tmp, "w", encoding="utf-8") as handle:
+                handle.write("\n".join(keys) + "\n")
+            os.replace(tmp, RECENT_FILE)
+        except OSError:
+            pass          # a history that cannot be saved is not worth an error
+
+    def _add_recent(self) -> None:
+        keys = self._read_recent()
+        if not keys:
+            return
+
+        # Resolve against what exists now, so an application that has since been
+        # uninstalled simply drops off the list instead of showing a tile that
+        # cannot start.
+        known: dict[str, dict] = {}
+        for _key, _title, entries in self.sections:
+            for entry in entries:
+                ident = self.entry_key(entry)
+                if ident is not None:
+                    known.setdefault(ident, entry)
+
+        recent = [known[k] for k in keys if k in known and known[k]["installed"]]
+        if recent:
+            # First, so the launcher opens on what you actually use.
+            self.sections.insert(0, ("recentes", "Recentes", recent))
 
     # catalog files -----------------------------------------------------------
     def _load_catalog(self) -> None:
@@ -658,7 +732,9 @@ class Launcher(Gtk.Window):
             self.flow.show_all()
             return
 
-        if key in ("todos", "sistema"):
+        # "recentes" is in most-recent-first order and sorting it would
+        # throw away the only thing it knows.
+        if key in ("recentes", "todos", "sistema"):
             ordered = entries
         else:
             ordered = sorted(entries, key=lambda e: (not e["installed"], e["name"].lower()))
@@ -865,6 +941,10 @@ class Launcher(Gtk.Window):
         if not entry["installed"]:
             self.install(entry)
             return
+
+        # Recorded before launching rather than after: info.launch() is followed
+        # immediately by main_quit(), and there is no "after" to record in.
+        self.catalog.remember(entry)
 
         info = getattr(tile, "appinfo", None) or self.catalog.find_appinfo(entry)
         if info is not None:

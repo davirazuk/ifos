@@ -94,6 +94,13 @@ big tiles, keyboard or gamepad navigation, one section per subject area. It
 reads the same catalog as `ifos-software`, so installed applications launch and
 missing ones offer to install themselves.
 
+Because it now opens with the session, the first section is **Recentes** — what
+this account last opened, most recent first. It appears once there is something
+to put in it, and an application that has since been uninstalled drops off
+rather than showing a tile that cannot start. The list lives in
+`~/.config/ifos/recent`, outside `/etc/skel`, so it survives
+`ifos-update --dotfiles`.
+
 It also carries a built-in **Moodle front end**: the *Escola Online* section
 embeds a browser pointed at the IFMS AVEA, with the academic system, SUAP, the
 library and webmail one click away in the sidebar. That works on a fresh install
