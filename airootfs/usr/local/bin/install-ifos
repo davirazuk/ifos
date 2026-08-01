@@ -522,6 +522,16 @@ PACKAGES=(
 
     # ── desktop ──────────────────────────────────────────────────────────────
     xorg-server xorg-xinit xorg-xrandr xorg-xsetroot xf86-input-libinput
+    # The i3 config runs `xset s 600` and `xset dpms 0 0 720` at login. Without
+    # this the line fails and neither thing happens: the screen never blanks,
+    # and xss-lock never gets the cue it locks on. A laptop then sits unlocked
+    # with the backlight on until the battery runs out.
+    xorg-xset
+    # lspci, which ifos-gpu reads to decide whether the machine has a discrete
+    # card - which is how the launcher knows to send a game to it. It was in
+    # packages.x86_64 for the ISO but not here, so an installed system had the
+    # tool and nothing for it to read.
+    pciutils
     i3-wm i3lock xss-lock libnotify polybar rofi picom dunst feh
     xfce4-terminal alacritty xterm
     thunar thunar-volman thunar-archive-plugin gvfs gvfs-mtp gvfs-smb tumbler
