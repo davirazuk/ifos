@@ -103,6 +103,23 @@ with no browser installed at all. The links live in
 Picking **IFOS Big Picture** at the login screen boots straight into it, console
 style: the launcher *is* the session, and closing it ends the session.
 
+## The bar
+
+The status bar is where the machine is actually driven from, so the things
+people reach for most are a single click away rather than behind a settings
+application:
+
+| Click | What happens |
+| --- | --- |
+| Wi-Fi icon | Networks in range; Enter joins, and it asks for a password only when it needs one. Right-click for the connection editor |
+| Bluetooth icon | Paired devices; Enter connects. Right-click for blueman, which handles pairing something new |
+| Power profile | Cycles power-saver / balanced / performance, showing which is active |
+| Now playing | Play and pause; the scroll wheel skips. Absent entirely when nothing is playing |
+| Battery, volume, CPU, memory | Status at a glance |
+
+`Mod + Esc` opens a graphical task manager — processes plus CPU, memory and
+network graphs — for when `htop` is not what you want.
+
 ## The shell
 
 fish, configured as an IFOS environment rather than left at defaults: a

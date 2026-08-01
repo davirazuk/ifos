@@ -57,6 +57,10 @@ bindsym $mod+Return    exec $term
 bindsym $mod+d         exec $menu
 bindsym $mod+e         exec thunar
 bindsym $mod+g         exec ifos-launcher
+# Ctrl+Shift+Esc is the reflex everyone brings from Windows; Mod+Esc is the
+# same idea without clashing with a terminal's Ctrl+Shift bindings. Falls back
+# to htop in a terminal if the graphical one is not installed.
+bindsym $mod+Escape    exec --no-startup-id sh -c 'command -v xfce4-taskmanager >/dev/null && exec xfce4-taskmanager || exec xfce4-terminal --title htop -e htop'
 bindsym $mod+Shift+a   exec $termrun ifos-software
 bindsym $mod+Shift+i   exec $termrun sudo install-ifos
 bindsym $mod+q         kill

@@ -11,6 +11,7 @@
     Mod + d                application launcher
     Mod + e                file manager
     Mod + g                IFOS Launcher — tela cheia: jogos, escola, Moodle
+    Mod + Esc              gerenciador de tarefas — processos e desempenho
     Mod + Shift + a        IFOS Software — install apps on demand
     Mod + Shift + i        install IFOS to disk
     Mod + F1               this cheatsheet

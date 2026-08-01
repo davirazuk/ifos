@@ -164,6 +164,39 @@ flowboxchild:selected .tile { border-color: @accent;
         letter-spacing: 2px; padding: 10px 16px 4px 16px; }
 .webbar { background-color: alpha(@deep, 0.92); padding: 8px 12px; }
 .weburl { color: @dim; font-size: 11px; }
+
+/* Scrollbars. Left alone these are drawn by adw-gtk3 in its own grey, which
+   inside a green full-screen launcher reads as a piece of another program
+   showing through. Thin, dark, and only solid enough to find. */
+scrollbar { background-color: transparent; border: none; }
+scrollbar trough { background-color: transparent; border: none; }
+scrollbar slider {
+    background-color: alpha(@text, 0.16);
+    border: none;
+    border-radius: 8px;
+    min-width: 6px;
+    min-height: 40px;
+    margin: 3px;
+}
+scrollbar slider:hover  { background-color: alpha(@text, 0.30); }
+scrollbar slider:active { background-color: @accent; }
+/* The tab strip scrolls when there are more sections than fit; a bar under it
+   would just be noise. */
+.tabs scrollbar { opacity: 0; min-height: 0; }
+
+/* GTK draws a focus ring on the tile that has keyboard focus. The tile already
+   shows selection with its border and background, so the ring lands on top of
+   it as a second, uglier outline. */
+flowboxchild:focus, flowboxchild:focus-visible,
+button:focus, button:focus-visible,
+.tab:focus, .sidebar-item:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Pango renders the placeholder with the entry's own colour otherwise, which
+   makes an empty search box look like it already has something typed in it. */
+.search placeholder, .search text placeholder { color: @dim; }
 """
 
 
@@ -414,7 +447,10 @@ class Launcher(Gtk.Window):
         top.get_style_context().add_class("header")
 
         titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        brand = Gtk.Label(label="I F O S", xalign=0)
+        # Spaced by CSS letter-spacing, not by typing spaces into the string -
+        # doing both gave the wordmark gaps wide enough to read as four separate
+        # letters rather than a name.
+        brand = Gtk.Label(label="IFOS", xalign=0)
         brand.get_style_context().add_class("brand")
         titles.pack_start(brand, False, False, 0)
         subtitle = Gtk.Label(label="IFMS · CAMPUS DOURADOS", xalign=0)
