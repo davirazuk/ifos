@@ -102,6 +102,17 @@ look draggable. Down the side a dozen of them fit on a 1366×768 laptop screen
 with room to spare. Typing searches the whole machine, not just the open
 section; `Tab` moves to the next section, `Esc` leaves.
 
+Search is written for the people using it. Accents are ignored on both sides,
+so `musica` finds *Música* and `programacao` finds *Programação* — typing the
+accents is possible on the ABNT2 keyboard IFOS ships and nobody does it inside
+a search box. It also knows the names people arrive already knowing: `photoshop`
+finds GIMP and Krita, `word` and `excel` find LibreOffice, `winrar` finds Ark,
+`premiere` finds Kdenlive. Those live in `SEARCH_ALIASES` near the top of
+`ifos-launcher` and are a search aid, not a claim that the programs are
+equivalent. Section names work too — `jogos` lists the games. A search that
+matches nothing says so and suggests what else to try, rather than leaving a
+blank page that looks like a crash.
+
 Because it now opens with the session, the first section is **Recentes** — what
 this account last opened, most recent first. It appears once there is something
 to put in it, and an application that has since been uninstalled drops off

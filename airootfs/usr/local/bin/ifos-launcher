@@ -28,6 +28,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import unicodedata
 import urllib.parse
 from datetime import datetime
 
@@ -79,6 +80,50 @@ SSO_HOSTS = {"accounts.google.com"}
 # substring, which is what silently broke when i3lock became ifos-lock.
 KEEP_LAUNCHER_OPEN = {"systemctl", "ifos-lock", "ifos-theme"}
 
+# What people type when they are looking for something they already know by
+# another name. Almost everyone arriving here has used Windows, and searching
+# "photoshop" or "word" in a list that contains GIMP and LibreOffice returned
+# nothing at all - which reads as "this system does not have one", not as "it
+# is called something else here".
+#
+# Keyed by the catalog name, lowercased. Only aliases someone would plausibly
+# type; this is a search aid, not a claim that the programs are equivalent.
+SEARCH_ALIASES = {
+    "gimp": "photoshop editor de fotos imagem",
+    "krita": "photoshop sai paint tool desenho pintura",
+    "inkscape": "illustrator corel coreldraw vetor",
+    "libreoffice": "word excel powerpoint office microsoft escritorio "
+                   "writer calc impress documento planilha slides",
+    "onlyoffice": "word excel powerpoint office microsoft documento planilha",
+    "kdenlive": "premiere sony vegas movie maker editor de video",
+    "audacity": "audio gravador gravar som",
+    "obs studio": "gravar tela stream live transmitir",
+    "vlc": "media player reprodutor filme video",
+    "thunderbird": "outlook email correio",
+    "chromium": "chrome google navegador",
+    "brave": "chrome navegador",
+    "firefox": "navegador",
+    "librewolf": "firefox navegador privacidade",
+    "ark": "winrar 7zip winzip zip rar descompactar compactar",
+    "visual studio code": "vscode vs code editor programar ide",
+    "obsidian": "onenote notion anotacoes notas",
+    "calibre": "livro ebook epub kindle",
+    "keepassxc": "senhas gerenciador de senhas cofre lastpass bitwarden",
+    "timeshift": "backup restauracao ponto de restauracao",
+    "btop": "gerenciador de tarefas processos desempenho",
+    "steam": "jogos games loja",
+    "lutris": "jogos games epic gog",
+    "wine": "rodar programas windows exe",
+    "bottles": "rodar programas windows exe wine prefixo",
+    "blender": "3d modelagem animacao",
+    "arduino ide": "arduino placa microcontrolador",
+    "kicad": "eletronica esquematico pcb placa de circuito",
+    "wireshark": "rede pacotes sniffer analisador",
+    "gparted": "particao disco particionar",
+    "impressao": "impressora imprimir cups printer",
+    "digitalizacao": "scanner escanear digitalizar",
+}
+
 SECTION_TITLES = {
     "escola": "Escola",
     "browsers": "Internet",
@@ -110,6 +155,20 @@ SECTION_ICONS = {
     "hardware": ("preferences-desktop-peripherals", "computer", "applications-system"),
 }
 SECTION_ICON_FALLBACK = "application-x-executable"
+
+
+def fold(text: str) -> str:
+    """Lowercase and strip accents, for comparing what someone typed.
+
+    Searching was accent-sensitive, in a system whose interface is Portuguese:
+    "musica" did not match Música, "programacao" did not match Programação,
+    "utilitarios" did not match Utilitários. Typing the accents is possible on
+    the ABNT2 keyboard this ships with and nobody does it inside a search box.
+    """
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text.lower())
+        if not unicodedata.combining(c)
+    )
 
 
 def section_icon(key: str) -> str:
@@ -704,7 +763,43 @@ class Launcher(Gtk.Window):
         self.flow.connect("child-activated", self.on_activate)
         self.flow.set_filter_func(self._filter_tile)
         scroller.add(self.flow)
-        return scroller
+
+        # A search that matches nothing used to leave a blank green page with
+        # no explanation - indistinguishable from the launcher having hung, and
+        # the reason people typed the same thing again instead of trying
+        # another word.
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.no_results = Gtk.Label(xalign=0.5)
+        self.no_results.get_style_context().add_class("empty")
+        self.no_results.set_justify(Gtk.Justification.CENTER)
+        self.no_results.set_no_show_all(True)
+        self.no_results.set_margin_top(80)
+        page.pack_start(self.no_results, False, False, 0)
+        page.pack_start(scroller, True, True, 0)
+        self.flow_scroller = scroller
+        return page
+
+    def _update_no_results(self) -> None:
+        """Show the message, and hide the grid while it is up.
+
+        Leaving the empty FlowBox in place is not the same as it being
+        invisible: it still lays out its rows, so the message appeared over a
+        set of empty horizontal bands.
+        """
+        found = not self._needle or any(
+            c.get_child_visible() for c in self.flow.get_children()
+        )
+        if found:
+            self.no_results.hide()
+            self.flow_scroller.show()
+            return
+        self.no_results.set_text(
+            "Nada encontrado para “%s”.\n\n"
+            "Tente outra palavra: o nome do programa, para que ele serve,\n"
+            "ou o nome que ele tinha no Windows." % self.search.get_text().strip()
+        )
+        self.no_results.show()
+        self.flow_scroller.hide()
 
     def _filter_tile(self, child) -> bool:
         needle = getattr(self, "_needle", "")
@@ -713,10 +808,31 @@ class Launcher(Gtk.Window):
         entry = getattr(child.get_child(), "entry", None)
         if entry is None:
             return True
-        haystack = " ".join(
-            [entry["name"], entry.get("desc", "")] + entry.get("packages", [])
-        ).lower()
-        return all(word in haystack for word in needle.split())
+        return all(word in self._haystack(entry) for word in fold(needle).split())
+
+    def _haystack(self, entry: dict) -> str:
+        """Everything a tile can be found by, folded and cached.
+
+        Cached on the entry: the filter runs once per tile per keystroke, and
+        typing "libreoffice" across 169 tiles rebuilt and re-folded the same
+        strings a couple of thousand times.
+        """
+        cached = entry.get("_haystack")
+        if cached is not None:
+            return cached
+        parts = [entry["name"], entry.get("desc", "")]
+        parts += entry.get("packages", [])
+        # The section, so "jogos" finds the games rather than only the tile
+        # whose description happens to contain the word.
+        category = entry.get("category", "")
+        parts += [category, SECTION_TITLES.get(category, "")]
+        # Folded on both sides: the catalog calls them "Impressão" and
+        # "Digitalização", and a table keyed on the raw lowercase name would
+        # never match those.
+        parts.append(SEARCH_ALIASES.get(fold(entry["name"]), ""))
+        text = fold(" ".join(p for p in parts if p))
+        entry["_haystack"] = text
+        return text
 
     def populate_all(self) -> None:
         """Every entry on the machine, for searching across sections."""
@@ -734,7 +850,7 @@ class Launcher(Gtk.Window):
         self.flow.show_all()
 
     def _on_search(self, entry) -> None:
-        self._needle = entry.get_text().strip().lower()
+        self._needle = fold(entry.get_text().strip())
 
         # Searching looks at the whole machine, not the section that happens to
         # be open. The flow only ever held one section, so typing "gimp" while
@@ -759,6 +875,7 @@ class Launcher(Gtk.Window):
             if child.get_child_visible() and child.get_mapped():
                 self.flow.select_child(child)
                 break
+        self._update_no_results()
 
     def _on_search_activate(self, _entry) -> None:
         visible = [c for c in self.flow.get_children() if c.get_mapped()]
@@ -1052,6 +1169,9 @@ class Launcher(Gtk.Window):
             self._suppress_search = False
             self._needle = ""
             self._searching = False
+            if hasattr(self, "no_results"):
+                self.no_results.hide()
+                self.flow_scroller.show()
 
         if key == "escola-online":
             self.stack.set_visible_child_name("escola-online")
