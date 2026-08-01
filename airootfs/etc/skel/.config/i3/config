@@ -44,6 +44,14 @@ exec_always --no-startup-id ~/.config/polybar/launch.sh
 # installed system, then never again.
 exec --no-startup-id ifos-welcome --autostart
 
+# The launcher opens with the session, so the machine starts on the list of
+# what it can do rather than on an empty desktop. Esc closes it and you are on
+# the desktop as before. The script skips live media and the first login, where
+# the welcome screen has to be the thing you see; delete this line to stop it
+# opening on its own. `exec`, not `exec_always` - otherwise every config reload
+# (ifos-theme does one) would open another.
+exec --no-startup-id ~/.config/i3/scripts/autostart-launcher.sh
+
 # ── Applications ─────────────────────────────────────────────────────────────
 bindsym $mod+Return    exec $term
 bindsym $mod+d         exec $menu

@@ -25,7 +25,11 @@
   "display": {
     "separator": "  ",
     // Values line up in one column instead of ragging off the end of each key.
-    "key": { "width": 10 },
+    // 12, not 10: the widest key is "Terminal", which with its icon is ten
+    // cells, and fastfetch aligns values by jumping the cursor to an absolute
+    // column. At 10 that column landed *inside* the key and the value printed
+    // over the end of it.
+    "key": { "width": 12 },
     "color": {
       "keys": "#00a86b",
       "title": "#7ed957",

@@ -41,6 +41,7 @@ file_permissions=(
   ["/etc/skel/.config/picom/launch.sh"]="0:0:755"
   ["/etc/skel/.config/i3/scripts/osd.sh"]="0:0:755"
   ["/etc/skel/.config/i3/scripts/lock.sh"]="0:0:755"
+  ["/etc/skel/.config/i3/scripts/autostart-launcher.sh"]="0:0:755"
   ["/etc/skel/.config/i3/scripts/battery-watch.sh"]="0:0:755"
   ["/etc/skel/.config/rofi/powermenu.sh"]="0:0:755"
   ["/etc/skel/.xinitrc"]="0:0:755"
