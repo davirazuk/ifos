@@ -391,6 +391,15 @@ class Launcher(Gtk.Window):
                 if key.lower().startswith(start.lower()):
                     self.section_index = index
                     break
+
+        # Shown before the section is picked, and this order matters: GtkStack
+        # will not make a child that is not itself visible into the visible
+        # child, so selecting a page here while everything was still unshown
+        # did nothing and the stack kept its first page. --category therefore
+        # always landed on the apps grid - including `ifos-launcher --category
+        # escola-online`, which is what the `moodle` command runs, so asking
+        # for Moodle opened the application list instead.
+        self.show_all()
         self.select_tab(self.section_index)
 
         GLib.timeout_add_seconds(10, self._tick_clock)
@@ -687,6 +696,7 @@ class Launcher(Gtk.Window):
                 lambda view, _e: self.urllabel.set_text(view.get_uri() or ""),
             )
             self.web.connect("decide-policy", self._decide_policy)
+            self.web.connect("create", self._on_create)
             right.pack_start(self.web, True, True, 0)
         else:
             self.web = None
@@ -723,9 +733,22 @@ class Launcher(Gtk.Window):
         Gio.AppInfo.launch_default_for_uri(url, None)
 
     def _decide_policy(self, _view, decision, decision_type) -> bool:
-        if decision_type != WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+        # NEW_WINDOW_ACTION is the one that made Moodle feel broken. Moodle
+        # opens resources - PDFs, files, external tools, anything it treats as
+        # an attachment - with target="_blank". There is no second window to
+        # open them in here, and WebKit's default for a new-window decision
+        # with nowhere to put it is to drop it silently: the click did nothing
+        # at all, no error and no navigation, while ordinary links worked.
+        # There is only ever one view in this front end, so they load in it.
+        new_window = decision_type == WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION
+        if not new_window and decision_type != WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
             return False
+
         uri = decision.get_navigation_action().get_request().get_uri() or ""
+
+        # Checked for both kinds of decision: the Google login is reached from
+        # a new-window link often enough that handling it only on ordinary
+        # navigation would let it through to the dead-end block page.
         if urllib.parse.urlsplit(uri).hostname in SSO_HOSTS:
             decision.ignore()
             Gio.AppInfo.launch_default_for_uri(uri, None)
@@ -734,7 +757,22 @@ class Launcher(Gtk.Window):
                 "Continue no navegador que acabou de abrir e depois volte para cá."
             )
             return True
+
+        if new_window and uri:
+            decision.ignore()
+            self.web.load_uri(uri)
+            return True
         return False
+
+    def _on_create(self, _view, navigation_action):
+        # Backstop for a window.open() that reaches the create stage without a
+        # new-window policy decision first. Same rule: load it here, and hand
+        # back no new view.
+        request = navigation_action.get_request()
+        uri = request.get_uri() if request is not None else ""
+        if uri:
+            GLib.idle_add(self.web.load_uri, uri)
+        return None
 
     # navigation -------------------------------------------------------------
     def select_tab(self, index: int) -> None:

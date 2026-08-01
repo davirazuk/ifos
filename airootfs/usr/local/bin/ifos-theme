@@ -87,6 +87,7 @@ for f in "$CFG/i3/config" "$CFG/polybar/config.ini" "$CFG/rofi/ifos.rasi" \
          "$CFG/dunst/dunstrc" "$CFG/alacritty/alacritty.toml" \
          "$CFG/xfce4/terminal/terminalrc" "$CFG/gtk-3.0/gtk.css" \
          "$CFG/gtk-4.0/gtk.css" "$CFG/i3/scripts/lock.sh" \
+         "$CFG/fastfetch/config.jsonc" \
          "$CFG/fish/conf.d/ifos.fish" \
          "$CFG/fish/functions/fish_prompt.fish" \
          "$CFG/fish/functions/fish_right_prompt.fish" \
