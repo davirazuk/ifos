@@ -48,6 +48,7 @@
   SCREENSHOTS
     Print                  whole screen  → ~/Pictures/screenshots + clipboard
     Shift + Print          select a region → file + clipboard
+    Alt + Print            active window → file + clipboard
     Ctrl + Print           select a region → clipboard only
 
   HARDWARE KEYS

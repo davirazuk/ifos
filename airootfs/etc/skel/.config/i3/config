@@ -48,6 +48,7 @@ exec --no-startup-id gammastep -c ~/.config/gammastep/config.ini
 exec --no-startup-id xset s 600 && xset dpms 0 0 720
 exec --no-startup-id xss-lock --transfer-sleep-lock -- ~/.config/i3/scripts/lock.sh
 exec --no-startup-id ~/.config/i3/scripts/battery-watch.sh
+exec --no-startup-id ~/.config/i3/scripts/disk-watch.sh
 exec_always --no-startup-id ~/.config/polybar/launch.sh
 
 # Welcome screen: offers the installer on live media, first-run tips once on an
@@ -85,9 +86,15 @@ bindsym $mod+l         exec --no-startup-id ~/.config/i3/scripts/lock.sh
 bindsym $mod+F1 exec --no-startup-id xfce4-terminal --title ifos-help -x sh -c 'cat /usr/share/ifos/keybindings.txt; read -n1 -s -p "  press any key "'
 
 # ── Screenshots (maim) ───────────────────────────────────────────────────────
-bindsym Print       exec --no-startup-id sh -c 'mkdir -p ~/Pictures/screenshots; f=~/Pictures/screenshots/$(date +%F_%H-%M-%S).png; maim "$f" && xclip -selection clipboard -t image/png < "$f" && notify-send "Screenshot" "Saved to $f"'
-bindsym Shift+Print exec --no-startup-id sh -c 'mkdir -p ~/Pictures/screenshots; f=~/Pictures/screenshots/$(date +%F_%H-%M-%S).png; maim -s "$f" && xclip -selection clipboard -t image/png < "$f" && notify-send "Screenshot" "Selection saved"'
-bindsym Ctrl+Print  exec --no-startup-id sh -c 'maim -s | xclip -selection clipboard -t image/png && notify-send "Screenshot" "Copied to clipboard"'
+# The modes live in one script rather than three near-identical one-liners
+# here, which is how the window mode finally got added. Mod1 is Alt: i3 does
+# not document "Alt" as a modifier name, and `i3 -C` accepts any name it does
+# not recognise without complaint, so the working spelling is the one already
+# used by Alt+Tab below.
+bindsym Print       exec --no-startup-id ~/.config/i3/scripts/screenshot.sh full
+bindsym Shift+Print exec --no-startup-id ~/.config/i3/scripts/screenshot.sh region
+bindsym Mod1+Print  exec --no-startup-id ~/.config/i3/scripts/screenshot.sh window
+bindsym Ctrl+Print  exec --no-startup-id ~/.config/i3/scripts/screenshot.sh clip
 
 # ── Media / hardware keys ────────────────────────────────────────────────────
 set $osd ~/.config/i3/scripts/osd.sh
