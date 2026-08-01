@@ -442,6 +442,8 @@ class Launcher(Gtk.Window):
         self.section_index = 0
         self.tab_keys: list[str] = []
         self._needle = ""
+        self._searching = False        # showing every section at once
+        self._suppress_search = False  # while a tab change resets the box
 
         display = Gdk.Display.get_default()
         if display is not None and display.get_n_monitors() > 0:
@@ -638,8 +640,37 @@ class Launcher(Gtk.Window):
         ).lower()
         return all(word in haystack for word in needle.split())
 
+    def populate_all(self) -> None:
+        """Every entry on the machine, for searching across sections."""
+        for child in self.flow.get_children():
+            self.flow.remove(child)
+
+        seen: set[str] = set()
+        for _key, _title, entries in self.catalog.sections:
+            for entry in entries:
+                ident = self.catalog.entry_key(entry) or ("act:" + entry["name"])
+                if ident in seen:
+                    continue
+                seen.add(ident)
+                self.flow.add(self._make_tile(entry))
+        self.flow.show_all()
+
     def _on_search(self, entry) -> None:
         self._needle = entry.get_text().strip().lower()
+
+        # Searching looks at the whole machine, not the section that happens to
+        # be open. The flow only ever held one section, so typing "gimp" while
+        # on Recentes searched the dozen things in Recentes and found nothing -
+        # and the footer has always said "digite para procurar" without saying
+        # "nesta seção". Opening on Recentes made that much easier to hit.
+        if not self._suppress_search:
+            if self._needle and not self._searching:
+                self._searching = True
+                self.populate_all()
+            elif not self._needle and self._searching:
+                self._searching = False
+                self.populate(self.tab_keys[self.section_index])
+
         self.flow.invalidate_filter()
         # Keep something selected so Enter always has a target.
         for child in self.flow.get_children():
@@ -901,8 +932,11 @@ class Launcher(Gtk.Window):
                 context.remove_class("active")
 
         if hasattr(self, "search"):
+            self._suppress_search = True
             self.search.set_text("")
+            self._suppress_search = False
             self._needle = ""
+            self._searching = False
 
         if key == "escola-online":
             self.stack.set_visible_child_name("escola-online")
