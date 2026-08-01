@@ -240,30 +240,47 @@ def lock_image(source: Image.Image, size: tuple[int, int]) -> Image.Image:
 def ascii_logo(pixel: str = "██") -> str:
     """The IFOS wordmark as coloured ASCII, for fastfetch.
 
-    Built from the same 4x5 glyphs the wallpaper uses, at two text rows per
-    pixel row so it stands about as tall as fastfetch's info block. $1/$2 are
-    fastfetch colour placeholders.
-    """
-    chars = "IFOS"
-    gap = 1                      # blank glyph columns between letters
-    width = len(chars) * 4 + gap * (len(chars) - 1)
+    Built from the same 4x5 glyphs the wallpaper uses. $1/$2 are fastfetch
+    colour placeholders.
 
-    rows = []
-    for py in range(5):
-        line = ""
-        for i, ch in enumerate(chars):
-            for px in range(4):
-                line += pixel if (px, py) in GLYPHS[ch] else "  "
-            if i < len(chars) - 1:
-                line += "  " * gap
-        rows.append(line.rstrip())
+    Stacked two letters per line rather than IFOS in a row. Spelled across, the
+    mark is 38 columns wide and fastfetch indents every fact past it, so the
+    system information ended up starting halfway across the terminal. Stacked
+    it is eighteen.
+
+    One text row per pixel row, not two. A character cell is about twice as
+    tall as it is wide, so a pixel two cells wide and two rows tall came out at
+    1:2 - the letters were noticeably stretched vertically. Two cells wide and
+    one row tall is square.
+    """
+    rows_of = ("IF", "OS")
+    gap = 1                      # blank glyph columns between letters
+    cell = len(pixel)
+
+    def render(chars: str) -> list[str]:
+        out = []
+        for py in range(5):
+            line = ""
+            for i, ch in enumerate(chars):
+                for px in range(4):
+                    line += pixel if (px, py) in GLYPHS[ch] else " " * cell
+                if i < len(chars) - 1:
+                    line += " " * (cell * gap)
+            out.append(line.rstrip())
+        return out
+
+    block: list[str] = []
+    for i, chars in enumerate(rows_of):
+        if i:
+            block.append("")     # one blank row between the two halves
+        block.extend(render(chars))
+
+    width = max(len(row) for row in block)
 
     out = ["$1"]
-    for row in rows:
-        out.append("$1  " + row)
-        out.append("$1  " + row)          # double height
+    out.extend(("$1  " + row).rstrip() for row in block)
     out.append("$1")
-    out.append("$2  " + "IFMS · Campus Dourados".center(width * 2 - 4))
+    out.append("$2  " + "IFMS · Campus Dourados".center(width))
     out.append("")
     return "\n".join(out) + "\n"
 
