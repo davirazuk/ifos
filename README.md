@@ -37,7 +37,7 @@ Boot it and you land straight in the desktop, logged in as **`ifos` / `ifos`**.
 | Install IFOS | `Mod+Shift+I`, or `sudo install-ifos` |
 | Install applications | `Mod+Shift+A`, or `ifos-software` |
 | Keyboard shortcuts | `Mod+F1` |
-| Connect to Wi-Fi | tray applet, or `nmtui` |
+| Connect to Wi-Fi | click the Wi-Fi icon in the bar, or `nmtui` |
 | Make free space for a dual boot | GParted (installed) |
 
 `Mod` is the Super / Windows key.
