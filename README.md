@@ -137,6 +137,15 @@ plainly that a card older than a GTX 16-series needs nouveau instead. On a
 hybrid laptop it adds `nvidia-prime`, which is what lets a game reach the
 discrete chip at all.
 
+The same step installs the firmware a machine needs to keep working after the
+install. Several things were on the live medium and not in the installed
+system, which produces the worst kind of bug report — *it worked before I
+installed it*: `sof-firmware`, without which Intel laptops from about 2019 on
+have no audio at all; the Wi-Fi regulatory database, without which the 5 GHz
+network may simply not appear; and, only on machines that actually have the
+chip, the Broadcom wireless driver, without which those laptops finish the
+install with no Wi-Fi.
+
 Choosing a driver also enables the multilib repository on the installed system.
 The 32-bit libraries games need can only be installed with it on, and a system
 that received them without it would never be able to update them again.

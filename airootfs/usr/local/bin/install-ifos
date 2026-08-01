@@ -247,6 +247,38 @@ SWAP_DEFAULT=$(( RAM_MIB > 8192 ? 8192 : RAM_MIB ))
 SWAP_MIB=$(ask_input "Swap file size in MiB (0 for none)" "$SWAP_DEFAULT") || exit 1
 [[ $SWAP_MIB =~ ^[0-9]+$ ]] || SWAP_MIB=0
 
+# ── Hardware that worked on the USB stick and would stop working after ───────
+# These are on the live medium and were not being installed, which produces the
+# worst kind of bug report: it worked before I installed it.
+HW_PKGS=(
+    # Sound Open Firmware. Intel laptops from about 2019 on have no audio at
+    # all without it - not quiet audio, no sound card. This is the single most
+    # common "I installed it and the sound disappeared" on Arch.
+    sof-firmware
+    alsa-utils
+    # Wi-Fi regulatory rules. Without them the card is limited to the most
+    # conservative channel set, so the 5 GHz network the school runs may simply
+    # not appear.
+    wireless-regdb
+    linux-firmware-marvell
+    # Mobile broadband. NetworkManager cannot see a built-in LTE modem without
+    # it, and a few school laptops have one.
+    modemmanager
+)
+
+# Broadcom wireless is detected rather than always installed. The module is
+# built by DKMS on every kernel update, which is a real cost on a slow machine,
+# and most machines have nothing for it to drive. The ones that do have no Wi-Fi
+# at all without it.
+#
+# The DKMS build rather than the prebuilt broadcom-wl: this installs both the
+# normal and the LTS kernel, and the prebuilt module only matches the first. The
+# LTS kernel exists to be booted when the normal one breaks, which is exactly
+# when needing to reach the network matters most.
+if lspci 2>/dev/null | grep -Ei 'network|wireless' | grep -qi 'broadcom'; then
+    HW_PKGS+=(broadcom-wl-dkms dkms)
+fi
+
 # ── Graphics driver ──────────────────────────────────────────────────────────
 # Nothing installed a graphics driver. Intel and AMD survived that because mesa
 # arrives as a dependency, but an NVIDIA machine came up on nouveau or on
@@ -347,6 +379,7 @@ ${c_b}  IFOS is about to install with these settings${c_reset}
     Filesystem     $FSTYPE
     Swap file      $SWAP_MIB MiB
     Graphics       $( (( ${#GPU_PKGS[@]} )) && echo "${GPU_PKGS[*]}" || echo 'none (install later with ifos-software)' )
+    Hardware       ${HW_PKGS[*]}
     Firmware       $FIRMWARE
     Hostname       $HOSTNAME
     User           $USERNAME $( [[ -n $ROOTPASS ]] && echo '(+ separate root password)' || echo '(root locked, sudo only)' )
@@ -493,6 +526,7 @@ PACKAGES=(
 )
 
 info "Installing the base system — this is the long part…"
+(( ${#HW_PKGS[@]} ))  && PACKAGES+=("${HW_PKGS[@]}")
 (( ${#GPU_PKGS[@]} )) && PACKAGES+=("${GPU_PKGS[@]}")
 
 pacstrap -K "$MNT" "${PACKAGES[@]}" || die "pacstrap failed. See $LOG"
