@@ -372,6 +372,7 @@ PACKAGES=(
     # ── audio and bluetooth ──────────────────────────────────────────────────
     pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber
     pavucontrol pamixer playerctl brightnessctl power-profiles-daemon
+    zram-generator
     bluez bluez-utils blueman
 
     # ── desktop ──────────────────────────────────────────────────────────────

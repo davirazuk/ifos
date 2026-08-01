@@ -110,6 +110,24 @@ with no browser installed at all. The links live in
 Picking **IFOS Big Picture** at the login screen boots straight into it, console
 style: the launcher *is* the session, and closing it ends the session.
 
+## Old machines
+
+IFOS is built for the machines a school actually has, so two things are set up
+for them by default.
+
+**Compressed swap.** `zram-generator` puts swap in RAM, compressed, sized to
+half the memory and never more than 4 GiB. Swapping to a mechanical disk is the
+difference between a computer that is slow and one that stops answering for
+seconds at a time. The generator gives it swap priority 100 and a swap file
+gets a far lower one, so the kernel fills zram first and only reaches the disk
+once zram is full — the installer's swap file stays as the overflow. Configured
+in `/etc/systemd/zram-generator.conf`; the compression algorithm is left at the
+kernel default on purpose, because zstd costs more CPU per page and the CPU is
+the scarce thing here.
+
+**Power profiles.** Click the profile in the bar to move between power-saver,
+balanced and performance.
+
 ## The bar
 
 The status bar is where the machine is actually driven from, so the things
