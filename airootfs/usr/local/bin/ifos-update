@@ -2,12 +2,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  ifos-update — update the system and pull the latest IFOS files from GitHub
 #
-#      ifos-update              update packages, then the IFOS files
-#      ifos-update --ifos-only  skip pacman, just refresh the IFOS files
-#      ifos-only --packages     only pacman -Syu
-#      ifos-update --dotfiles   also refresh your ~/.config from the new defaults
-#      ifos-update --repair     only repair known-broken files in your ~/.config
-#      ifos-update --check      show what would change, change nothing
+#      ifos-update                 packages, IFOS files, your desktop, restart
+#      ifos-update --no-reboot     everything, but stay running
+#      ifos-update --no-dotfiles   leave your own ~/.config alone
+#      ifos-update --ifos-only     skip pacman, just refresh the IFOS files
+#      ifos-only --packages        only pacman -Syu
+#      ifos-update --repair        only repair known-broken files in your ~/.config
+#      ifos-update --check         show what would change, change nothing
 #
 #  The IFOS parts of the system - the launcher, the software catalog, the
 #  installer, the themes, the wallpapers, the login screen - all live in the git
@@ -15,10 +16,12 @@
 #  so a system installed months ago can be brought up to date without
 #  reinstalling.
 #
-#  Updating the defaults in /etc/skel does not touch a home directory that
-#  already exists, so afterwards this also runs the small, idempotent repairs in
-#  repair-dotfiles.sh against your ~/.config. Those keep your colours; only
-#  --dotfiles replaces your configuration outright.
+#  One command brings a machine fully current: packages, the IFOS files, the
+#  desktop configuration in your home directory, and a restart so all of it is
+#  actually in effect. Updating the defaults in /etc/skel does not reach a home
+#  directory that already exists, which is why the desktop refresh is part of
+#  the normal run rather than something to remember to ask for. Your previous
+#  configuration is copied aside first, and --no-dotfiles skips it entirely.
 #
 #  System-level settings that only install-ifos used to write - the GRUB theme
 #  among them - are applied here too, so an already-installed machine picks them
@@ -47,21 +50,60 @@ die()  { printf '%s==> ERROR:%s %s\n' "$c_red" "$c_reset" "$*" >&2; exit 1; }
 
 DO_PACKAGES=1
 DO_IFOS=1
-DO_DOTFILES=0
+# On by default: a home directory that already exists never sees a change to
+# /etc/skel, so leaving this opt-in meant the desktop half of an update
+# silently did not arrive unless you knew to ask for it.
+DO_DOTFILES=1
+DO_REBOOT=1
 CHECK_ONLY=0
 REPAIR_ONLY=0
+REBOOT_DELAY=15
 
 for arg in "$@"; do
     case $arg in
-        -h|--help)   sed -n '3,25p' "$0" | sed 's/^# \?//'; exit 0 ;;
-        --ifos-only) DO_PACKAGES=0 ;;
-        --packages)  DO_IFOS=0 ;;
-        --dotfiles)  DO_DOTFILES=1 ;;
-        --repair)    REPAIR_ONLY=1; DO_PACKAGES=0 ;;
-        --check)     CHECK_ONLY=1 ;;
+        -h|--help)     sed -n '3,28p' "$0" | sed 's/^# \?//'; exit 0 ;;
+        --ifos-only)   DO_PACKAGES=0 ;;
+        --packages)    DO_IFOS=0 ;;
+        --dotfiles)    DO_DOTFILES=1 ;;   # kept: it is the default now
+        --no-dotfiles) DO_DOTFILES=0 ;;
+        --no-reboot)   DO_REBOOT=0 ;;
+        --repair)      REPAIR_ONLY=1; DO_PACKAGES=0 ;;
+        --check)       CHECK_ONLY=1 ;;
         *) die "unknown option '$arg' (try --help)" ;;
     esac
 done
+
+# Nothing that only inspects the system should restart it.
+(( CHECK_ONLY || REPAIR_ONLY )) && DO_REBOOT=0
+
+# ── Restarting ───────────────────────────────────────────────────────────────
+# Most of what an update lands only takes effect on a fresh boot: a new kernel,
+# the GRUB theme, the X input configuration, the login screen, and the desktop
+# files that the running i3 session already read. Finishing without a restart
+# left a machine in a half-updated state that looked like the update had not
+# worked.
+#
+# It is a countdown rather than an immediate reboot, because this can be run on
+# a machine with something unsaved on screen.
+finish_and_reboot() {
+    if (( ! DO_REBOOT )); then
+        warn "Not restarting. Some of this takes effect only after a restart."
+        return 0
+    fi
+
+    trap 'printf "\n"; warn "Restart cancelled - do it when convenient."; exit 0' INT
+    printf '\n%s==>%s Restarting in %ss. Press Ctrl+C to stay.\n' \
+           "$c_blue" "$c_reset" "$REBOOT_DELAY"
+    local i
+    for (( i = REBOOT_DELAY; i > 0; i-- )); do
+        printf '\r      %2ds ' "$i"
+        sleep 1
+    done
+    printf '\r%*s\r' 12 ''
+    trap - INT
+
+    $SUDO systemctl reboot
+}
 
 # ── The login screen ─────────────────────────────────────────────────────────
 # The theme itself is copied by branding-sync, but SDDM only uses it if
@@ -233,7 +275,11 @@ if (( DO_PACKAGES )) && (( ! CHECK_ONLY )); then
     fi
 fi
 
-(( DO_IFOS )) || exit 0
+if (( ! DO_IFOS )); then
+    # --packages: a kernel or driver upgrade still wants the restart.
+    finish_and_reboot
+    exit 0
+fi
 
 # ── Fetch the repository ─────────────────────────────────────────────────────
 $SUDO install -d -m 0755 "$STATE"
@@ -268,7 +314,11 @@ if [[ $OLD_COMMIT == "$NEW_COMMIT" ]]; then
         repair_dotfiles --check
         exit 0
     fi
-    (( DO_DOTFILES )) || { repair_dotfiles; exit 0; }
+    if (( ! DO_DOTFILES )); then
+        repair_dotfiles
+        finish_and_reboot
+        exit 0
+    fi
 fi
 
 if (( CHECK_ONLY )); then
@@ -299,12 +349,18 @@ configure_sddm
 configure_grub
 
 # ── The user's own configuration ─────────────────────────────────────────────
-if (( DO_DOTFILES )); then
-    [[ $EUID -eq 0 ]] && die "Run --dotfiles as your normal user, not root."
+if (( DO_DOTFILES )) && [[ $EUID -eq 0 ]]; then
+    # Refusing outright would now abort a normal `sudo ifos-update`, since this
+    # step is no longer opt-in. root has no single home directory to refresh,
+    # so skip just this part and say so.
+    warn "Running as root, so your personal desktop files were not refreshed."
+    warn "Run ifos-update as your own user to pick up the new defaults."
+    repair_dotfiles
+elif (( DO_DOTFILES )); then
     BACKUP="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
     info "Backing up your configuration to $BACKUP…"
     mkdir -p "$BACKUP"
-    for d in i3 polybar rofi dunst picom fish alacritty xfce4 gtk-3.0 gtk-4.0; do
+    for d in i3 polybar rofi dunst picom fish alacritty xfce4 gtk-3.0 gtk-4.0 fastfetch; do
         [[ -e "$HOME/.config/$d" ]] && cp -a "$HOME/.config/$d" "$BACKUP/" 2>/dev/null
     done
     cp -a /etc/skel/.config/. "$HOME/.config/" 2>/dev/null
@@ -312,11 +368,19 @@ if (( DO_DOTFILES )); then
         [[ -f /etc/skel/$f ]] && cp -a "/etc/skel/$f" "$HOME/$f"
     done
     ok "Dotfiles refreshed (your previous ones are in $BACKUP)"
-    command -v i3-msg >/dev/null && [[ -n ${DISPLAY:-} ]] && i3-msg restart >/dev/null 2>&1
+
+    # This runs on every update now, so the backups would otherwise pile up in
+    # the home directory one per run. Keep the last few and drop the rest.
+    mapfile -t OLD_BACKUPS < <(
+        ls -1d "$HOME"/.config-backup-* 2>/dev/null | sort -r | tail -n +4
+    )
+    if (( ${#OLD_BACKUPS[@]} )); then
+        rm -rf -- "${OLD_BACKUPS[@]}" 2>/dev/null &&
+            info "Removed ${#OLD_BACKUPS[@]} older configuration backup(s)."
+    fi
 else
     repair_dotfiles
-    warn "Your ~/.config was otherwise left alone. Use --dotfiles to take the new"
-    warn "defaults (your current ones get backed up first)."
+    warn "Your ~/.config was left alone because of --no-dotfiles."
 fi
 
 # ── Colours ──────────────────────────────────────────────────────────────────
@@ -339,8 +403,11 @@ cat <<EOF
 
 ${c_grn}✓ IFOS is up to date.${c_reset}
 
-    ${c_b}ifos-update --check${c_reset}      see what changed
-    ${c_b}ifos-update --repair${c_reset}     re-check your ~/.config for known problems
-    ${c_b}ifos-update --dotfiles${c_reset}   also take the new desktop defaults
+    ${c_b}ifos-update --check${c_reset}        see what changed
+    ${c_b}ifos-update --repair${c_reset}       re-check your ~/.config for known problems
+    ${c_b}ifos-update --no-dotfiles${c_reset}  update without touching your ~/.config
+    ${c_b}ifos-update --no-reboot${c_reset}    update without restarting afterwards
 
 EOF
+
+finish_and_reboot
