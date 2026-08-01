@@ -9,3 +9,5 @@ Laptop power management (TLP)|Replaces the bar's power profile button: TLP and p
 Fingerprint reader|fprintd with PAM integration|fprintd|repo
 Xbox controller|xpadneo driver for Xbox wireless controllers|xpadneo-dkms|aur
 Firmware updates|fwupd, vendor firmware over LVFS|fwupd|repo
+Leitor de tela no console|espeakup: lê o terminal em voz alta. O menu de boot do pendrive oferece isso; num sistema instalado precisa ser instalado|espeakup|repo
+Linha braille|brltty, para displays braille. Cuidado: costuma ocupar adaptadores USB-serial, o que atrapalha Arduino e afins|brltty|repo
