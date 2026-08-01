@@ -1,12 +1,12 @@
-# IFOS software catalog — Audio, video and graphics
-VLC|Plays essentially any media file|vlc|repo
-mpv|Minimal, scriptable video player|mpv|repo
-GIMP|Raster image editor|gimp|repo
-Inkscape|Vector graphics editor|inkscape|repo
-Krita|Digital painting|krita|repo
-Blender|3D modelling, animation and rendering|blender|repo
-Audacity|Audio recording and editing|audacity|repo
-Kdenlive|Non-linear video editor|kdenlive|repo
-HandBrake|Video transcoder|handbrake|repo
-Spotify|Music streaming|spotify|aur
-Codecs|GStreamer plugins for extra formats|gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav|repo
+# IFOS software catalog — Áudio, vídeo e imagem / Audio, video and graphics
+VLC|Toca praticamente qualquer arquivo de áudio ou vídeo|vlc|repo
+mpv|Reprodutor de vídeo simples e programável|mpv|repo
+GIMP|Editor de imagens|gimp|repo
+Inkscape|Editor de desenho vetorial|inkscape|repo
+Krita|Pintura digital|krita|repo
+Blender|Modelagem, animação e renderização 3D|blender|repo
+Audacity|Gravação e edição de áudio|audacity|repo
+Kdenlive|Editor de vídeo|kdenlive|repo
+HandBrake|Converte vídeo entre formatos|handbrake|repo
+Spotify|Streaming de música|spotify|aur
+Codecs|Plugins do GStreamer para formatos adicionais|gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav|repo

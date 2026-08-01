@@ -1,13 +1,13 @@
-# IFOS software catalog — Development
-Visual Studio Code|Microsoft's editor, fully open-source build|code|repo
-Neovim|Modern vim, with LSP support built in|neovim|repo
-Base development tools|Compilers and build tooling (needed for AUR packages)|base-devel|repo
-Git tooling|lazygit, git-delta and GitHub CLI|lazygit git-delta github-cli|repo
-Docker|Containers, with docker compose|docker docker-compose|repo
-Podman|Daemonless containers|podman podman-compose|repo
-Python toolchain|pip, virtualenv and IPython|python-pip python-virtualenv ipython|repo
-Node.js|JavaScript runtime with npm|nodejs npm|repo
-Rust|rustup toolchain manager|rustup|repo
-Go|Go compiler and tooling|go|repo
-JetBrains Toolbox|Installer for IntelliJ, PyCharm, CLion and friends|jetbrains-toolbox|aur
-Virtual machines|QEMU/KVM with the virt-manager GUI|qemu-desktop libvirt virt-manager dnsmasq edk2-ovmf|repo
+# IFOS software catalog — Programação / Development
+Visual Studio Code|Editor da Microsoft, na versão totalmente livre|code|repo
+Neovim|Vim moderno, já com suporte a LSP|neovim|repo
+Ferramentas de compilação|Compiladores e ferramentas de build (necessário para pacotes do AUR)|base-devel|repo
+Ferramentas de Git|lazygit, git-delta e a CLI do GitHub|lazygit git-delta github-cli|repo
+Docker|Contêineres, com docker compose|docker docker-compose|repo
+Podman|Contêineres sem serviço em segundo plano|podman podman-compose|repo
+Ferramentas Python|pip, virtualenv e IPython|python-pip python-virtualenv ipython|repo
+Node.js|Ambiente JavaScript com npm|nodejs npm|repo
+Rust|Gerenciador de versões rustup|rustup|repo
+Go|Compilador e ferramentas da linguagem Go|go|repo
+JetBrains Toolbox|Instalador do IntelliJ, PyCharm, CLion e afins|jetbrains-toolbox|aur
+Máquinas virtuais|QEMU/KVM com a interface gráfica virt-manager|qemu-desktop libvirt virt-manager dnsmasq edk2-ovmf|repo

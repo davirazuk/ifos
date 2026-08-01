@@ -94,6 +94,14 @@ big tiles, keyboard or gamepad navigation, one section per subject area. It
 reads the same catalog as `ifos-software`, so installed applications launch and
 missing ones offer to install themselves.
 
+Sections run down a sidebar on the left, each with the icon its catalog file
+names, and the one you are in is spelled out above the tiles. They used to be a
+strip across the top, which scrolled once there were more than a few — the later
+sections sat off the edge, reachable only by dragging something that did not
+look draggable. Down the side a dozen of them fit on a 1366×768 laptop screen
+with room to spare. Typing searches the whole machine, not just the open
+section; `Tab` moves to the next section, `Esc` leaves.
+
 Because it now opens with the session, the first section is **Recentes** — what
 this account last opened, most recent first. It appears once there is something
 to put in it, and an application that has since been uninstalled drops off
@@ -103,9 +111,10 @@ rather than showing a tile that cannot start. The list lives in
 
 It also carries a built-in **Moodle front end**: the *Escola Online* section
 embeds a browser pointed at the IFMS AVEA, with the academic system, SUAP, the
-library and webmail one click away in the sidebar. That works on a fresh install
-with no browser installed at all. The links live in
-`airootfs/usr/share/ifos/escola.list` — plain text, edit freely.
+library and webmail a click away along the top, or `←`/`→` from the keyboard.
+That works on a fresh install with no browser installed at all, and *Abrir no
+navegador* hands the current page to a real browser once one is installed. The
+links live in `airootfs/usr/share/ifos/escola.list` — plain text, edit freely.
 
 Picking **IFOS Big Picture** at the login screen boots straight into it, console
 style: the launcher *is* the session, and closing it ends the session.
