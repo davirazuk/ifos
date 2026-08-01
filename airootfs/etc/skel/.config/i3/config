@@ -202,6 +202,11 @@ for_window [class="Blueman-manager"]      floating enable, resize set 700 500
 for_window [class="Arandr"]               floating enable
 for_window [class="Gparted"]              floating enable
 for_window [class="Nm-connection-editor"] floating enable
+# Mod+Esc. A task manager is something you glance at and dismiss, so it floats
+# like the other utility windows rather than becoming another tab you have to
+# navigate away from. Both the graphical one and the htop fallback.
+for_window [class="Xfce4-taskmanager"]    floating enable, resize set 900 620, move position center
+for_window [title="^htop$"]               floating enable, resize set 900 620, move position center
 for_window [title="ifos-welcome"]         floating enable, resize set 900 640, move position center
 for_window [title="^IFOS$"]               fullscreen enable
 for_window [title="ifos-help"]            floating enable, resize set 820 640, move position center
