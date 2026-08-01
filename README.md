@@ -134,9 +134,8 @@ The installer detects the graphics hardware and offers to install a driver for
 it, rather than leaving that to a later trip through the software catalog. On a
 machine with an NVIDIA card it offers the open kernel module branch, and says
 plainly that a card older than a GTX 16-series needs nouveau instead. On a
-hybrid laptop it adds `nvidia-prime`, so `prime-run <game>` sends a game to the
-discrete chip — without it every game quietly runs on the integrated one and
-the machine just seems slow.
+hybrid laptop it adds `nvidia-prime`, which is what lets a game reach the
+discrete chip at all.
 
 Choosing a driver also enables the multilib repository on the installed system.
 The 32-bit libraries games need can only be installed with it on, and a system
@@ -146,6 +145,19 @@ that received them without it would never be able to update them again.
 is far below what modern games need through Proton and DXVK, and a title that
 runs past it does not warn — it fails to start, or crashes partway in with
 nothing in its own logs to explain why.
+
+**On a laptop with two graphics chips, games use the fast one on their own.**
+Everything renders on the integrated chip by default, which is what makes the
+battery last and is wrong for exactly one kind of program — so the launcher
+sends games to the discrete card and leaves everything else alone. It knows
+which entries are games because the catalog already sorts them, and it also
+honours `PrefersNonDefaultGPU`, the desktop-entry key Steam and Lutris set on
+the shortcuts they generate. Nobody has to know the word `prime-run`, and
+nobody has to discover months later that their machine had been running
+everything on the slow chip.
+
+`ifos-gpu` shows what the machine has, for the rare case of starting something
+heavy from outside the launcher.
 
 Steam, Lutris, Heroic, Wine, Proton-GE, MangoHud, GameMode and Gamescope are all
 one line in `ifos-software`.

@@ -443,6 +443,9 @@ class Launcher(Gtk.Window):
         self.tab_keys: list[str] = []
         self._needle = ""
         self._searching = False        # showing every section at once
+        # Checked once: lspci is cheap but not free, and the answer
+        # cannot change while the launcher is open.
+        self._offload_gpu = self._detect_offload()
         self._suppress_search = False  # while a tab change resets the box
 
         display = Gdk.Display.get_default()
@@ -981,6 +984,20 @@ class Launcher(Gtk.Window):
         self.catalog.remember(entry)
 
         info = getattr(tile, "appinfo", None) or self.catalog.find_appinfo(entry)
+
+        # On a laptop with two graphics chips, send games to the fast one.
+        # Everything renders on the integrated chip by default, which is what
+        # makes the battery last and is wrong for exactly one kind of program.
+        # The launcher already knows which entries are games, so nobody has to
+        # be told about prime-run, or discover that their machine has been
+        # running everything on the slow chip the whole time.
+        if self._offload_gpu and self._prefers_dgpu(entry, info):
+            command = self._command_for(entry, info)
+            if command:
+                self.spawn("ifos-gpu run " + command)
+                Gtk.main_quit()
+                return
+
         if info is not None:
             info.launch(None, None)
             Gtk.main_quit()
@@ -992,6 +1009,50 @@ class Launcher(Gtk.Window):
             Gtk.main_quit()
         else:
             self.notify("Não foi possível iniciar %s." % entry["name"])
+
+    # ── the fast graphics chip, without being asked ──────────────────────────
+    @staticmethod
+    def _detect_offload() -> bool:
+        """True on a laptop with a second, faster graphics chip."""
+        try:
+            return subprocess.run(
+                ["ifos-gpu", "--has-dgpu"], stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=5,
+            ).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    @staticmethod
+    def _prefers_dgpu(entry: dict, info) -> bool:
+        # The catalog already sorts games into their own section, which is the
+        # whole answer for anything installed through IFOS.
+        if entry.get("category") == "gaming":
+            return True
+        # And the desktop-entry standard has a key for exactly this, which Steam
+        # and Lutris set on the shortcuts they generate for individual games.
+        if info is not None:
+            try:
+                return bool(info.get_boolean("PrefersNonDefaultGPU"))
+            except (AttributeError, TypeError):
+                return False
+        return False
+
+    @staticmethod
+    def _command_for(entry: dict, info) -> str | None:
+        """The command line to run, with the desktop-entry field codes removed."""
+        line = None
+        if info is not None:
+            try:
+                line = info.get_commandline()
+            except AttributeError:
+                line = None
+        if not line:
+            line = next((p for p in entry.get("packages", []) if shutil.which(p)), None)
+        if not line:
+            return None
+        # %u %U %f %F %i %c %k are placeholders the launcher has nothing to put
+        # in; left in place they are passed to the game as literal arguments.
+        return re.sub(r"%[a-zA-Z]", "", line).strip()
 
     def spawn(self, command: str) -> None:
         try:
