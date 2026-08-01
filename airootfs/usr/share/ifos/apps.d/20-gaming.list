@@ -1,14 +1,14 @@
-# IFOS software catalog — Gaming
-Steam|Valve's game store and launcher|steam|multilib
-Lutris|Game manager for Windows, emulated and native games|lutris|repo
-Heroic Games Launcher|Epic Games and GOG launcher|heroic-games-launcher-bin|aur
-Wine|Run Windows applications and games|wine wine-mono wine-gecko|multilib
-Proton (GE)|Community Proton builds, managed by ProtonUp-Qt|protonup-qt|aur
-MangoHud|In-game FPS and hardware overlay|mangohud lib32-mangohud|multilib
-Gamescope|Valve's session compositor: fixes scaling and lets a game run at its own resolution|gamescope|repo
-GameMode|Applies performance tuning while a game runs|gamemode lib32-gamemode|multilib
-Discord|Voice and text chat|discord|repo
-OBS Studio|Recording and streaming|obs-studio|repo
-RetroArch|Multi-system emulator front end|retroarch retroarch-assets-xmb|repo
-PCSX2|PlayStation 2 emulator|pcsx2|aur
-Dolphin Emulator|GameCube and Wii emulator|dolphin-emu|repo
+# IFOS software catalog — Jogos / Gaming
+Steam|Loja e lançador de jogos da Valve|steam|multilib
+Lutris|Gerenciador de jogos do Windows, emulados e nativos|lutris|repo
+Heroic Games Launcher|Lançador para Epic Games e GOG|heroic-games-launcher-bin|aur
+Wine|Roda programas e jogos de Windows|wine wine-mono wine-gecko|multilib
+Proton (GE)|Versões do Proton feitas pela comunidade, gerenciadas pelo ProtonUp-Qt|protonup-qt|aur
+MangoHud|Mostra FPS e uso do hardware por cima do jogo|mangohud lib32-mangohud|multilib
+Gamescope|Compositor da Valve: corrige o dimensionamento e deixa o jogo rodar na resolução dele|gamescope|repo
+GameMode|Ajusta o desempenho do sistema enquanto o jogo roda|gamemode lib32-gamemode|multilib
+Discord|Conversa por voz e texto|discord|repo
+OBS Studio|Gravação e transmissão ao vivo|obs-studio|repo
+RetroArch|Central de emuladores de vários consoles|retroarch retroarch-assets-xmb|repo
+PCSX2|Emulador de PlayStation 2|pcsx2|aur
+Dolphin Emulator|Emulador de GameCube e Wii|dolphin-emu|repo

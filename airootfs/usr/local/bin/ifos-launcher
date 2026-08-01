@@ -28,6 +28,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import unicodedata
 import urllib.parse
 from datetime import datetime
 
@@ -79,6 +80,50 @@ SSO_HOSTS = {"accounts.google.com"}
 # substring, which is what silently broke when i3lock became ifos-lock.
 KEEP_LAUNCHER_OPEN = {"systemctl", "ifos-lock", "ifos-theme"}
 
+# What people type when they are looking for something they already know by
+# another name. Almost everyone arriving here has used Windows, and searching
+# "photoshop" or "word" in a list that contains GIMP and LibreOffice returned
+# nothing at all - which reads as "this system does not have one", not as "it
+# is called something else here".
+#
+# Keyed by the catalog name, lowercased. Only aliases someone would plausibly
+# type; this is a search aid, not a claim that the programs are equivalent.
+SEARCH_ALIASES = {
+    "gimp": "photoshop editor de fotos imagem",
+    "krita": "photoshop sai paint tool desenho pintura",
+    "inkscape": "illustrator corel coreldraw vetor",
+    "libreoffice": "word excel powerpoint office microsoft escritorio "
+                   "writer calc impress documento planilha slides",
+    "onlyoffice": "word excel powerpoint office microsoft documento planilha",
+    "kdenlive": "premiere sony vegas movie maker editor de video",
+    "audacity": "audio gravador gravar som",
+    "obs studio": "gravar tela stream live transmitir",
+    "vlc": "media player reprodutor filme video",
+    "thunderbird": "outlook email correio",
+    "chromium": "chrome google navegador",
+    "brave": "chrome navegador",
+    "firefox": "navegador",
+    "librewolf": "firefox navegador privacidade",
+    "ark": "winrar 7zip winzip zip rar descompactar compactar",
+    "visual studio code": "vscode vs code editor programar ide",
+    "obsidian": "onenote notion anotacoes notas",
+    "calibre": "livro ebook epub kindle",
+    "keepassxc": "senhas gerenciador de senhas cofre lastpass bitwarden",
+    "timeshift": "backup restauracao ponto de restauracao",
+    "btop": "gerenciador de tarefas processos desempenho",
+    "steam": "jogos games loja",
+    "lutris": "jogos games epic gog",
+    "wine": "rodar programas windows exe",
+    "bottles": "rodar programas windows exe wine prefixo",
+    "blender": "3d modelagem animacao",
+    "arduino ide": "arduino placa microcontrolador",
+    "kicad": "eletronica esquematico pcb placa de circuito",
+    "wireshark": "rede pacotes sniffer analisador",
+    "gparted": "particao disco particionar",
+    "impressao": "impressora imprimir cups printer",
+    "digitalizacao": "scanner escanear digitalizar",
+}
+
 SECTION_TITLES = {
     "escola": "Escola",
     "browsers": "Internet",
@@ -91,17 +136,48 @@ SECTION_TITLES = {
     "hardware": "Hardware",
 }
 
+# One name per section, with fallbacks after it. IFOS ships Papirus, which has
+# all of the first choices; the fallbacks are for a machine where the theme did
+# not install or a fork swapped it, because an icon name a theme does not have
+# is not drawn as nothing - GTK draws the broken-image glyph, and a sidebar of
+# those looks like the launcher is faulty rather than plain.
 SECTION_ICONS = {
-    "escola": "applications-education",
-    "browsers": "web-browser",
-    "gaming": "applications-games",
-    "development": "applications-development",
-    "media": "applications-multimedia",
-    "musica": "audio-x-generic",
-    "office": "applications-office",
-    "utilities": "applications-utilities",
-    "hardware": "preferences-desktop-peripherals",
+    "recentes": ("document-open-recent", "document-open-recent-symbolic", "history"),
+    "escola": ("applications-education", "accessories-dictionary", "text-x-generic"),
+    "escola-online": ("applications-internet", "web-browser", "network-workgroup"),
+    "browsers": ("web-browser", "applications-internet", "network-workgroup"),
+    "gaming": ("applications-games", "input-gaming"),
+    "development": ("applications-development", "text-x-script", "utilities-terminal"),
+    "media": ("applications-multimedia", "video-x-generic"),
+    "musica": ("audio-x-generic", "multimedia-audio-player"),
+    "office": ("applications-office", "x-office-document", "text-x-generic"),
+    "utilities": ("applications-utilities", "applications-system", "preferences-system"),
+    "hardware": ("preferences-desktop-peripherals", "computer", "applications-system"),
 }
+SECTION_ICON_FALLBACK = "application-x-executable"
+
+
+def fold(text: str) -> str:
+    """Lowercase and strip accents, for comparing what someone typed.
+
+    Searching was accent-sensitive, in a system whose interface is Portuguese:
+    "musica" did not match Música, "programacao" did not match Programação,
+    "utilitarios" did not match Utilitários. Typing the accents is possible on
+    the ABNT2 keyboard this ships with and nobody does it inside a search box.
+    """
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text.lower())
+        if not unicodedata.combining(c)
+    )
+
+
+def section_icon(key: str) -> str:
+    """The first name for `key` the icon theme can actually draw."""
+    theme = Gtk.IconTheme.get_default()
+    for name in SECTION_ICONS.get(key, ()):
+        if theme.has_icon(name):
+            return name
+    return SECTION_ICON_FALLBACK
 
 # Every colour is defined once at the top and referenced by name below, so that
 # ifos-theme only has to rewrite the seven @define-color lines to repaint the
@@ -128,18 +204,26 @@ window { background-color: @mantle; }
             background-size: cover; background-position: center; }
 .scrim { background: linear-gradient(alpha(@mantle, 0.72), alpha(@mantle, 0.94)); }
 
-.header { padding: 22px 34px 0 34px; }
-.brand { color: @text; font-size: 30px; font-weight: bold; letter-spacing: 6px; }
-.subtitle { color: @bright; font-size: 12px; letter-spacing: 1px; }
-.clock { color: @text; font-size: 22px; font-weight: bold; }
-.clockdate { color: @dim; font-size: 12px; }
-
-.tabs { padding: 6px 34px 16px 34px; }
-.tab { background: transparent; color: @subtext; border: none; outline: none;
-       padding: 9px 18px; font-size: 14px; border-radius: 20px;
+/* The sidebar is a darker panel than the page beside it, so the split reads
+   without needing a border drawn down it. */
+.nav { background-color: alpha(@deep, 0.90); padding: 24px 12px 14px 12px; }
+.brand { color: @text; font-size: 26px; font-weight: bold; letter-spacing: 6px;
+         padding: 0 12px; }
+.subtitle { color: @bright; font-size: 10px; letter-spacing: 1px;
+            padding: 2px 12px 18px 12px; }
+.navitems { padding-right: 2px; }
+.navitem { background: transparent; color: @subtext; border: none; outline: none;
+       padding: 10px 12px; font-size: 14px; border-radius: 10px;
        transition: background-color 120ms ease-out, color 120ms ease-out; }
-.tab:hover { background-color: alpha(@accent, 0.20); color: @text; }
-.tab.active { background-color: @accent; color: @deep; font-weight: bold; }
+.navitem:hover { background-color: alpha(@accent, 0.20); color: @text; }
+.navitem.active { background-color: @accent; color: @deep; font-weight: bold; }
+.clocks { padding: 14px 12px 2px 12px; }
+.clock { color: @text; font-size: 22px; font-weight: bold; }
+.clockdate { color: @dim; font-size: 11px; }
+
+.topbar { padding: 20px 34px 14px 34px; }
+.sectiontitle { color: @text; font-size: 24px; font-weight: bold;
+                letter-spacing: 1px; }
 
 flowboxchild { border-radius: 16px; padding: 0; }
 .tile { background-color: alpha(@surface, 0.82); border-radius: 16px;
@@ -164,14 +248,17 @@ flowboxchild:selected .tile { border-color: @accent;
 .hint { color: @dim; font-size: 12px; }
 .empty { color: @dim; font-size: 16px; }
 
-.sidebar { background-color: alpha(@deep, 0.92); padding: 10px; }
-.sidebar-item { background: transparent; color: @subtext; border: none;
-        padding: 12px 16px; border-radius: 10px; font-size: 14px;
+.servicerow { padding: 0 34px 12px 34px; }
+.service { background-color: alpha(@surface, 0.72); color: @subtext; border: none;
+        padding: 8px 16px; border-radius: 18px; font-size: 13px;
         transition: background-color 120ms ease-out, color 120ms ease-out; }
-.sidebar-item:hover { background-color: alpha(@accent, 0.22); color: @text; }
-.sidebar-item.active { background-color: @accent; color: @deep; font-weight: bold; }
-.sidebar-title { color: @bright; font-size: 11px; font-weight: bold;
-        letter-spacing: 2px; padding: 10px 16px 4px 16px; }
+.service:hover { background-color: alpha(@accent, 0.30); color: @text; }
+.service.active { background-color: @accent; color: @deep; font-weight: bold; }
+/* Not one of the services - it leaves the launcher - so it is outlined rather
+   than filled, and never takes the .active highlight. */
+.service-external { background-color: transparent; color: @dim;
+        border: 1px solid alpha(@accent, 0.45); }
+.service-external:hover { background-color: alpha(@accent, 0.22); color: @text; }
 .webbar { background-color: alpha(@deep, 0.92); padding: 8px 12px; }
 .weburl { color: @dim; font-size: 11px; }
 
@@ -190,16 +277,16 @@ scrollbar slider {
 }
 scrollbar slider:hover  { background-color: alpha(@text, 0.30); }
 scrollbar slider:active { background-color: @accent; }
-/* The tab strip scrolls when there are more sections than fit; a bar under it
-   would just be noise. */
-.tabs scrollbar { opacity: 0; min-height: 0; }
+/* Both of these scroll only when there are more entries than fit, and a bar
+   beside a dozen section names is noise. */
+.nav scrollbar, .services scrollbar { opacity: 0; min-width: 0; min-height: 0; }
 
 /* GTK draws a focus ring on the tile that has keyboard focus. The tile already
    shows selection with its border and background, so the ring lands on top of
    it as a second, uglier outline. */
 flowboxchild:focus, flowboxchild:focus-visible,
 button:focus, button:focus-visible,
-.tab:focus, .sidebar-item:focus {
+.navitem:focus, .service:focus {
     outline: none;
     box-shadow: none;
 }
@@ -458,6 +545,7 @@ class Launcher(Gtk.Window):
         self.school_links = load_school_links()
         self.section_index = 0
         self.tab_keys: list[str] = []
+        self.tab_titles: list[str] = []
         self._needle = ""
         self._searching = False        # showing every section at once
         # Checked once: lspci is cheap but not free, and the answer
@@ -498,21 +586,28 @@ class Launcher(Gtk.Window):
         backdrop.get_style_context().add_class("backdrop")
         self.add(backdrop)
 
-        scrim = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        # Sidebar on the left, everything else in a column beside it.
+        scrim = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         scrim.get_style_context().add_class("scrim")
         backdrop.pack_start(scrim, True, True, 0)
 
-        scrim.pack_start(self._build_header(), False, False, 0)
+        scrim.pack_start(self._build_nav(), False, False, 0)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        content.get_style_context().add_class("content")
+        scrim.pack_start(content, True, True, 0)
+
+        content.pack_start(self._build_topbar(), False, False, 0)
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self.stack.set_transition_duration(140)
-        scrim.pack_start(self.stack, True, True, 0)
+        content.pack_start(self.stack, True, True, 0)
 
         self.stack.add_named(self._build_apps_page(), "apps")
         self.stack.add_named(self._build_school_page(), "escola-online")
 
-        scrim.pack_start(self._build_footer(), False, False, 0)
+        content.pack_start(self._build_footer(), False, False, 0)
 
         # Section 0 is whatever the catalog put first; honour --category.
         if start:
@@ -535,65 +630,50 @@ class Launcher(Gtk.Window):
         if use_gamepad:
             self.attach_gamepad()
 
-    # header -----------------------------------------------------------------
-    def _build_header(self) -> Gtk.Widget:
-        header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    # navigation --------------------------------------------------------------
+    #  Sections live down the side rather than in a strip across the top. The
+    #  strip was a horizontal scroller: with a dozen sections the later ones sat
+    #  off the edge, reachable only by scrolling something that did not look
+    #  scrollable, and the names were the only thing distinguishing them.
+    #  Down the side they all fit, they carry the icons the catalog already
+    #  names, and the reading order matches the tiles.
+    def _build_nav(self) -> Gtk.Widget:
+        nav = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        nav.get_style_context().add_class("nav")
+        nav.set_size_request(228, -1)
 
-        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
-        top.get_style_context().add_class("header")
-
-        titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        # Spaced by CSS letter-spacing, not by typing spaces into the string -
-        # doing both gave the wordmark gaps wide enough to read as four separate
-        # letters rather than a name.
         brand = Gtk.Label(label="IFOS", xalign=0)
         brand.get_style_context().add_class("brand")
-        titles.pack_start(brand, False, False, 0)
+        nav.pack_start(brand, False, False, 0)
         subtitle = Gtk.Label(label="IFMS · CAMPUS DOURADOS", xalign=0)
         subtitle.get_style_context().add_class("subtitle")
-        titles.pack_start(subtitle, False, False, 0)
-        top.pack_start(titles, False, False, 0)
+        nav.pack_start(subtitle, False, False, 0)
 
-        clocks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        clocks.set_halign(Gtk.Align.END)
-        self.clock = Gtk.Label(xalign=1)
-        self.clock.get_style_context().add_class("clock")
-        clocks.pack_start(self.clock, False, False, 0)
-        self.clockdate = Gtk.Label(xalign=1)
-        self.clockdate.get_style_context().add_class("clockdate")
-        clocks.pack_start(self.clockdate, False, False, 0)
-        top.pack_end(clocks, False, False, 0)
-
-        # 120 entries is too many to hunt through by eye.
-        self.search = Gtk.SearchEntry()
-        self.search.set_placeholder_text("Procurar…")
-        self.search.set_size_request(280, 34)
-        self.search.set_valign(Gtk.Align.CENTER)
-        self.search.get_style_context().add_class("search")
-        self.search.connect("search-changed", self._on_search)
-        self.search.connect("activate", self._on_search_activate)
-        top.pack_end(self.search, False, False, 18)
-
-        self._tick_clock()
-
-        header.pack_start(top, False, False, 0)
-
-        tabs_scroller = Gtk.ScrolledWindow()
-        tabs_scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
-        tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        tabs.get_style_context().add_class("tabs")
+        items = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        items.get_style_context().add_class("navitems")
         self.tab_buttons = []
+        self.tab_titles = []
 
         def add_tab(key: str, label: str) -> None:
-            button = Gtk.Button(label=label)
-            button.get_style_context().add_class("tab")
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            icon = Gtk.Image.new_from_icon_name(
+                section_icon(key), Gtk.IconSize.LARGE_TOOLBAR
+            )
+            icon.set_pixel_size(20)
+            row.pack_start(icon, False, False, 0)
+            row.pack_start(Gtk.Label(label=label, xalign=0), True, True, 0)
+
+            button = Gtk.Button()
+            button.add(row)
+            button.get_style_context().add_class("navitem")
             button.set_relief(Gtk.ReliefStyle.NONE)
             button.set_can_focus(False)
             index = len(self.tab_keys)
             button.connect("clicked", lambda _b, i=index: self.select_tab(i))
-            tabs.pack_start(button, False, False, 0)
+            items.pack_start(button, False, False, 0)
             self.tab_buttons.append(button)
             self.tab_keys.append(key)
+            self.tab_titles.append(label)
 
         # Escola Online sits right after Escola: school first, by design.
         for key, title, _ in self.catalog.sections:
@@ -603,9 +683,46 @@ class Launcher(Gtk.Window):
         if "escola-online" not in self.tab_keys:
             add_tab("escola-online", "Escola Online")
 
-        tabs_scroller.add(tabs)
-        header.pack_start(tabs_scroller, False, False, 0)
-        return header
+        # More sections than fit is a real possibility once a fork adds its own,
+        # so the list scrolls rather than pushing the clock off the bottom.
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.add(items)
+        nav.pack_start(scroller, True, True, 0)
+
+        clocks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        clocks.get_style_context().add_class("clocks")
+        self.clock = Gtk.Label(xalign=0)
+        self.clock.get_style_context().add_class("clock")
+        clocks.pack_start(self.clock, False, False, 0)
+        self.clockdate = Gtk.Label(xalign=0)
+        self.clockdate.get_style_context().add_class("clockdate")
+        clocks.pack_start(self.clockdate, False, False, 0)
+        nav.pack_end(clocks, False, False, 0)
+
+        self._tick_clock()
+        return nav
+
+    def _build_topbar(self) -> Gtk.Widget:
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        top.get_style_context().add_class("topbar")
+
+        # The section you are in, named where you are looking rather than only
+        # highlighted in the corner of your eye.
+        self.section_label = Gtk.Label(xalign=0)
+        self.section_label.get_style_context().add_class("sectiontitle")
+        top.pack_start(self.section_label, True, True, 0)
+
+        # 120 entries is too many to hunt through by eye.
+        self.search = Gtk.SearchEntry()
+        self.search.set_placeholder_text("Procurar em tudo…")
+        self.search.set_size_request(320, 36)
+        self.search.set_valign(Gtk.Align.CENTER)
+        self.search.get_style_context().add_class("search")
+        self.search.connect("search-changed", self._on_search)
+        self.search.connect("activate", self._on_search_activate)
+        top.pack_end(self.search, False, False, 0)
+        return top
 
     def _tick_clock(self) -> bool:
         now = datetime.now()
@@ -646,7 +763,43 @@ class Launcher(Gtk.Window):
         self.flow.connect("child-activated", self.on_activate)
         self.flow.set_filter_func(self._filter_tile)
         scroller.add(self.flow)
-        return scroller
+
+        # A search that matches nothing used to leave a blank green page with
+        # no explanation - indistinguishable from the launcher having hung, and
+        # the reason people typed the same thing again instead of trying
+        # another word.
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.no_results = Gtk.Label(xalign=0.5)
+        self.no_results.get_style_context().add_class("empty")
+        self.no_results.set_justify(Gtk.Justification.CENTER)
+        self.no_results.set_no_show_all(True)
+        self.no_results.set_margin_top(80)
+        page.pack_start(self.no_results, False, False, 0)
+        page.pack_start(scroller, True, True, 0)
+        self.flow_scroller = scroller
+        return page
+
+    def _update_no_results(self) -> None:
+        """Show the message, and hide the grid while it is up.
+
+        Leaving the empty FlowBox in place is not the same as it being
+        invisible: it still lays out its rows, so the message appeared over a
+        set of empty horizontal bands.
+        """
+        found = not self._needle or any(
+            c.get_child_visible() for c in self.flow.get_children()
+        )
+        if found:
+            self.no_results.hide()
+            self.flow_scroller.show()
+            return
+        self.no_results.set_text(
+            "Nada encontrado para “%s”.\n\n"
+            "Tente outra palavra: o nome do programa, para que ele serve,\n"
+            "ou o nome que ele tinha no Windows." % self.search.get_text().strip()
+        )
+        self.no_results.show()
+        self.flow_scroller.hide()
 
     def _filter_tile(self, child) -> bool:
         needle = getattr(self, "_needle", "")
@@ -655,10 +808,31 @@ class Launcher(Gtk.Window):
         entry = getattr(child.get_child(), "entry", None)
         if entry is None:
             return True
-        haystack = " ".join(
-            [entry["name"], entry.get("desc", "")] + entry.get("packages", [])
-        ).lower()
-        return all(word in haystack for word in needle.split())
+        return all(word in self._haystack(entry) for word in fold(needle).split())
+
+    def _haystack(self, entry: dict) -> str:
+        """Everything a tile can be found by, folded and cached.
+
+        Cached on the entry: the filter runs once per tile per keystroke, and
+        typing "libreoffice" across 169 tiles rebuilt and re-folded the same
+        strings a couple of thousand times.
+        """
+        cached = entry.get("_haystack")
+        if cached is not None:
+            return cached
+        parts = [entry["name"], entry.get("desc", "")]
+        parts += entry.get("packages", [])
+        # The section, so "jogos" finds the games rather than only the tile
+        # whose description happens to contain the word.
+        category = entry.get("category", "")
+        parts += [category, SECTION_TITLES.get(category, "")]
+        # Folded on both sides: the catalog calls them "Impressão" and
+        # "Digitalização", and a table keyed on the raw lowercase name would
+        # never match those.
+        parts.append(SEARCH_ALIASES.get(fold(entry["name"]), ""))
+        text = fold(" ".join(p for p in parts if p))
+        entry["_haystack"] = text
+        return text
 
     def populate_all(self) -> None:
         """Every entry on the machine, for searching across sections."""
@@ -676,7 +850,7 @@ class Launcher(Gtk.Window):
         self.flow.show_all()
 
     def _on_search(self, entry) -> None:
-        self._needle = entry.get_text().strip().lower()
+        self._needle = fold(entry.get_text().strip())
 
         # Searching looks at the whole machine, not the section that happens to
         # be open. The flow only ever held one section, so typing "gimp" while
@@ -687,9 +861,13 @@ class Launcher(Gtk.Window):
             if self._needle and not self._searching:
                 self._searching = True
                 self.populate_all()
+                # The heading has to follow, or the grid says every application
+                # on the machine while the title above it still says "Recentes".
+                self.section_label.set_text("Resultados")
             elif not self._needle and self._searching:
                 self._searching = False
                 self.populate(self.tab_keys[self.section_index])
+                self.section_label.set_text(self.tab_titles[self.section_index])
 
         self.flow.invalidate_filter()
         # Keep something selected so Enter always has a target.
@@ -697,6 +875,7 @@ class Launcher(Gtk.Window):
             if child.get_child_visible() and child.get_mapped():
                 self.flow.select_child(child)
                 break
+        self._update_no_results()
 
     def _on_search_activate(self, _entry) -> None:
         visible = [c for c in self.flow.get_children() if c.get_mapped()]
@@ -724,8 +903,9 @@ class Launcher(Gtk.Window):
                 image = Gtk.Image.new_from_icon_name(name, Gtk.IconSize.DIALOG)
                 image.set_pixel_size(56)
                 return image
-        fallback = SECTION_ICONS.get(entry.get("category", ""), "application-x-executable")
-        image = Gtk.Image.new_from_icon_name(fallback, Gtk.IconSize.DIALOG)
+        image = Gtk.Image.new_from_icon_name(
+            section_icon(entry.get("category", "")), Gtk.IconSize.DIALOG
+        )
         image.set_pixel_size(56)
         return image
 
@@ -760,7 +940,11 @@ class Launcher(Gtk.Window):
             badge.get_style_context().add_class(
                 "badge-ready" if entry["installed"] else "badge-install"
             )
-            box.pack_start(badge, False, False, 0)
+            # pack_end, not pack_start. A FlowBox row is as tall as its tallest
+            # tile, and packing from the top left every badge at whatever height
+            # its own name and description happened to end at - a row of
+            # INSTALAR at four different heights. From the bottom they line up.
+            box.pack_end(badge, False, False, 0)
 
         box.entry = entry
         box.appinfo = info
@@ -800,34 +984,53 @@ class Launcher(Gtk.Window):
             first.grab_focus()
 
     # school page ------------------------------------------------------------
+    #  The services used to be a second 280px sidebar. Beside the new one that
+    #  is two columns of navigation before any content starts, on a 1366-wide
+    #  school laptop that leaves the page itself under half the screen. They are
+    #  a row of pills above the view instead: seven short names fit across, and
+    #  the web page gets the whole width.
     def _build_school_page(self) -> Gtk.Widget:
-        page = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        sidebar.get_style_context().add_class("sidebar")
-        sidebar.set_size_request(280, -1)
-
-        title = Gtk.Label(label="SERVIÇOS DO IFMS", xalign=0)
-        title.get_style_context().add_class("sidebar-title")
-        sidebar.pack_start(title, False, False, 0)
+        picker = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
         self.school_buttons = []
         for index, (name, url, desc) in enumerate(self.school_links):
             button = Gtk.Button(label=name)
-            button.get_style_context().add_class("sidebar-item")
+            button.get_style_context().add_class("service")
             button.set_relief(Gtk.ReliefStyle.NONE)
+            button.set_can_focus(False)
             button.set_tooltip_text(desc or url)
             button.connect("clicked", lambda _b, i=index: self.open_school(i))
-            sidebar.pack_start(button, False, False, 0)
+            picker.pack_start(button, False, False, 0)
             self.school_buttons.append(button)
 
-        external = Gtk.Button(label="Abrir no navegador")
-        external.get_style_context().add_class("sidebar-item")
-        external.set_relief(Gtk.ReliefStyle.NONE)
-        external.connect("clicked", self.open_in_browser)
-        sidebar.pack_end(external, False, False, 0)
+        # A fork adding services, or simply a narrow screen, must not push the
+        # last pill off the edge with no way to reach it.
+        # The class goes on the scroller, not the row inside it: the scrollbar
+        # is the scroller's own child, so a rule hung off the inner box would
+        # never reach it.
+        picker_scroller = Gtk.ScrolledWindow()
+        picker_scroller.get_style_context().add_class("services")
+        picker_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        picker_scroller.add(picker)
 
-        page.pack_start(sidebar, False, False, 0)
+        # Outside the scroller. Nine services already overflow 1366px, so a
+        # button packed at the end of the scrolling row sat past the right edge:
+        # the way out to a real browser was reachable only by scrolling a strip
+        # that does not look scrollable. Pinned here it is always on screen.
+        external = Gtk.Button(label="Abrir no navegador")
+        external.get_style_context().add_class("service")
+        external.get_style_context().add_class("service-external")
+        external.set_relief(Gtk.ReliefStyle.NONE)
+        external.set_can_focus(False)
+        external.connect("clicked", self.open_in_browser)
+
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.get_style_context().add_class("servicerow")
+        row.pack_start(picker_scroller, True, True, 0)
+        row.pack_end(external, False, False, 0)
+        page.pack_start(row, False, False, 0)
 
         right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
@@ -865,7 +1068,7 @@ class Launcher(Gtk.Window):
             self.web = None
             notice = Gtk.Label(
                 label="O visualizador embutido não está disponível.\n"
-                      "Escolha um serviço à esquerda para abrí-lo no navegador."
+                      "Escolha um serviço acima para abrí-lo no navegador."
             )
             notice.get_style_context().add_class("empty")
             notice.set_justify(Gtk.Justification.CENTER)
@@ -875,15 +1078,19 @@ class Launcher(Gtk.Window):
         self.school_index = 0
         return page
 
-    def open_school(self, index: int) -> None:
+    def _highlight_school(self, index: int) -> None:
+        """Move the highlight without opening anything."""
         self.school_index = index
-        name, url, _desc = self.school_links[index]
         for i, button in enumerate(self.school_buttons):
             context = button.get_style_context()
             if i == index:
                 context.add_class("active")
             else:
                 context.remove_class("active")
+
+    def open_school(self, index: int) -> None:
+        self._highlight_school(index)
+        _name, url, _desc = self.school_links[index]
         if self.web is not None:
             self.web.load_uri(url)
         else:
@@ -951,18 +1158,28 @@ class Launcher(Gtk.Window):
             else:
                 context.remove_class("active")
 
+        # Not SECTION_TITLES: sections the catalog invents itself, "Recentes"
+        # above all, are not in it and would come out as "Recentes" only by
+        # luck of capitalisation - "escola-online" would come out "Escola-online".
+        self.section_label.set_text(self.tab_titles[self.section_index])
+
         if hasattr(self, "search"):
             self._suppress_search = True
             self.search.set_text("")
             self._suppress_search = False
             self._needle = ""
             self._searching = False
+            if hasattr(self, "no_results"):
+                self.no_results.hide()
+                self.flow_scroller.show()
 
         if key == "escola-online":
             self.stack.set_visible_child_name("escola-online")
             self.hint.set_text(
-                "Tab trocar de seção    Esc sair    "
-                + ("navegue com o mouse ou Tab" if HAVE_WEBKIT else "")
+                "←→ trocar de serviço    Tab trocar de seção    Esc voltar ou sair"
+                if HAVE_WEBKIT else
+                "←→ trocar de serviço    Enter abrir no navegador    "
+                "Tab trocar de seção    Esc sair"
             )
             if self.web is not None and not self.web.get_uri():
                 self.open_school(0)
@@ -1158,6 +1375,30 @@ class Launcher(Gtk.Window):
         if key in (Gdk.KEY_ISO_Left_Tab, Gdk.KEY_Page_Up):
             self.switch_section(-1)
             return True
+
+        # On the school page Tab is spent switching sections and the pills are
+        # not in the focus chain, so without this there is no way at all to
+        # change service from the keyboard - which in the Big Picture session,
+        # where there may be no mouse, meant Moodle or nothing.
+        if (self.stack.get_visible_child_name() == "escola-online"
+                and self.school_buttons
+                and not (self.web is not None and self.web.has_focus())):
+            if key in (Gdk.KEY_Left, Gdk.KEY_Right):
+                step = 1 if key == Gdk.KEY_Right else -1
+                index = (self.school_index + step) % len(self.school_buttons)
+                if self.web is not None:
+                    # Loads in place: moving along the row *is* opening it.
+                    self.open_school(index)
+                else:
+                    # Without the embedded view, opening means launching a
+                    # browser. Arrowing along the row must not spawn one window
+                    # per keypress, so here the arrows only move the highlight
+                    # and Enter is what opens.
+                    self._highlight_school(index)
+                return True
+            if key in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) and self.web is None:
+                self.open_school(self.school_index)
+                return True
         return False
 
     # gamepad ----------------------------------------------------------------

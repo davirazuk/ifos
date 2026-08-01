@@ -29,7 +29,25 @@ mocha_palette=('#1e1e2e' '#313244' '#45475a' '#cdd6f4' '#6c7086' '#89b4fa' '#cba
 ifms_deep=('#0a1a14' '#b9d4c6' '#04150f' '#00c47d')
 mocha_deep=('#181825' '#a6adc8' '#11111b' '#7ca9f0')
 
-usage() { sed -n '3,13p' "$0" | sed 's/^# \?//'; }
+# Written out rather than scraped from the header comment with `sed -n '3,13p'`.
+# Two reasons: the comment is maintainer documentation and stays in English,
+# while this is read by students; and the line numbers silently went stale every
+# time a line was added to the header, so the help would print half a sentence.
+usage() {
+    cat <<'AJUDA'
+ifos-theme — troca as cores de todo o desktop
+
+    ifos-theme                 mostra o tema atual
+    ifos-theme ifms            verde institucional (padrão)
+    ifos-theme mocha           Catppuccin Mocha
+    ifos-theme toggle          troca para o que não estiver em uso
+    ifos-theme ifms --system   muda também a tela de login (pede sudo)
+
+Troca o papel de parede e todas as cores das configurações do i3, polybar,
+rofi, dunst e do terminal. Funciona a partir da paleta que estiver aplicada,
+então pode ser executado várias vezes sem estragar nada.
+AJUDA
+}
 current() { [[ -f $STAMP ]] && cat "$STAMP" || echo ifms; }
 
 THEME=""
@@ -40,12 +58,12 @@ for arg in "$@"; do
         --system)  SYSTEM=1 ;;
         ifms|mocha) THEME=$arg ;;
         toggle)    THEME=$( [[ $(current) == ifms ]] && echo mocha || echo ifms ) ;;
-        *) echo "ifos-theme: unknown argument '$arg' (try ifms, mocha or toggle)" >&2; exit 1 ;;
+        *) echo "ifos-theme: argumento desconhecido '$arg' (use ifms, mocha ou toggle)" >&2; exit 1 ;;
     esac
 done
 
 if [[ -z $THEME ]]; then
-    printf 'Current theme: %s\nAvailable:     %s\n' "$(current)" "$THEMES"
+    printf 'Tema atual:  %s\nDisponíveis: %s\n' "$(current)" "$THEMES"
     exit 0
 fi
 
@@ -57,7 +75,7 @@ declare -n from_pal="${FROM}_palette"  to_pal="${THEME}_palette"
 declare -n from_deep="${FROM}_deep"    to_deep="${THEME}_deep"
 
 WALL="$BG_DIR/ifos-$THEME.png"
-[[ -f $WALL ]] || { echo "ifos-theme: missing wallpaper $WALL" >&2; exit 1; }
+[[ -f $WALL ]] || { echo "ifos-theme: papel de parede ausente: $WALL" >&2; exit 1; }
 
 SUDO=""; [[ $EUID -ne 0 ]] && SUDO=sudo
 
@@ -138,7 +156,7 @@ if (( SYSTEM )); then
              /usr/local/bin/ifos-lock; do
         recolour_system "$f"
     done
-    echo "Login screen, launcher and Big Picture session updated."
+    echo "Tela de login, lançador e sessão Big Picture atualizados."
 fi
 
 echo "Theme set to $THEME."

@@ -1,13 +1,13 @@
-# IFOS software catalog — Drivers and hardware support
-NVIDIA|NVIDIA driver (open kernel modules — the only branch Arch ships now), with 32-bit libraries|nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
-NVIDIA (DKMS)|NVIDIA driver built against custom or LTS kernels|nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
-AMD / Intel graphics (Vulkan)|Vulkan drivers plus 32-bit libraries for games|vulkan-radeon vulkan-intel lib32-vulkan-radeon lib32-vulkan-intel mesa lib32-mesa|multilib
-Printing|CUPS with a configuration GUI and common drivers|cups cups-pdf system-config-printer gutenprint|repo
-Scanning|SANE with a scanning GUI|sane simple-scan|repo
-Bluetooth audio codecs|AAC, LDAC and aptX support for headsets|libfreeaptx sbc|repo
-Laptop power management (TLP)|Replaces the bar's power profile button: TLP and power-profiles-daemon both drive the same knobs and cannot run together|tlp tlp-rdw|repo
-Fingerprint reader|fprintd with PAM integration|fprintd|repo
-Xbox controller|xpadneo driver for Xbox wireless controllers|xpadneo-dkms|aur
-Firmware updates|fwupd, vendor firmware over LVFS|fwupd|repo
+# IFOS software catalog — Drivers e suporte a hardware / Drivers and hardware support
+NVIDIA|Driver da NVIDIA (módulos abertos — o único ramo que o Arch distribui hoje), com bibliotecas de 32 bits|nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
+NVIDIA (DKMS)|Driver da NVIDIA compilado para kernels LTS ou personalizados|nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
+Vídeo AMD / Intel (Vulkan)|Drivers Vulkan e bibliotecas de 32 bits para jogos|vulkan-radeon vulkan-intel lib32-vulkan-radeon lib32-vulkan-intel mesa lib32-mesa|multilib
+Impressão|CUPS com interface de configuração e drivers comuns|cups cups-pdf system-config-printer gutenprint|repo
+Digitalização|SANE com um programa gráfico para escanear|sane simple-scan|repo
+Codecs de áudio Bluetooth|Suporte a AAC, LDAC e aptX em fones|libfreeaptx sbc|repo
+Gerenciamento de energia (TLP)|Substitui o botão de modo de energia da barra: TLP e power-profiles-daemon mexem nos mesmos ajustes e não podem rodar juntos|tlp tlp-rdw|repo
+Leitor de digital|fprintd, integrado ao PAM|fprintd|repo
+Controle de Xbox|Driver xpadneo para controles sem fio do Xbox|xpadneo-dkms|aur
+Atualização de firmware|fwupd, firmware do fabricante pelo LVFS|fwupd|repo
 Leitor de tela no console|espeakup: lê o terminal em voz alta. O menu de boot do pendrive oferece isso; num sistema instalado precisa ser instalado|espeakup|repo
 Linha braille|brltty, para displays braille. Cuidado: costuma ocupar adaptadores USB-serial, o que atrapalha Arduino e afins|brltty|repo

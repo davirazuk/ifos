@@ -5,3 +5,9 @@
 *.iso
 *.iso.sha256
 .claude/settings.local.json*
+
+# The ifos-* tools are Python but have no .py extension, so anything that
+# imports one for testing drops a __pycache__ next to them inside airootfs -
+# which would otherwise be copied straight into the image.
+__pycache__/
+*.pyc

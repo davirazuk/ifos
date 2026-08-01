@@ -6,7 +6,7 @@
 #      ifos-update --no-reboot     everything, but stay running
 #      ifos-update --no-dotfiles   leave your own ~/.config alone
 #      ifos-update --ifos-only     skip pacman, just refresh the IFOS files
-#      ifos-only --packages        only pacman -Syu
+#      ifos-update --packages      only pacman -Syu
 #      ifos-update --repair        only repair known-broken files in your ~/.config
 #      ifos-update --check         show what would change, change nothing
 #
@@ -59,9 +59,37 @@ CHECK_ONLY=0
 REPAIR_ONLY=0
 REBOOT_DELAY=15
 
+# Written out rather than scraped from the header comment with a line range.
+# That comment is maintainer documentation and stays in English, while this is
+# read by students; and the line numbers went stale every time the header grew,
+# so --help would print half a sentence.
+usage() {
+    cat <<'AJUDA'
+ifos-update — atualiza o sistema e baixa os arquivos mais novos do IFOS
+
+    ifos-update                 pacotes, arquivos do IFOS, seu desktop, reinicia
+    ifos-update --no-reboot     tudo, mas sem reiniciar no final
+    ifos-update --no-dotfiles   não mexe no seu ~/.config
+    ifos-update --ifos-only     pula o pacman, só atualiza os arquivos do IFOS
+    ifos-update --packages      só pacman -Syu
+    ifos-update --repair        só conserta arquivos quebrados no seu ~/.config
+    ifos-update --check         mostra o que mudaria, sem mudar nada
+
+As partes do IFOS — o lançador, o catálogo de programas, o instalador, os
+temas, os papéis de parede, a tela de login — ficam no repositório git. Este
+comando traz a versão atual delas para uma máquina já instalada, então um
+sistema instalado meses atrás fica em dia sem precisar reinstalar.
+
+Um comando deixa a máquina inteira em dia: pacotes, arquivos do IFOS, a
+configuração do desktop na sua pasta pessoal, e um reinício para que tudo passe
+a valer. Sua configuração anterior é copiada para ~/.config-backup-<data>
+antes de qualquer coisa, e --no-dotfiles pula essa parte.
+AJUDA
+}
+
 for arg in "$@"; do
     case $arg in
-        -h|--help)     sed -n '3,28p' "$0" | sed 's/^# \?//'; exit 0 ;;
+        -h|--help)     usage; exit 0 ;;
         --ifos-only)   DO_PACKAGES=0 ;;
         --packages)    DO_IFOS=0 ;;
         --dotfiles)    DO_DOTFILES=1 ;;   # kept: it is the default now
@@ -69,7 +97,7 @@ for arg in "$@"; do
         --no-reboot)   DO_REBOOT=0 ;;
         --repair)      REPAIR_ONLY=1; DO_PACKAGES=0 ;;
         --check)       CHECK_ONLY=1 ;;
-        *) die "unknown option '$arg' (try --help)" ;;
+        *) die "opção desconhecida '$arg' (veja --help)" ;;
     esac
 done
 
@@ -87,12 +115,12 @@ done
 # a machine with something unsaved on screen.
 finish_and_reboot() {
     if (( ! DO_REBOOT )); then
-        warn "Not restarting. Some of this takes effect only after a restart."
+        warn "Não vou reiniciar. Parte disto só passa a valer depois de reiniciar."
         return 0
     fi
 
-    trap 'printf "\n"; warn "Restart cancelled - do it when convenient."; exit 0' INT
-    printf '\n%s==>%s Restarting in %ss. Press Ctrl+C to stay.\n' \
+    trap 'printf "\n"; warn "Reinício cancelado — reinicie quando puder."; exit 0' INT
+    printf '\n%s==>%s Reiniciando em %ss. Pressione Ctrl+C para ficar.\n' \
            "$c_blue" "$c_reset" "$REBOOT_DELAY"
     local i
     for (( i = REBOOT_DELAY; i > 0; i-- )); do
@@ -119,14 +147,14 @@ configure_sddm() {
     command -v sddm >/dev/null || return 0
 
     if [[ ! -d $theme_dir ]]; then
-        warn "The IFOS login theme is missing from $theme_dir."
-        warn "Run: sudo ifos-update --ifos-only"
+        warn "O tema de login do IFOS não está em $theme_dir."
+        warn "Execute: sudo ifos-update --ifos-only"
         return 0
     fi
 
     # Make sure our drop-in exists and selects the theme.
     if [[ ! -f $drop_in ]]; then
-        info "Restoring the IFOS login screen configuration…"
+        info "Restaurando a configuração da tela de login do IFOS…"
         $SUDO install -d -m 0755 /etc/sddm.conf.d
         $SUDO tee "$drop_in" >/dev/null <<'SDDMCFG'
 [General]
@@ -143,7 +171,7 @@ HideShells=/usr/bin/nologin,/sbin/nologin
 SDDMCFG
         ok "Login screen configuration restored"
     elif ! grep -qE '^[[:space:]]*Current[[:space:]]*=[[:space:]]*ifos[[:space:]]*$' "$drop_in"; then
-        info "Selecting the IFOS login theme…"
+        info "Selecionando o tema de login do IFOS…"
         if grep -qE '^[[:space:]]*Current[[:space:]]*=' "$drop_in"; then
             $SUDO sed -i 's|^[[:space:]]*Current[[:space:]]*=.*|Current=ifos|' "$drop_in"
         elif grep -q '^\[Theme\]' "$drop_in"; then
@@ -163,8 +191,8 @@ SDDMTHEME
     if [[ -f /etc/sddm.conf ]] &&
        grep -qE '^[[:space:]]*Current[[:space:]]*=' /etc/sddm.conf &&
        ! grep -qE '^[[:space:]]*Current[[:space:]]*=[[:space:]]*ifos[[:space:]]*$' /etc/sddm.conf; then
-        warn "/etc/sddm.conf selects a different theme and overrides the drop-in."
-        info "Pointing it at the IFOS theme…"
+        warn "/etc/sddm.conf escolhe outro tema e sobrepõe o arquivo de configuração."
+        info "Apontando-o para o tema do IFOS…"
         $SUDO sed -i 's|^[[:space:]]*Current[[:space:]]*=.*|Current=ifos|' /etc/sddm.conf &&
             ok "/etc/sddm.conf now selects ifos"
     fi
@@ -189,7 +217,7 @@ configure_grub() {
         return 0                      # already ours; do not rewrite every update
     fi
 
-    info "Applying the IFOS boot menu theme…"
+    info "Aplicando o tema do menu de boot do IFOS…"
     $SUDO sed -i '/^GRUB_THEME=/d; /^GRUB_GFXMODE=/d; /^GRUB_GFXPAYLOAD_LINUX=/d; /^GRUB_TERMINAL_OUTPUT=/d' "$cfg"
     # gfxterm is what makes a theme render at all, and without an explicit
     # GFXMODE some firmware drops to 640x480 and the theme looks cramped.
@@ -201,9 +229,9 @@ GRUB_TERMINAL_OUTPUT="gfxterm"
 GRUBCFG
 
     if $SUDO grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1; then
-        ok "Boot menu themed - you will see it on the next restart"
+        ok "Menu de boot personalizado — você verá no próximo reinício"
     else
-        warn "grub-mkconfig failed. Run it by hand: sudo grub-mkconfig -o /boot/grub/grub.cfg"
+        warn "grub-mkconfig falhou. Execute na mão: sudo grub-mkconfig -o /boot/grub/grub.cfg"
     fi
 }
 
@@ -219,11 +247,11 @@ configure_power_profiles() {
     systemctl cat "$unit" >/dev/null 2>&1 || return 0
     [[ $(systemctl is-enabled "$unit" 2>/dev/null) == enabled ]] && return 0
 
-    info "Enabling power profiles…"
+    info "Habilitando os perfis de energia…"
     if $SUDO systemctl enable --now "$unit" >/dev/null 2>&1; then
-        ok "Power profiles enabled - the profile button in the bar works now"
+        ok "Perfis de energia habilitados — o botão de perfil na barra já funciona"
     else
-        warn "Could not enable $unit; the bar's power profile button will stay blank."
+        warn "Não foi possível habilitar $unit; o botão de perfil de energia da barra ficará vazio."
     fi
 }
 
@@ -262,7 +290,7 @@ repair_dotfiles() {
     for script in "$REPO_DIR/airootfs/usr/share/ifos/repair-dotfiles.sh" \
                   /usr/share/ifos/repair-dotfiles.sh; do
         [[ -f $script ]] || continue
-        info "Checking your configuration for known problems…"
+        info "Verificando sua configuração em busca de problemas conhecidos…"
         if [[ $EUID -eq 0 ]]; then
             # Run as root: no single "your" home to repair, so do them all.
             bash "$script" --all-users "$@"
@@ -271,7 +299,7 @@ repair_dotfiles() {
         fi
         return 0
     done
-    warn "repair-dotfiles.sh is missing; skipping the configuration repairs."
+    warn "repair-dotfiles.sh não foi encontrado; pulando os reparos de configuração."
 }
 
 if (( REPAIR_ONLY )); then
@@ -280,18 +308,18 @@ if (( REPAIR_ONLY )); then
     exit 0
 fi
 
-[[ -d /run/archiso ]] && die "This updates an installed system; you are on live media."
+[[ -d /run/archiso ]] && die "Isto atualiza um sistema instalado; você está na mídia ao vivo."
 
 SUDO=""; [[ $EUID -ne 0 ]] && SUDO=sudo
-command -v git >/dev/null || die "git is not installed:  sudo pacman -S git"
+command -v git >/dev/null || die "o git não está instalado:  sudo pacman -S git"
 
 # ── Packages ─────────────────────────────────────────────────────────────────
 if (( DO_PACKAGES )) && (( ! CHECK_ONLY )); then
-    info "Updating packages…"
-    $SUDO pacman -Syu || warn "pacman did not finish cleanly."
+    info "Atualizando os pacotes…"
+    $SUDO pacman -Syu || warn "O pacman não terminou limpo."
     if command -v yay >/dev/null && [[ $EUID -ne 0 ]]; then
-        info "Updating AUR packages…"
-        yay -Sua --noconfirm || warn "Some AUR packages failed to build."
+        info "Atualizando os pacotes do AUR…"
+        yay -Sua --noconfirm || warn "Alguns pacotes do AUR falharam ao compilar."
     fi
 fi
 
@@ -305,15 +333,15 @@ fi
 $SUDO install -d -m 0755 "$STATE"
 
 if [[ -d $REPO_DIR/.git ]]; then
-    info "Fetching $IFOS_REPO…"
+    info "Baixando $IFOS_REPO…"
     $SUDO git -C "$REPO_DIR" remote set-url origin "$IFOS_REPO"
     $SUDO git -C "$REPO_DIR" fetch --depth 1 origin "$IFOS_BRANCH" \
-        || die "Could not reach the repository. Is it public, and are you online?"
+        || die "Não foi possível acessar o repositório. Ele é público, e você está online?"
     $SUDO git -C "$REPO_DIR" reset --hard "origin/$IFOS_BRANCH" >/dev/null
 else
-    info "Cloning $IFOS_REPO…"
+    info "Clonando $IFOS_REPO…"
     $SUDO git clone --depth 1 --branch "$IFOS_BRANCH" "$IFOS_REPO" "$REPO_DIR" \
-        || die "Could not clone the repository. Is it public, and are you online?"
+        || die "Não foi possível clonar o repositório. Ele é público, e você está online?"
 fi
 
 NEW_COMMIT=$($SUDO git -C "$REPO_DIR" rev-parse --short HEAD)
@@ -356,14 +384,14 @@ fi
 # ── Apply the IFOS files ─────────────────────────────────────────────────────
 SYNC="$REPO_DIR/airootfs/usr/share/ifos/branding-sync.sh"
 [[ -x $SYNC ]] || $SUDO chmod +x "$SYNC" 2>/dev/null
-[[ -f $SYNC ]] || die "The checkout looks wrong: $SYNC is missing."
+[[ -f $SYNC ]] || die "A cópia do repositório parece errada: falta $SYNC."
 
-info "Applying IFOS files…"
+info "Aplicando os arquivos do IFOS…"
 # branding-sync copies from a live root; point it at the checkout's airootfs.
-$SUDO env IFOS_SOURCE="$REPO_DIR/airootfs" "$SYNC" / || die "Applying the update failed."
+$SUDO env IFOS_SOURCE="$REPO_DIR/airootfs" "$SYNC" / || die "Falha ao aplicar a atualização."
 
 $SUDO sh -c "printf '%s\n' '$NEW_COMMIT' > '$STATE/applied-commit'"
-ok "IFOS files updated to $NEW_COMMIT"
+ok "Arquivos do IFOS atualizados para $NEW_COMMIT"
 
 configure_sddm
 configure_grub
@@ -374,12 +402,12 @@ if (( DO_DOTFILES )) && [[ $EUID -eq 0 ]]; then
     # Refusing outright would now abort a normal `sudo ifos-update`, since this
     # step is no longer opt-in. root has no single home directory to refresh,
     # so skip just this part and say so.
-    warn "Running as root, so your personal desktop files were not refreshed."
-    warn "Run ifos-update as your own user to pick up the new defaults."
+    warn "Executando como root, então seus arquivos pessoais do desktop não foram atualizados."
+    warn "Execute o ifos-update com o seu próprio usuário para pegar os novos padrões."
     repair_dotfiles
 elif (( DO_DOTFILES )); then
     BACKUP="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
-    info "Backing up your configuration to $BACKUP…"
+    info "Fazendo cópia da sua configuração em $BACKUP…"
     mkdir -p "$BACKUP"
     for d in i3 polybar rofi dunst picom fish alacritty xfce4 gtk-3.0 gtk-4.0 fastfetch; do
         [[ -e "$HOME/.config/$d" ]] && cp -a "$HOME/.config/$d" "$BACKUP/" 2>/dev/null
@@ -388,7 +416,7 @@ elif (( DO_DOTFILES )); then
     for f in .xprofile .xinitrc .dialogrc .bashrc; do
         [[ -f /etc/skel/$f ]] && cp -a "/etc/skel/$f" "$HOME/$f"
     done
-    ok "Dotfiles refreshed (your previous ones are in $BACKUP)"
+    ok "Configurações atualizadas (as anteriores estão em $BACKUP)"
 
     # This runs on every update now, so the backups would otherwise pile up in
     # the home directory one per run. Keep the last few and drop the rest.
@@ -397,11 +425,11 @@ elif (( DO_DOTFILES )); then
     )
     if (( ${#OLD_BACKUPS[@]} )); then
         rm -rf -- "${OLD_BACKUPS[@]}" 2>/dev/null &&
-            info "Removed ${#OLD_BACKUPS[@]} older configuration backup(s)."
+            info "Removidas ${#OLD_BACKUPS[@]} cópia(s) antiga(s) de configuração."
     fi
 else
     repair_dotfiles
-    warn "Your ~/.config was left alone because of --no-dotfiles."
+    warn "Seu ~/.config não foi tocado por causa do --no-dotfiles."
 fi
 
 # ── Colours ──────────────────────────────────────────────────────────────────
@@ -414,20 +442,20 @@ THEME_STAMP="${XDG_CONFIG_HOME:-$HOME/.config}/ifos/theme"
 if [[ $EUID -ne 0 && -r $THEME_STAMP ]] && command -v ifos-theme >/dev/null; then
     WANT=$(<"$THEME_STAMP")
     if [[ -n $WANT && $WANT != ifms ]]; then
-        info "Re-applying your $WANT theme…"
+        info "Reaplicando o seu tema $WANT…"
         ifos-theme "$WANT" --system >/dev/null &&
-            ok "Theme restored: $WANT (desktop and login screen)"
+            ok "Tema restaurado: $WANT (desktop e tela de login)"
     fi
 fi
 
 cat <<EOF
 
-${c_grn}✓ IFOS is up to date.${c_reset}
+${c_grn}✓ O IFOS está atualizado.${c_reset}
 
-    ${c_b}ifos-update --check${c_reset}        see what changed
-    ${c_b}ifos-update --repair${c_reset}       re-check your ~/.config for known problems
-    ${c_b}ifos-update --no-dotfiles${c_reset}  update without touching your ~/.config
-    ${c_b}ifos-update --no-reboot${c_reset}    update without restarting afterwards
+    ${c_b}ifos-update --check${c_reset}        ver o que mudou
+    ${c_b}ifos-update --repair${c_reset}       reconferir seu ~/.config em busca de problemas
+    ${c_b}ifos-update --no-dotfiles${c_reset}  atualizar sem mexer no seu ~/.config
+    ${c_b}ifos-update --no-reboot${c_reset}    atualizar sem reiniciar depois
 
 EOF
 
