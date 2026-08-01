@@ -7,10 +7,10 @@ command -v bluetoothctl >/dev/null 2>&1 || exit 0
 
 if bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; then
     if [ -n "$(bluetoothctl devices Connected 2>/dev/null)" ]; then
-        printf '󰂱\n'
+        printf '%%{F#7ed957}󰂱%%{F-}\n'
     else
-        printf '󰂯\n'
+        printf '%%{F#7ed957}󰂯%%{F-}\n'
     fi
 else
-    printf '󰂲\n'
+    printf '%%{F#7fa392}󰂲%%{F-}\n'
 fi
