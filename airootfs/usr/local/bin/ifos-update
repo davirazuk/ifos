@@ -207,6 +207,26 @@ GRUBCFG
     fi
 }
 
+# ── Power profiles ───────────────────────────────────────────────────────────
+# The package itself arrives through install_missing_packages, but an installed
+# package is not a running service. Only install-ifos enables this, so a machine
+# set up before it existed would get the bar's profile button with nothing
+# behind it: powerprofilesctl reaches the daemon over D-Bus, and the module
+# stays blank rather than reporting anything.
+configure_power_profiles() {
+    local unit=power-profiles-daemon.service
+
+    systemctl cat "$unit" >/dev/null 2>&1 || return 0
+    [[ $(systemctl is-enabled "$unit" 2>/dev/null) == enabled ]] && return 0
+
+    info "Enabling power profiles…"
+    if $SUDO systemctl enable --now "$unit" >/dev/null 2>&1; then
+        ok "Power profiles enabled - the profile button in the bar works now"
+    else
+        warn "Could not enable $unit; the bar's power profile button will stay blank."
+    fi
+}
+
 # ── Packages this system should have but might be missing ───────────────────
 # pacman -Syu only upgrades packages that are already installed; a package
 # newly added to install-ifos's list after this machine was set up (like the
@@ -347,6 +367,7 @@ ok "IFOS files updated to $NEW_COMMIT"
 
 configure_sddm
 configure_grub
+configure_power_profiles
 
 # ── The user's own configuration ─────────────────────────────────────────────
 if (( DO_DOTFILES )) && [[ $EUID -eq 0 ]]; then

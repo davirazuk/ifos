@@ -48,7 +48,8 @@ link ../ifos-fontcache.service                  etc/systemd/system/multi-user.ta
 for u in sshd.service ModemManager.service \
          hv_fcopy_daemon.service hv_kvp_daemon.service hv_vss_daemon.service \
          vboxservice.service vmtoolsd.service vmware-vmblock-fuse.service \
-         systemd-resolved.service NetworkManager.service bluetooth.service; do
+         systemd-resolved.service NetworkManager.service bluetooth.service \
+         power-profiles-daemon.service; do
     link "/usr/lib/systemd/system/$u" "etc/systemd/system/multi-user.target.wants/$u"
 done
 
