@@ -38,4 +38,4 @@ ColorSelection=#24503f
 ColorSelectionUseDefault=FALSE
 ColorBold=#e8f5e9
 ColorBoldUseDefault=FALSE
-ColorPalette=#45475a;#f38ba8;#a6e3a1;#f9e2af;#89b4fa;#f5c2e7;#94e2d5;#bac2de;#585b70;#f38ba8;#a6e3a1;#f9e2af;#89b4fa;#f5c2e7;#94e2d5;#a6adc8
+ColorPalette=#24503f;#f38ba8;#a6e3a1;#f9e2af;#00a86b;#f5c2e7;#94e2d5;#bac2de;#585b70;#f38ba8;#a6e3a1;#f9e2af;#00a86b;#f5c2e7;#94e2d5;#b9d4c6

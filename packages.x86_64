@@ -183,6 +183,10 @@ xorg-server
 xorg-xinit
 xorg-xrandr
 xorg-xsetroot
+# The X input driver. It is only an optional dependency of xorg-server, so it
+# was arriving by chance as something else's dependency - and nothing that
+# 30-touchpad.conf configures applies without it being the driver in use.
+xf86-input-libinput
 xterm
 xfce4-terminal
 i3-wm

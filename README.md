@@ -128,25 +128,36 @@ themes, the login screen — live in this repository, so an installed machine ca
 pull them without reinstalling:
 
 ```
-ifos-update              # update packages, then the IFOS files
-ifos-update --check      # show what changed, change nothing
-ifos-update --dotfiles   # also take the new desktop defaults (backs yours up)
-ifos-update --ifos-only  # skip pacman
-ifos-update --repair     # only repair known-broken files in your ~/.config
+ifos-update                 # packages, IFOS files, your desktop, then restart
+ifos-update --check         # show what would change, change nothing
+ifos-update --no-reboot     # everything, but stay running
+ifos-update --no-dotfiles   # leave your own ~/.config alone
+ifos-update --ifos-only     # skip pacman
+ifos-update --repair        # only repair known-broken files in your ~/.config
 ```
 
-It clones the repo to `/var/lib/ifos/repo`, applies everything under
-`airootfs/` with `branding-sync.sh`, and records the commit it applied so
-`--check` can show you the difference. Your own `~/.config` is left alone
-unless you pass `--dotfiles`.
+One command brings a machine fully current. It clones the repo to
+`/var/lib/ifos/repo`, applies everything under `airootfs/` with
+`branding-sync.sh`, records the commit it applied so `--check` can show you the
+difference, refreshes your `~/.config` from the new defaults, and restarts.
+
+The desktop refresh and the restart are both part of the normal run rather than
+flags to remember. Changing `/etc/skel` does not reach a home directory that
+already exists, so leaving it opt-in meant half of an update quietly did not
+arrive; and most of what an update lands — a new kernel, the boot menu, the
+input configuration, the login screen, the files the running session already
+read — only takes effect on a fresh boot. Your previous configuration is copied
+to `~/.config-backup-<date>` first (the three most recent are kept), and the
+restart is a countdown you can cancel with Ctrl+C.
 
 ### Fixes that have to reach a home directory you already have
 
 Updating `/etc/skel` only changes what *new* accounts get; your existing
 `~/.config` keeps whatever it was created with, bug and all. So `ifos-update`
 also runs `/usr/share/ifos/repair-dotfiles.sh`, a list of narrow, idempotent
-repairs to files you already have. They preserve the colours you are running —
-only `--dotfiles` replaces your configuration outright.
+repairs to files you already have. They preserve the colours you are running,
+and they are what `--no-dotfiles` leaves you with when you would rather keep
+your own configuration than take the new defaults.
 
 ```
 /usr/share/ifos/repair-dotfiles.sh --check       # say what is broken
@@ -174,8 +185,9 @@ running a customised IFOS across a lab of machines.
 | Command | Purpose |
 | --- | --- |
 | `ifos-launcher` | Full-screen launcher (`Mod+G`) |
-| `ifos-update` | Update packages and pull the latest IFOS from GitHub |
-| `ifos-theme ifms\|mocha` | Switch between the green IFMS theme and Catppuccin Mocha |
+| `ifos-update` | Update packages, IFOS files and your desktop, then restart |
+| `ifos-theme ifms\|mocha\|toggle` | Switch between the green IFMS theme and Catppuccin Mocha; add `--system` to include the login screen, launcher and Big Picture session |
+| `ifos-lock` | Lock the screen against the wallpaper (`Mod+L`) |
 | `install-yay` | Enable AUR access |
 | `ifos-post-install` | Re-apply IFOS defaults on an installed system |
 | `/usr/share/ifos/repair-dotfiles.sh` | Repair known-broken files in a `~/.config` you already have |

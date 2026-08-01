@@ -43,6 +43,9 @@ echo "==> Applying IFOS branding to ${TARGET:-/}"
 # Desktop defaults for every new account
 copy /etc/skel
 
+# Input. Tap-to-click, which libinput leaves off by default.
+copy /etc/X11/xorg.conf.d/30-touchpad.conf
+
 # Look and feel
 copy /usr/share/backgrounds/ifos.png
 copy /usr/share/backgrounds/ifos-ifms.png
@@ -82,7 +85,7 @@ copy /usr/share/ifos/archinstall-preset.json
 
 # Tools
 for t in ifos-software ifos-welcome ifos-post-install ifos-theme ifos-launcher \
-         ifos-bigpicture ifos-update install-yay; do
+         ifos-bigpicture ifos-update ifos-lock install-yay; do
     copy "/usr/local/bin/$t" 0755
 done
 
