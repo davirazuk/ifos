@@ -33,6 +33,16 @@ exec --no-startup-id blueman-applet
 exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec --no-startup-id xdg-user-dirs-update
 
+# Mount removable media and say so. thunar-volman only does this while Thunar is
+# open, being a Thunar plugin, so plugging in a pendrive on the desktop itself
+# used to do nothing at all. No tray icon: the bar has no tray, and udiskie
+# notifies through dunst anyway.
+exec --no-startup-id udiskie --no-tray --automount --notify
+
+# Night light. Warms the screen after sunset, using the coordinates in
+# ~/.config/gammastep/config.ini so it needs no geolocation service. Mod+N.
+exec --no-startup-id gammastep -c ~/.config/gammastep/config.ini
+
 # Lock after 10 minutes idle, blank the screen after 12. xss-lock also locks on
 # suspend, so closing a laptop lid does the right thing.
 exec --no-startup-id xset s 600 && xset dpms 0 0 720
@@ -61,6 +71,7 @@ bindsym $mod+g         exec ifos-launcher
 # same idea without clashing with a terminal's Ctrl+Shift bindings. Falls back
 # to htop in a terminal if the graphical one is not installed.
 bindsym $mod+Escape    exec --no-startup-id sh -c 'command -v xfce4-taskmanager >/dev/null && exec xfce4-taskmanager || exec xfce4-terminal --title htop -e htop'
+bindsym $mod+n         exec --no-startup-id ~/.config/i3/scripts/nightlight.sh
 bindsym $mod+Shift+a   exec $termrun ifos-software
 bindsym $mod+Shift+i   exec $termrun sudo install-ifos
 bindsym $mod+q         kill

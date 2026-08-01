@@ -34,10 +34,10 @@ PATHNAME="/${BUS//.//}"
 
 label_for() {
     case $1 in
-        power-saver) printf '%%{F#7ed957}󰌪%%{F-} Economia'    ;;
-        balanced)    printf '%%{F#7ed957}󰾅%%{F-} Equilibrado' ;;
-        performance) printf '%%{F#7ed957}󰓅%%{F-} Desempenho'  ;;
-        *)           printf '%%{F#7ed957}󰾆%%{F-} %s' "$1"     ;;
+        power-saver) printf '%%{F#7ed957}󰌪%%{F#7fa392} Economia'    ;;
+        balanced)    printf '%%{F#7ed957}󰾅%%{F#7fa392} Equilibrado' ;;
+        performance) printf '%%{F#7ed957}󰓅%%{F#7fa392} Desempenho'  ;;
+        *)           printf '%%{F#7ed957}󰾆%%{F#7fa392} %s' "$1"     ;;
     esac
 }
 
