@@ -5,6 +5,7 @@ Heroic Games Launcher|Epic Games and GOG launcher|heroic-games-launcher-bin|aur
 Wine|Run Windows applications and games|wine wine-mono wine-gecko|multilib
 Proton (GE)|Community Proton builds, managed by ProtonUp-Qt|protonup-qt|aur
 MangoHud|In-game FPS and hardware overlay|mangohud lib32-mangohud|multilib
+Gamescope|Valve's session compositor: fixes scaling and lets a game run at its own resolution|gamescope|repo
 GameMode|Applies performance tuning while a game runs|gamemode lib32-gamemode|multilib
 Discord|Voice and text chat|discord|repo
 OBS Studio|Recording and streaming|obs-studio|repo
