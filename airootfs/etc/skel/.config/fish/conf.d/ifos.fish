@@ -2,23 +2,39 @@
 # conf.d is sourced before config.fish, and every file here is loaded
 # automatically — drop your own file in beside this one rather than editing it.
 
-# ── Colours (Catppuccin-ish, tuned to the IFOS green) ────────────────────────
-set -g fish_color_normal        cdd6f4
+# ── Colours ──────────────────────────────────────────────────────────────────
+# These were Catppuccin values left over from before the green theme: what you
+# typed came out in a blue-grey, with purple keywords and a teal operator,
+# inside a green terminal. Note that the hexes cannot be quoted in prose here -
+# ifos-theme substitutes palette colours wherever it finds them, comments
+# included, so a documented colour would be rewritten along with the real ones.
+#
+# Every value below is one of the palette hexes, which is also what lets
+# ifos-theme repaint them - it substitutes palette colours, so anything outside
+# the palette would stay green after switching to mocha. The two exceptions are
+# deliberate: errors stay red and terminators stay yellow in both schemes,
+# because those mean the same thing whatever the desktop looks like.
+set -g fish_color_normal        e8f5e9
 set -g fish_color_command       00a86b
-set -g fish_color_keyword       cba6f7
-set -g fish_color_quote         a6e3a1
-set -g fish_color_redirection   7ed957
+set -g fish_color_keyword       7ed957
+set -g fish_color_quote         b9d4c6
+set -g fish_color_redirection   00c47d
 set -g fish_color_end           f9e2af
 set -g fish_color_error         f38ba8
-set -g fish_color_param         cdd6f4
-set -g fish_color_comment       6c8f80
-set -g fish_color_operator      94e2d5
-set -g fish_color_autosuggestion 45604f
-set -g fish_color_search_match  --background=14503f
+set -g fish_color_param         e8f5e9
+set -g fish_color_option        7ed957
+set -g fish_color_comment       7fa392
+set -g fish_color_operator      00c47d
+set -g fish_color_escape        00c47d
+set -g fish_color_valid_path    --underline
+set -g fish_color_autosuggestion 24503f
+set -g fish_color_cancel        f38ba8
+set -g fish_color_search_match  --background=24503f
+set -g fish_color_selection     --background=24503f
 set -g fish_pager_color_prefix  00a86b --bold
-set -g fish_pager_color_completion cdd6f4
-set -g fish_pager_color_description 6c8f80
-set -g fish_pager_color_selected_background --background=14503f
+set -g fish_pager_color_completion e8f5e9
+set -g fish_pager_color_description 7fa392
+set -g fish_pager_color_selected_background --background=24503f
 
 # ── Abbreviations (expand as you type, so you still learn the real command) ──
 if status is-interactive

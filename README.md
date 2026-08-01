@@ -175,7 +175,8 @@ running a customised IFOS across a lab of machines.
 | --- | --- |
 | `ifos-launcher` | Full-screen launcher (`Mod+G`) |
 | `ifos-update` | Update packages and pull the latest IFOS from GitHub |
-| `ifos-theme ifms\|mocha` | Switch between the green IFMS theme and Catppuccin Mocha |
+| `ifos-theme ifms\|mocha\|toggle` | Switch between the green IFMS theme and Catppuccin Mocha; add `--system` to include the login screen, launcher and Big Picture session |
+| `ifos-lock` | Lock the screen against the wallpaper (`Mod+L`) |
 | `install-yay` | Enable AUR access |
 | `ifos-post-install` | Re-apply IFOS defaults on an installed system |
 | `/usr/share/ifos/repair-dotfiles.sh` | Repair known-broken files in a `~/.config` you already have |

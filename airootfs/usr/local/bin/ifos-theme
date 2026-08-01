@@ -5,6 +5,7 @@
 #      ifos-theme              show the current theme
 #      ifos-theme ifms         institutional green (default)
 #      ifos-theme mocha        Catppuccin Mocha
+#      ifos-theme toggle       switch to whichever one is not current
 #      ifos-theme ifms --system   also change the login screen (asks for sudo)
 #
 #  Swaps the wallpaper and every colour in the i3, polybar, rofi, dunst and
@@ -28,7 +29,7 @@ mocha_palette=('#1e1e2e' '#313244' '#45475a' '#cdd6f4' '#6c7086' '#89b4fa' '#cba
 ifms_deep=('#0a1a14' '#b9d4c6' '#04150f' '#00c47d')
 mocha_deep=('#181825' '#a6adc8' '#11111b' '#7ca9f0')
 
-usage() { sed -n '3,12p' "$0" | sed 's/^# \?//'; }
+usage() { sed -n '3,13p' "$0" | sed 's/^# \?//'; }
 current() { [[ -f $STAMP ]] && cat "$STAMP" || echo ifms; }
 
 THEME=""
@@ -38,7 +39,8 @@ for arg in "$@"; do
         -h|--help) usage; exit 0 ;;
         --system)  SYSTEM=1 ;;
         ifms|mocha) THEME=$arg ;;
-        *) echo "ifos-theme: unknown argument '$arg' (try ifms or mocha)" >&2; exit 1 ;;
+        toggle)    THEME=$( [[ $(current) == ifms ]] && echo mocha || echo ifms ) ;;
+        *) echo "ifos-theme: unknown argument '$arg' (try ifms, mocha or toggle)" >&2; exit 1 ;;
     esac
 done
 
@@ -57,10 +59,15 @@ declare -n from_deep="${FROM}_deep"    to_deep="${THEME}_deep"
 WALL="$BG_DIR/ifos-$THEME.png"
 [[ -f $WALL ]] || { echo "ifos-theme: missing wallpaper $WALL" >&2; exit 1; }
 
+SUDO=""; [[ $EUID -ne 0 ]] && SUDO=sudo
+
 # ── Recolour the configuration ───────────────────────────────────────────────
-recolour() {
-    local file=$1 i expr=""
-    [[ -f $file ]] || return 0
+# The substitution list is the same wherever it is applied, so it is built once
+# here: each colour of the outgoing scheme mapped to the one holding the same
+# role in the incoming scheme, with and without the leading '#' because fish
+# writes colours bare.
+build_expr() {
+    local i expr=""
     for i in "${!from_pal[@]}"; do
         expr+="s/${from_pal[i]}/${to_pal[i]}/gI;"
         expr+="s/${from_pal[i]#\#}/${to_pal[i]#\#}/gI;"
@@ -69,13 +76,21 @@ recolour() {
         expr+="s/${from_deep[i]}/${to_deep[i]}/gI;"
         expr+="s/${from_deep[i]#\#}/${to_deep[i]#\#}/gI;"
     done
-    sed -i "$expr" "$file"
+    printf '%s' "$expr"
 }
+EXPR=$(build_expr)
+
+recolour()        { [[ -f $1 ]] && sed -i "$EXPR" "$1"; return 0; }
+recolour_system() { [[ -f $1 ]] && $SUDO sed -i "$EXPR" "$1"; return 0; }
 
 for f in "$CFG/i3/config" "$CFG/polybar/config.ini" "$CFG/rofi/ifos.rasi" \
          "$CFG/dunst/dunstrc" "$CFG/alacritty/alacritty.toml" \
          "$CFG/xfce4/terminal/terminalrc" "$CFG/gtk-3.0/gtk.css" \
-         "$CFG/gtk-4.0/gtk.css"; do
+         "$CFG/gtk-4.0/gtk.css" "$CFG/i3/scripts/lock.sh" \
+         "$CFG/fish/conf.d/ifos.fish" \
+         "$CFG/fish/functions/fish_prompt.fish" \
+         "$CFG/fish/functions/fish_right_prompt.fish" \
+         "$CFG/fish/functions/fish_greeting.fish"; do
     recolour "$f"
 done
 
@@ -96,24 +111,26 @@ if [[ -n ${DISPLAY:-} ]]; then
     [[ -x $CFG/polybar/launch.sh ]] && "$CFG/polybar/launch.sh" >/dev/null 2>&1 &
 fi
 
-# ── Login screen ─────────────────────────────────────────────────────────────
+# ── The system-wide parts ────────────────────────────────────────────────────
+# The login screen, the Big Picture session and the launcher live outside
+# $HOME, so they only follow along when asked to - they are shared by every
+# account on the machine.
+#
+# These used to be one hand-written sed per colour, which had already drifted:
+# it listed seven of the eleven palette colours, so a login screen using the
+# bright accent would have kept it after switching. They go through the same
+# substitution as everything else now.
 if (( SYSTEM )); then
-    SUDO=""; [[ $EUID -ne 0 ]] && SUDO=sudo
     $SUDO cp "$WALL" /usr/share/sddm/themes/ifos/background.png 2>/dev/null
     $SUDO cp "$WALL" "$BG_DIR/ifos.png" 2>/dev/null
-    $SUDO env FROM="$FROM" THEME="$THEME" sh -c '
-        f=/usr/share/sddm/themes/ifos/Main.qml
-        [ -f "$f" ] || exit 0
-        if [ "$THEME" = mocha ]; then
-            sed -i "s/#10241d/#1e1e2e/g; s/#1b3a2e/#313244/g; s/#24503f/#45475a/g;
-                    s/#e8f5e9/#cdd6f4/g; s/#7fa392/#6c7086/g; s/#00a86b/#89b4fa/g;
-                    s/#00c47d/#7ca9f0/g" "$f"
-        else
-            sed -i "s/#1e1e2e/#10241d/g; s/#313244/#1b3a2e/g; s/#45475a/#24503f/g;
-                    s/#cdd6f4/#e8f5e9/g; s/#6c7086/#7fa392/g; s/#89b4fa/#00a86b/g;
-                    s/#7ca9f0/#00c47d/g" "$f"
-        fi'
-    echo "Login screen updated."
+
+    for f in /usr/share/sddm/themes/ifos/Main.qml \
+             /usr/share/ifos/i3-bigpicture.config \
+             /usr/local/bin/ifos-launcher \
+             /usr/local/bin/ifos-lock; do
+        recolour_system "$f"
+    done
+    echo "Login screen, launcher and Big Picture session updated."
 fi
 
 echo "Theme set to $THEME."
