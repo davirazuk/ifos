@@ -46,6 +46,9 @@ copy /etc/skel
 # Input. Tap-to-click, which libinput leaves off by default.
 copy /etc/X11/xorg.conf.d/30-touchpad.conf
 
+# Compressed swap in RAM, so machines installed before this reach it too.
+copy /etc/systemd/zram-generator.conf
+
 # Look and feel
 copy /usr/share/backgrounds/ifos.png
 copy /usr/share/backgrounds/ifos-ifms.png

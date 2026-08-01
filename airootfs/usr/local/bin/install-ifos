@@ -108,7 +108,7 @@ FIRMWARE=BIOS
 [[ -d /sys/firmware/efi/efivars ]] && FIRMWARE=UEFI
 
 ping -c1 -W3 archlinux.org &>/dev/null || \
-    die "No internet connection. Connect first (tray applet, or run nmtui) and try again."
+    die "No internet connection. Connect first (click the Wi-Fi icon in the bar, or run nmtui) and try again."
 
 for tool in sgdisk parted mkfs.ext4 mkfs.vfat pacstrap genfstab arch-chroot lsblk reflector; do
     command -v "$tool" >/dev/null || die "Missing required tool: $tool"
@@ -372,6 +372,7 @@ PACKAGES=(
     # ── audio and bluetooth ──────────────────────────────────────────────────
     pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber
     pavucontrol pamixer playerctl brightnessctl power-profiles-daemon
+    zram-generator
     bluez bluez-utils blueman
 
     # ── desktop ──────────────────────────────────────────────────────────────

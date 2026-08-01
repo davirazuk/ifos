@@ -260,10 +260,19 @@ pavucontrol
 pamixer
 playerctl
 brightnessctl
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Power and memory
+#   Both of these exist for the same reason: the machines this runs on are old.
+# ─────────────────────────────────────────────────────────────────────────────
 # Power profiles, switchable from the bar. Deliberately not tlp: the two
 # conflict, and tlp has no equivalent of a profile you can change from the
 # desktop without a root shell.
 power-profiles-daemon
+# Compressed swap in RAM, configured in /etc/systemd/zram-generator.conf.
+# Swapping to a mechanical disk is what makes an old machine unusable rather
+# than merely slow.
+zram-generator
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bluetooth
