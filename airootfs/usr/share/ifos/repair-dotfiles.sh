@@ -107,6 +107,45 @@ fastfetch_logo() {
 
 # rofi falls back to its default theme rather than failing, so the exit status
 # says nothing; the warning on stderr is the only evidence.
+# ── Repair: files that are new, and so cannot have been customised ───────────
+#  The repairs above mend a file the account already has. This one covers the
+#  opposite case: a file added to /etc/skel after the account was created. It
+#  has no counterpart in $HOME to conflict with, so copying it in cannot lose
+#  anything the user chose - the account simply never had the chance to have it.
+#
+#  gtk-4.0/gtk.css is the one that matters today. libadwaita ignores
+#  gtk-theme-name entirely, so without this file every GTK4 application - the
+#  newer file chooser, the colour and font dialogs - keeps Adwaita's blue while
+#  the rest of the desktop is green.
+#
+#  Only files whose absence is itself the bug belong here. Anything the user
+#  may have edited stays the business of `ifos-update --dotfiles`.
+NEW_FILES=(
+    .config/gtk-4.0/gtk.css
+)
+
+missing_new_files() {
+    local home=$1 rel src dst owner
+    for rel in "${NEW_FILES[@]}"; do
+        src="/etc/skel/$rel"
+        dst="$home/$rel"
+        [[ -f $src ]] || continue
+        [[ -e $dst ]] && continue
+
+        found "$dst is missing (added to IFOS after this account was created)"
+        (( CHECK )) && continue
+
+        install -d "$(dirname "$dst")" 2>/dev/null || continue
+        if cp -a "$src" "$dst" 2>/dev/null; then
+            # Root repairing somebody else's home must not leave root's file
+            # behind; match the ownership of the home directory itself.
+            owner=$(stat -c '%u:%g' "$home" 2>/dev/null)
+            [[ -n $owner ]] && chown "$owner" "$dst" 2>/dev/null
+            fixed "installed $rel"
+        fi
+    done
+}
+
 verify_rofi() {
     local rasi="$1/.config/rofi/ifos.rasi"
     [[ -f $rasi ]] || return 0
@@ -122,6 +161,7 @@ repair_home() {
     [[ -d $home ]] || return 0
     rofi_highlight "$home"
     fastfetch_logo "$home"
+    missing_new_files "$home"
     (( CHECK )) || verify_rofi "$home"
 }
 
