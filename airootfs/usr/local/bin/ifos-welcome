@@ -54,27 +54,27 @@ menu_dialog() {
     local -a items
     if (( LIVE )); then
         items=(
-            install  "Install IFOS on this computer"
-            launcher "Open the IFOS launcher (games, school, Moodle)"
-            wifi     "Connect to a network"
-            apps     "Install applications (browsers, games, drivers)"
-            keys     "Keyboard shortcuts"
-            gparted  "Make room on a disk (GParted)"
-            shell    "Just give me a terminal"
+            install  "Instalar o IFOS neste computador"
+            launcher "Abrir o lançador do IFOS (jogos, escola, Moodle)"
+            wifi     "Conectar a uma rede"
+            apps     "Instalar programas (navegadores, jogos, drivers)"
+            keys     "Atalhos de teclado"
+            gparted  "Liberar espaço num disco (GParted)"
+            shell    "Só quero um terminal"
         )
     else
         items=(
-            launcher "Open the IFOS launcher (games, school, Moodle)"
-            apps     "Install applications (browsers, games, drivers)"
-            keys     "Keyboard shortcuts"
-            aur      "Enable AUR access (install yay)"
-            update   "Update the system now"
-            shell    "Close"
+            launcher "Abrir o lançador do IFOS (jogos, escola, Moodle)"
+            apps     "Instalar programas (navegadores, jogos, drivers)"
+            keys     "Atalhos de teclado"
+            aur      "Habilitar o acesso ao AUR (instalar o yay)"
+            update   "Atualizar o sistema agora"
+            shell    "Fechar"
         )
     fi
-    dialog --clear --backtitle "IFOS" --title " Welcome to IFOS " \
-        --cancel-label "Close" \
-        --menu "\n$( (( LIVE )) && echo 'You are running IFOS from the live medium — nothing has been written to your disks.' || echo 'A few things you might want to set up.' )\n" \
+    dialog --clear --backtitle "IFOS" --title " Bem-vindo ao IFOS " \
+        --cancel-label "Fechar" \
+        --menu "\n$( (( LIVE )) && echo 'Você está executando o IFOS pela mídia ao vivo — nada foi gravado nos seus discos.' || echo 'Algumas coisas que você talvez queira configurar.' )\n" \
         18 72 8 "${items[@]}" 3>&1 1>&2 2>&3
 }
 
@@ -85,19 +85,19 @@ menu_dialog() {
 menu_plain() {
     clear >&2
     banner >&2
-    printf '\n%s  Welcome to IFOS%s\n' "$c_b" "$c_reset" >&2
+    printf '\n%s  Bem-vindo ao IFOS%s\n' "$c_b" "$c_reset" >&2
     local -a keys
     if (( LIVE )); then
-        printf '%s  Running from live media — nothing has been written to your disks.%s\n\n' \
+        printf '%s  Rodando da mídia ao vivo — nada foi gravado nos seus discos.%s\n\n' \
             "$c_dim" "$c_reset" >&2
         keys=(install launcher wifi apps keys gparted shell)
-        printf '   1) Install IFOS on this computer\n'   >&2
-        printf '   2) Open the IFOS launcher\n'          >&2
-        printf '   3) Connect to a network\n'            >&2
-        printf '   4) Install applications\n'            >&2
-        printf '   5) Keyboard shortcuts\n'              >&2
-        printf '   6) Make room on a disk (GParted)\n'   >&2
-        printf '   7) Just give me a terminal\n\n'       >&2
+        printf '   1) Instalar o IFOS neste computador\n' >&2
+        printf '   2) Abrir o lançador do IFOS\n'         >&2
+        printf '   3) Conectar a uma rede\n'             >&2
+        printf '   4) Instalar programas\n'              >&2
+        printf '   5) Atalhos de teclado\n'              >&2
+        printf '   6) Liberar espaço num disco (GParted)\n' >&2
+        printf '   7) Só quero um terminal\n\n'          >&2
     else
         printf '\n' >&2
         keys=(launcher apps keys aur update shell)
@@ -109,7 +109,7 @@ menu_plain() {
         printf '   6) Close\n\n'                         >&2
     fi
     local reply
-    read -rp "  Choice: " reply
+    read -rp "  Escolha: " reply
     if [[ $reply =~ ^[0-9]+$ ]] && (( reply >= 1 && reply <= ${#keys[@]} )); then
         choice=${keys[reply-1]}
     else
@@ -147,8 +147,8 @@ while :; do
         apps)    clear; ifos-software ;;
         keys)    clear; less -R /usr/share/ifos/keybindings.txt ;;
         gparted) (sudo gparted &) ; clear ;;
-        aur)     clear; install-yay; read -rp "  Press Enter… " ;;
-        update)  clear; sudo pacman -Syu; read -rp "  Press Enter… " ;;
+        aur)     clear; install-yay; read -rp "  Pressione Enter… " ;;
+        update)  clear; sudo pacman -Syu; read -rp "  Pressione Enter… " ;;
         shell|*) clear; mark_done; exit 0 ;;
     esac
 done
