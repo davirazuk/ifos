@@ -344,6 +344,16 @@ acceleration at all, `--natural` to invert scrolling. Choices are saved and put
 back at login, because libinput's per-device properties reset on every one —
 a speed chosen once was gone the next morning.
 
+**And when a button does reach the computer, it can become the DPI button.**
+On these mice it is usually a side button that works even when the DPI one is
+deaf. `ifos-mouse --learn` asks for a press, records whatever code arrives, and
+from then on that button steps the pointer through three levels with the
+current one named on screen — which is what the DPI button was being pressed
+for, done where the computer can see it. Not an X keybinding: a mouse button
+above the ninth has no X button number and a keycode the mouse invents may map
+to nothing X can name, while both are perfectly readable straight from the
+event device, which also works the same in the Big Picture session.
+
 It is **Mouse** under Sistema in the launcher. Mice whose DPI genuinely can be
 set from the computer are the ones libratbag supports, most Logitech, Razer,
 SteelSeries and Roccat hardware; that is **Piper**, one line in `ifos-software`,

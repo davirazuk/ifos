@@ -599,6 +599,62 @@ run_sw Bom
 check "quando dá certo, diz Pronto" says "Pronto."
 check "e sai zero"                  rc_is 0
 
+# ── 18b. A DPI button in software ────────────────────────────────────────────
+#  What the DPI button was being pressed for, done where the computer can see
+#  it. The whole point is the mouse whose DPI button is deaf but whose side
+#  button is not, so the fixtures are exactly that: an ordinary click on the
+#  pointer node, and a keycode on the keyboard-looking sibling.
+case_name "Um botão de DPI em software"
+FAKEIN="$M2/input"; mkdir -p "$FAKEIN"
+python3 - "$FAKEIN" <<'PYEV'
+import struct, sys, pathlib
+SIZE = struct.calcsize("llHHi")
+def ev(kind, code, value):
+    return struct.pack("llHHi", 0, 0, kind, code, value)
+root = pathlib.Path(sys.argv[1])
+# the pointer half: an ordinary left click, which must be ignored
+(root / "event4").write_bytes(ev(1, 0x110, 1) + ev(1, 0x110, 0))
+# the keyboard half: a side button sending keycode 183
+(root / "event5").write_bytes(ev(1, 183, 1) + ev(1, 183, 0))
+PYEV
+
+M3="$M2/learned"; mkdir -p "$M3"
+learn_env() {
+    IFOS_MOUSE_DEVICES="$M2/redragon" IFOS_MOUSE_INPUT_DIR="$FAKEIN" DISPLAY=:0 \
+    PATH="$M2/bin:/usr/bin:/bin" RECORD="$M2/rec2" \
+    XDG_RUNTIME_DIR="$M3" HOME="$M3" "$@"
+}
+rm -f "$M2/rec2" "$M2/rec2.speed"
+
+OUT=$(learn_env timeout 20 bash "$MSE" --learn 2>&1); RC=$?
+check "--learn aprende um botão"        rc_is 0
+OUT=$(cat "$M3/.config/ifos/mouse" 2>/dev/null)
+check "e guarda o código certo"         says "BUTTON=183"
+check "ignorando o clique esquerdo"     not_says "BUTTON=272"
+
+# The daemon: sees that code and steps the speed. It also has to *end* when the
+# devices go away rather than spinning on a descriptor that returns nothing,
+# which is what reaching the end of these files stands in for.
+rm -f "$M2/rec2" "$M2/rec2.speed"
+learn_env timeout 15 bash "$MSE" --daemon >/dev/null 2>&1
+RC=$?
+check "--daemon termina sozinho, não gira" rc_is 0
+OUT=$(cat "$M2/rec2" 2>/dev/null)
+check "e mudou a sensibilidade"         says "libinput Accel Speed|0.30"
+
+# Three levels, and back to the start.
+rm -f "$M2/rec2" "$M2/rec2.speed"
+printf 'SPEED=0\n' > "$M3/.config/ifos/mouse"
+for _ in 1 2 3; do learn_env bash "$MSE" --cycle >/dev/null 2>&1; done
+OUT=$(cat "$M2/rec2")
+check "o ciclo passa por três e volta"  says "0.00"
+check "sem parar no meio"               says "0.60"
+
+OUT=$(learn_env bash "$MSE" --forget 2>&1); RC=$?
+check "--forget sai 0"                  rc_is 0
+OUT=$(learn_env bash "$MSE" --daemon 2>&1); RC=$?
+check "e o daemon volta a sair calado"  rc_is 1
+
 # ── 19. The system files that are not scripts ────────────────────────────────
 #  udev refuses a whole rules file over one bad line and says so only in the
 #  journal, at boot, on a machine nobody is watching. Two of these decide
