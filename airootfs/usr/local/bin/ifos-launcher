@@ -294,6 +294,21 @@ button:focus, button:focus-visible,
 /* Pango renders the placeholder with the entry's own colour otherwise, which
    makes an empty search box look like it already has something typed in it. */
 .search placeholder, .search text placeholder { color: @dim; }
+
+/* The one dialog this puts on screen - a failure to start or install
+   something. Styled here rather than left to adw-gtk3, which draws it grey. */
+.ifos-dialog { background-color: @base; }
+.ifos-dialog box, .ifos-dialog .dialog-vbox { background-color: @base; }
+.ifos-dialog label { color: @text; }
+.ifos-dialog button {
+    background-image: none;
+    background-color: @surface;
+    color: @text;
+    border: 1px solid alpha(@accent, 0.45);
+    border-radius: 8px;
+    padding: 6px 18px;
+}
+.ifos-dialog button:hover { background-color: @hover; border-color: @accent; }
 """
 
 
@@ -550,7 +565,14 @@ class Launcher(Gtk.Window):
         self._searching = False        # showing every section at once
         # Checked once: lspci is cheap but not free, and the answer
         # cannot change while the launcher is open.
-        self._offload_gpu = self._detect_offload()
+        # Not asked here. `ifos-gpu --has-dgpu` shells out to lspci, and this
+        # ran before the window was mapped with a five second timeout - so on a
+        # machine where lspci was slow the launcher showed nothing at all for
+        # up to five seconds. In the Big Picture session the launcher is the
+        # session, which makes that a black screen at boot. The answer is only
+        # needed when a game is actually started, by which time the interface
+        # is up; None means "not asked yet".
+        self._offload_gpu: bool | None = None
         self._suppress_search = False  # while a tab change resets the box
 
         display = Gdk.Display.get_default()
@@ -1225,7 +1247,10 @@ class Launcher(Gtk.Window):
         # The launcher already knows which entries are games, so nobody has to
         # be told about prime-run, or discover that their machine has been
         # running everything on the slow chip the whole time.
-        if self._offload_gpu and self._prefers_dgpu(entry, info):
+        # _prefers_dgpu first: it is a dictionary lookup, and asking it before
+        # shelling out to lspci means the ordinary case of starting something
+        # that is not a game never runs the check at all.
+        if self._prefers_dgpu(entry, info) and self._can_offload():
             command = self._command_for(entry, info)
             if command:
                 self.spawn("ifos-gpu run " + command)
@@ -1245,6 +1270,12 @@ class Launcher(Gtk.Window):
             self.notify("Não foi possível iniciar %s." % entry["name"])
 
     # ── the fast graphics chip, without being asked ──────────────────────────
+    def _can_offload(self) -> bool:
+        """Is there a second, faster graphics chip? Asked once, on first need."""
+        if self._offload_gpu is None:
+            self._offload_gpu = self._detect_offload()
+        return self._offload_gpu
+
     @staticmethod
     def _detect_offload() -> bool:
         """True on a laptop with a second, faster graphics chip."""
@@ -1335,6 +1366,11 @@ class Launcher(Gtk.Window):
             message_type=Gtk.MessageType.INFO,
             buttons=Gtk.ButtonsType.OK, text=message,
         )
+        # Without this it is drawn by adw-gtk3 in its own grey, floating on a
+        # full-screen green launcher - it reads as a piece of another program
+        # rather than as this one having something to say.
+        dialog.get_style_context().add_class("ifos-dialog")
+        dialog.set_title("IFOS")
         dialog.run()
         dialog.destroy()
 

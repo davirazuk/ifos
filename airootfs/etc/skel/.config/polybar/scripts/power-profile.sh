@@ -32,13 +32,32 @@ for candidate in org.freedesktop.UPower.PowerProfiles net.hadess.PowerProfiles; 
 done
 PATHNAME="/${BUS//.//}"
 
-label_for() {
+# The plain words, with no bar markup. Two callers want the name and only one
+# of them is polybar: the notification shown after a click was being handed
+# label_for's output, so it popped up reading
+# "%{F#7ed957}󰾅%{F#7fa392} Equilibrado" - the colour tags printed literally,
+# because nothing outside the bar knows what to do with them.
+name_for() {
     case $1 in
-        power-saver) printf '%%{F#7ed957}󰌪%%{F#7fa392} Economia'    ;;
-        balanced)    printf '%%{F#7ed957}󰾅%%{F#7fa392} Equilibrado' ;;
-        performance) printf '%%{F#7ed957}󰓅%%{F#7fa392} Desempenho'  ;;
-        *)           printf '%%{F#7ed957}󰾆%%{F#7fa392} %s' "$1"     ;;
+        power-saver) printf 'Economia'    ;;
+        balanced)    printf 'Equilibrado' ;;
+        performance) printf 'Desempenho'  ;;
+        *)           printf '%s' "$1"     ;;
     esac
+}
+
+icon_for() {
+    case $1 in
+        power-saver) printf '󰌪' ;;
+        balanced)    printf '󰾅' ;;
+        performance) printf '󰓅' ;;
+        *)           printf '󰾆' ;;
+    esac
+}
+
+# For the bar only.
+label_for() {
+    printf '%%{F#7ed957}%s%%{F#7fa392} %s' "$(icon_for "$1")" "$(name_for "$1")"
 }
 
 current_profile() {
@@ -69,7 +88,7 @@ if [[ ${1:-} == --cycle ]]; then
 
     powerprofilesctl set "$next" 2>/dev/null || exit 0
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send -a IFOS -t 2000 "Energia" "$(label_for "$next")"
+        notify-send -a IFOS -t 2000 "Energia" "$(name_for "$next")"
     fi
     exit 0
 fi

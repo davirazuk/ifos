@@ -43,24 +43,31 @@
     { "type": "title", "fqdn": false },
 
     { "type": "custom", "format": "Sistema", "outputColor": "#7ed957" },
-    { "type": "os",       "key": " OS" },
-    { "type": "kernel",   "key": " Kernel" },
-    { "type": "uptime",   "key": "󱑍 Ligado" },
-    { "type": "packages", "key": " Pacotes" },
+    { "type": "os",       "key": " OS" },
+    { "type": "kernel",   "key": " Kernel" },
+    { "type": "uptime",   "key": " Ligado" },
+    { "type": "packages", "key": " Pacotes" },
     "break",
 
     { "type": "custom", "format": "Ambiente", "outputColor": "#7ed957" },
-    { "type": "wm",       "key": " Janelas" },
-    { "type": "shell",    "key": " Shell" },
-    { "type": "terminal", "key": " Terminal" },
+    { "type": "wm",       "key": " Janelas" },
+    { "type": "shell",    "key": " Shell" },
+    { "type": "terminal", "key": " Terminal" },
     "break",
 
     { "type": "custom", "format": "Hardware", "outputColor": "#7ed957" },
-    { "type": "cpu",      "key": " CPU" },
-    { "type": "gpu",      "key": "󰍹 GPU" },
-    { "type": "memory",   "key": " RAM" },
-    { "type": "disk",     "key": "󰋊 Disco", "folders": "/" },
-    { "type": "localip",  "key": "󰩠 Rede" },
+    { "type": "cpu",      "key": " CPU" },
+    { "type": "gpu",      "key": " GPU" },
+    { "type": "memory",   "key": " RAM" },
+    // zram is one of the things that makes an old machine usable here, and
+    // this is the only place that shows whether it is actually working: on a
+    // 4 GiB laptop the swap line is compressed memory, not disk.
+    { "type": "swap",     "key": " Swap" },
+    { "type": "disk",     "key": " Disco", "folders": "/" },
+    // Prints nothing at all on a machine with no battery, so the desktops in
+    // the lab do not get an empty row. Checked against fastfetch 2.66.
+    { "type": "battery",  "key": " Bateria" },
+    { "type": "localip",  "key": " Rede" },
     "break",
 
     { "type": "colors", "symbol": "circle", "paddingLeft": 1 }
