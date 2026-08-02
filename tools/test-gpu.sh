@@ -310,7 +310,25 @@ run_check
 check "sai 1"              rc_is 1
 check "aponta o nomodeset" says "nomodeset"
 
-# ── 13. Every entry point still works ────────────────────────────────────────
+# ── 13. Healthy, but with no glxinfo to confirm it ───────────────────────────
+#  Every machine installed before the doctor existed is in this state. It is
+#  not a fault and must not raise the notification at login - but --fix should
+#  still pick the package up, so the next check is a complete one.
+case_name "Sem o glxinfo — falta, mas não é defeito"
+new_machine no-glxinfo 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 23 [Radeon RX 6600]"
+packages mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon \
+         vulkan-icd-loader lib32-vulkan-icd-loader
+loaded amdgpu
+multilib
+kernel_is 6.12.1-arch1-1 linux
+rm -f "$M/bin/glxinfo"
+run_check
+check "sai 0 — nada quebrado"      rc_is 0
+check "pede o mesa-utils mesmo assim" says "mesa-utils"
+check "não chama isso de problema"    not_says "✗"
+
+# ── 14. Every entry point still works ────────────────────────────────────────
 case_name "As outras opções"
 new_machine flags 6.12.1-arch1-1
 cards "00:02.0 VGA compatible controller: Intel Corporation Alder Lake-P GT2 [Iris Xe Graphics]" \

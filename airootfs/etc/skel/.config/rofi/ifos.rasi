@@ -50,7 +50,7 @@ prompt {
 }
 
 entry {
-    placeholder:        "search…";
+    placeholder:        "procurar…";
     placeholder-color:  @overlay0;
     vertical-align:     0.5;
 }

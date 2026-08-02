@@ -263,6 +263,18 @@ other one, an AMD desktop with no multilib, a card that predates the open
 modules — because none of those can be reproduced on the machine IFOS is built
 on, and each one is a student in front of a computer that will not open Steam.
 
+**Jogos lists the games you have, not just the ones you could install.** The
+section used to be a shop — Steam, Lutris, Heroic, Wine — with no way to reach
+a game from it; every installed game sat in "Todos" between LibreOffice Calc
+and the printer settings. A game says so itself, in the `Game` category of its
+desktop entry, which Steam, Lutris and Heroic all write into the shortcuts they
+generate, so the list is whatever the machine has rather than something anyone
+maintains. Installed games come first, the catalog after them, and each one
+still goes to the discrete card on its own.
+
+The Big Picture session opens straight there, which is the difference between a
+console and a catalogue when the machine is across the room with a gamepad.
+
 Steam, Lutris, Heroic, Wine, Proton-GE, MangoHud, GameMode and Gamescope are all
 one line in `ifos-software`.
 

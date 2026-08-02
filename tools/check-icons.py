@@ -50,6 +50,10 @@ def is_cap(ch: str) -> bool:
 # would flag the labels, the colours and the commands too, and a check that
 # cries wolf is one nobody runs.
 SLOTS = [
+    # The rofi prompts. These were three spaces with no glyph in them at all,
+    # sitting at the top of the most-opened window on the machine.
+    ("etc/skel/.config/rofi/config.rasi", "rofi prompt",
+     re.compile(r'^\s*display-(?:drun|run|window):\s*"([^"]*)"', re.M)),
     ("etc/skel/.config/fastfetch/config.jsonc", "fastfetch key",
      re.compile(r'"key"\s*:\s*"([^"]*)"')),
     ("etc/skel/.config/i3/scripts/osd.sh", "on-screen display icon",

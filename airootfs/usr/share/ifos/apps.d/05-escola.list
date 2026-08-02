@@ -19,7 +19,7 @@ Kit Geoprocessamento (avançado)|GRASS e SAGA GIS, para agropecuária e análise
 
 # ── Programação ──────────────────────────────────────────────────────────────
 Visual Studio Code|Editor da Microsoft, build open source|code|repo
-Compiladores C/C++|GCC, make, gdb e ferramentas de build|base-devel gdb|repo
+Compiladores C e C++|GCC, make, gdb e ferramentas de build|base-devel gdb|repo
 Python|Interpretador, pip e ambiente virtual|python python-pip python-virtualenv|repo
 Python científico|NumPy, Pandas, Matplotlib e Jupyter|python-numpy python-pandas python-matplotlib jupyterlab|repo
 Java (JDK)|OpenJDK e ferramentas Java|jdk-openjdk|repo

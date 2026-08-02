@@ -355,6 +355,7 @@ class Catalog:
         self.sections: list[tuple[str, str, list[dict]]] = []   # (key, title, entries)
         self._load_catalog()
         self._reconcile_with_desktop()
+        self._add_installed_games()
         self._add_all_apps()
         self._add_system()
         self._add_recent()
@@ -481,6 +482,53 @@ class Catalog:
         if source == "flatpak":
             return all(p in self.flatpaks for p in packages)
         return all(p in self.installed_pkgs for p in packages)
+
+    def _add_installed_games(self) -> None:
+        """Put the games that are on the machine at the top of Jogos.
+
+        The section was a shop: Steam, Lutris, Heroic, Wine, and no way to
+        reach a game from it. Every installed game is somewhere in "Todos",
+        between LibreOffice Calc and the printer settings, which is the one
+        place nobody looks for one - and in the Big Picture session, which
+        opens here and is meant to work from a sofa with a gamepad, it was the
+        difference between a console and a catalogue.
+
+        A game says so itself: the desktop-entry spec has a Game category, and
+        Steam, Lutris and Heroic all write it into the shortcuts they generate.
+        So this is not a list anybody has to maintain - it is whatever the
+        machine has, asked directly.
+        """
+        for index, (key, title, entries) in enumerate(self.sections):
+            if key != "gaming":
+                continue
+
+            # Not the storefronts. Steam is already in this section as a tile
+            # that says PRONTO, and a second one two places along - same name,
+            # same icon, different tile - reads as a fault.
+            known = {e["name"].strip().lower() for e in entries}
+
+            games = []
+            for info in sorted(self.appinfos,
+                               key=lambda a: (a.get_display_name() or "").lower()):
+                categories = (info.get_categories() or "").lower().split(";")
+                if "game" not in categories:
+                    continue
+                name = (info.get_display_name() or info.get_name() or "").strip()
+                if not name or name.lower() in known:
+                    continue
+                known.add(name.lower())
+                games.append({
+                    "kind": "app",
+                    "name": name,
+                    "desc": info.get_description() or "",
+                    "appinfo": info,
+                    "category": "gaming",
+                    "installed": True,
+                })
+
+            if games:
+                self.sections[index] = (key, title, games + entries)
+            return
 
     # everything with a .desktop file, so nothing is unreachable ---------------
     def _add_all_apps(self) -> None:
@@ -762,10 +810,9 @@ class Launcher(Gtk.Window):
 
         # Section 0 is whatever the catalog put first; honour --category.
         if start:
-            for index, key in enumerate(self.tab_keys):
-                if key.lower().startswith(start.lower()):
-                    self.section_index = index
-                    break
+            index = self.section_for(start, self.tab_keys, self.tab_titles)
+            if index is not None:
+                self.section_index = index
 
         # Shown before the section is picked, and this order matters: GtkStack
         # will not make a child that is not itself visible into the visible
@@ -879,7 +926,13 @@ class Launcher(Gtk.Window):
         now = datetime.now()
         self.clock.set_text(now.strftime("%H:%M"))
         try:
-            self.clockdate.set_text(now.strftime("%A, %d de %B").capitalize())
+            # Uppercase the first letter and leave the rest alone. str.capitalize
+            # lowercases everything after it, which is invisible in Portuguese -
+            # "domingo, 02 de agosto" is lowercase to begin with - and mangles
+            # every locale where a month name is capitalised: an account left on
+            # English read "Sunday, 02 de august".
+            stamp = now.strftime("%A, %d de %B")
+            self.clockdate.set_text(stamp[:1].upper() + stamp[1:])
         except ValueError:
             self.clockdate.set_text(now.strftime("%d/%m/%Y"))
         return True
@@ -1070,6 +1123,12 @@ class Launcher(Gtk.Window):
         name = Gtk.Label(label=entry["name"])
         name.get_style_context().add_class("tile-name")
         name.set_line_wrap(True)
+        # Break between words, never inside one. The default also breaks at any
+        # character when a word does not fit, and the names this list is full of
+        # are exactly the ones that suffer for it: "Compiladores C/C++" came out
+        # as "Compiladores C/C+" over "+", which reads as a typo rather than as
+        # a wrap. Anything genuinely too long is ellipsised two lines down.
+        name.set_line_wrap_mode(Pango.WrapMode.WORD)
         name.set_justify(Gtk.Justification.CENTER)
         name.set_max_width_chars(16)
         name.set_lines(2)
@@ -1342,6 +1401,27 @@ class Launcher(Gtk.Window):
                 "↑↓←→ navegar    Enter abrir    digite para procurar    Tab trocar de seção    Esc sair"
             )
             self.populate(key)
+
+    @staticmethod
+    def section_for(start: str, keys: list[str], titles: list[str]) -> int | None:
+        """Which section --category asked for, or None.
+
+        Matched against the section's name on screen as well as its key,
+        because those are not the same word and the visible one is what anybody
+        would type. The keys come from the catalog filenames - the games live in
+        20-gaming.list, so the key is "gaming" - while the section is called
+        Jogos everywhere a person can see it. `ifos jogos` and the Big Picture
+        session both ask for "jogos", matched nothing at all, and opened
+        silently on whatever section happened to be first.
+        """
+        wanted = fold(start)
+        if not wanted:
+            return None
+        for index, key in enumerate(keys):
+            title = fold(titles[index]) if index < len(titles) else ""
+            if key.lower().startswith(wanted) or (title and title.startswith(wanted)):
+                return index
+        return None
 
     def switch_section(self, delta: int) -> None:
         self.select_tab(self.section_index + delta)
