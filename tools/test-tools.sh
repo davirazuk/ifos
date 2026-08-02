@@ -534,6 +534,37 @@ check "sem xinput, --flat sai 1"      rc_is 1
 run_mouse --nonsense
 check "opção inválida sai 2"         rc_is 2
 
+# A generic gaming mouse presents itself as two or three devices: the pointer,
+# and one or two the kernel treats as keyboards, which is where the extra
+# buttons send their keycodes. --test listened to the first one only, so a DPI
+# button that *does* reach the computer looked exactly like one that does not.
+cat > "$M2/redragon" <<'EOF'
+I: Bus=0003 Vendor=258a Product=1007 Version=0111
+N: Name="SINOWEALTH Wired Gaming Mouse"
+H: Handlers=mouse0 event4 
+
+I: Bus=0003 Vendor=258a Product=1007 Version=0111
+N: Name="SINOWEALTH Wired Gaming Mouse Keyboard"
+H: Handlers=sysrq kbd event5 
+
+I: Bus=0003 Vendor=046d Product=c31c Version=0111
+N: Name="Some other keyboard entirely"
+H: Handlers=sysrq kbd event0 
+EOF
+OUT=$(IFOS_MOUSE_DEVICES="$M2/redragon" DISPLAY="" HOME="$M2/home" \
+      bash "$MSE" --test 2>&1); RC=$?
+check "--test pega os dois nós do mesmo mouse" says "event4 event5"
+check "e não pega o teclado de verdade"        not_says "event0"
+
+OUT=$(IFOS_MOUSE_DEVICES="$M2/redragon" DISPLAY=:0 PATH="$M2/bin:/usr/bin:/bin" \
+      RECORD="$M2/record" HOME="$M2/home" bash "$MSE" 2>&1)
+check "avisa que o Piper não cobre esse mouse" says "provavelmente não vai reconhecer"
+check "o nome sai limpo, sem os ids colados"   not_says "258a:1007"
+
+OUT=$(IFOS_MOUSE_DEVICES="$M2/devices" DISPLAY=:0 PATH="$M2/bin:/usr/bin:/bin" \
+      RECORD="$M2/record" HOME="$M2/home" bash "$MSE" 2>&1)
+check "e que num Logitech vale tentar"         says "costuma reconhecer"
+
 # ── 18. ifos-software tells the truth about what it installed ────────────────
 #  A catalog entry naming a package that is not in the AUR shipped, and the
 #  install ended with a green "Pronto." under yay's own "no package found for

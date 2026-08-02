@@ -303,7 +303,11 @@ cannot tell you it was pressed, and from the desk that is indistinguishable
 from a dead button.
 
 `ifos-mouse --test` settles which it is in five seconds: it prints what each
-button emits, and says so plainly when the DPI button emits nothing. The speed
+button emits, and says so plainly when the DPI button emits nothing. It listens
+to *every* node the mouse presents, not just the pointer — a gaming mouse is
+usually two or three devices, and the extra buttons send their keycodes on the
+one the kernel treats as a keyboard. Watching only the first meant a button
+that does reach the computer looked exactly like one that does not. The speed
 controls in the same tool then do the job the button was being pressed for, on
 any mouse: `--speed -10..10`, `--faster`, `--slower`, `--flat` for no
 acceleration at all, `--natural` to invert scrolling. Choices are saved and put
@@ -313,7 +317,10 @@ a speed chosen once was gone the next morning.
 It is **Mouse** under Sistema in the launcher. Mice whose DPI genuinely can be
 set from the computer are the ones libratbag supports, most Logitech, Razer,
 SteelSeries and Roccat hardware; that is **Piper**, one line in `ifos-software`,
-which also starts `ratbagd` for it.
+which also starts `ratbagd` for it. The report says which case the mouse in
+front of you is in, rather than recommending Piper to everybody — the budget
+mice built on SINOWEALTH and Holtek controllers are not in libratbag's
+database, and Piper opens on an empty list with nothing to explain why.
 
 `xorg-xinput` ships now. Nothing on the machine could look at a pointing device
 or change its speed: libinput's per-device settings live in X properties, and
