@@ -168,6 +168,12 @@ I3_EXECS=(
     '~/.config/i3/scripts/gpu-watch.sh'
 )
 
+# Same idea for a command that lives in /usr/local/bin rather than in the home
+# directory: there is no file to copy, only a line to add.
+I3_EXEC_COMMANDS=(
+    'ifos-mouse --apply'
+)
+
 i3_new_execs() {
     local home=$1
     local cfg="$home/.config/i3/config"
@@ -191,6 +197,21 @@ i3_new_execs() {
         edit "$cfg" "${anchor}a\\
 exec --no-startup-id $script" &&
             fixed "i3 now starts $(basename "$script") at login"
+    done
+
+    local command
+    for command in "${I3_EXEC_COMMANDS[@]}"; do
+        grep -qF "$command" "$cfg" && continue
+        command -v "${command%% *}" >/dev/null 2>&1 || continue
+
+        found "$cfg does not run '$command' at login"
+        (( CHECK )) && continue
+
+        anchor=$(grep -n '^exec --no-startup-id' "$cfg" | tail -1 | cut -d: -f1)
+        [[ -n $anchor ]] || continue
+        edit "$cfg" "${anchor}a\\
+exec --no-startup-id $command" &&
+            fixed "i3 now runs '$command' at login"
     done
 }
 

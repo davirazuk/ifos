@@ -585,6 +585,13 @@ class Catalog:
             ("Controles", "Ver os controles ligados e como parear",
              "input-gaming",
              "ifos-term 'Controles' ifos-controller", True),
+            # The DPI button on a gaming mouse is handled inside the mouse and
+            # sends nothing to the computer, so there is nothing here to bind
+            # and no way for the system to say it was pressed. This is where
+            # the sensitivity actually lives, plus a test that settles whether
+            # the button emits anything at all.
+            ("Mouse", "Velocidade, aceleração e o que cada botão faz",
+             "input-mouse", "ifos-term 'Mouse' ifos-mouse", True),
             ("Monitores", "Resolução e disposição das telas",
              "video-display", "arandr", True),
             # Everything added for screens so far was a keyboard shortcut, and

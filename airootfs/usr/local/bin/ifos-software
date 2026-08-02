@@ -134,6 +134,10 @@ post_install_hint() {
                     $SUDO usermod -aG libvirt "${SUDO_USER:-$USER}" 2>/dev/null
                     warn "Saia e entre de novo na sessão para o grupo do libvirt valer." ;;
         cups)       $SUDO systemctl enable --now cups.service 2>/dev/null ;;
+        libratbag|piper)
+                    # Piper is only a window onto ratbagd; without the daemon
+                    # running it opens and says it found no devices.
+                    $SUDO systemctl enable --now ratbagd.service 2>/dev/null ;;
         tlp)        $SUDO systemctl enable --now tlp.service 2>/dev/null ;;
         flatpak)    $SUDO flatpak remote-add --if-not-exists flathub \
                         https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null ;;

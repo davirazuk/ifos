@@ -202,6 +202,10 @@ xorg-xsetroot
 # happen. A school laptop then sits unlocked with the backlight on until the
 # battery gives out, which is the opposite of both intentions.
 xorg-xset
+# xinput. Nothing on the machine could look at a mouse or change its speed:
+# libinput's per-device settings live in X properties, and this is the only
+# thing that reads or writes them. `ifos-mouse` is built on it.
+xorg-xinput
 # The X input driver. It is only an optional dependency of xorg-server, so it
 # was arriving by chance as something else's dependency - and nothing that
 # 30-touchpad.conf configures applies without it being the driver in use.
