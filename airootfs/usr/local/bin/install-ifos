@@ -274,8 +274,38 @@ FSTYPE=$(ask_menu "Sistema de arquivos da partição raiz do IFOS" \
     ext4  "Simples e confiável (recomendado)" \
     btrfs "Snapshots e compressão") || exit 1
 
+# ── Swap file size ───────────────────────────────────────────────────────────
+# Sized against the disk as well as the memory. The old default was simply
+# min(RAM, 8 GiB), which ignored where it was going: on the 32 GiB eMMC laptops
+# schools buy, a machine with 4 GiB of memory proposed a 4 GiB swap file - an
+# eighth of the whole disk - and one with 8 GiB proposed 8.
+#
+# It does not need to match the memory anyway. zram already provides swap
+# sized to half of RAM, compressed and in memory; this file is the overflow
+# underneath it, which is reached rarely and does not need to be large. A tenth
+# of the root partition is the ceiling, so the proportion holds on any disk.
+#
+# Still only a default: the question is asked either way and any number can be
+# typed, including 0.
+root_mib() {
+    case $MODE in
+        alongside) printf '%s' "$(( FREE_END - FREE_START ))" ;;
+        partition) printf '%s' "${psize:-0}" ;;
+        wipe)      printf '%s' "$(( $(blockdev --getsize64 "$DISK" 2>/dev/null || echo 0) / 1024 / 1024 ))" ;;
+        *)         printf '0' ;;
+    esac
+}
+
 RAM_MIB=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) / 1024 ))
+ROOT_MIB=$(root_mib)
 SWAP_DEFAULT=$(( RAM_MIB > 8192 ? 8192 : RAM_MIB ))
+if (( ROOT_MIB > 0 )); then
+    disk_cap=$(( ROOT_MIB / 10 ))
+    (( SWAP_DEFAULT > disk_cap )) && SWAP_DEFAULT=$disk_cap
+fi
+# Below a gigabyte a swap file is not worth the space it costs; zram covers it.
+(( SWAP_DEFAULT < 1024 )) && SWAP_DEFAULT=0
+
 SWAP_MIB=$(ask_input "Tamanho do arquivo de swap em MiB (0 para nenhum)" "$SWAP_DEFAULT") || exit 1
 [[ $SWAP_MIB =~ ^[0-9]+$ ]] || SWAP_MIB=0
 
