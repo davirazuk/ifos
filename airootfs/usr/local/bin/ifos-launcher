@@ -1473,19 +1473,41 @@ class Launcher(Gtk.Window):
         # _prefers_dgpu first: it is a dictionary lookup, and asking it before
         # shelling out to lspci means the ordinary case of starting something
         # that is not a game never runs the check at all.
-        if self._prefers_dgpu(entry, info) and self._can_offload():
-            command = self._command_for(entry, info)
-            if command:
-                self.launch_watched(entry["name"], "ifos-gpu run " + command)
-                return
-
         command = self._command_for(entry, info)
         if command is None:
             command = next((p for p in entry.get("packages", []) if shutil.which(p)), None)
-        if command:
-            self.launch_watched(entry["name"], command)
-        else:
+        if command is None:
             self.notify("Não foi possível iniciar %s." % entry["name"])
+            return
+
+        self.launch_watched(entry["name"],
+                            self._game_prefix(entry, info) + command)
+
+    def _game_prefix(self, entry: dict, info) -> str:
+        """What a game gets wrapped in, and nothing else does.
+
+        Two wrappers, both of which only make sense for a game and both of
+        which nobody is going to type:
+
+        `ifos-gpu run` on a laptop with two graphics chips, because everything
+        renders on the integrated one by default - which is what makes the
+        battery last and is wrong for exactly one kind of program.
+
+        `gamemoderun` everywhere, because the machines this runs on need it
+        most: for as long as the game is open it puts the processor on the
+        performance governor, raises the game's scheduling and I/O priority
+        over everything else, and stops the screen blanking. It ends the moment
+        the game does, so nothing here costs a machine anything while nobody is
+        playing - which is the whole reason it can be on by default.
+        """
+        if not self._prefers_dgpu(entry, info):
+            return ""
+        prefix = ""
+        if self._can_offload():
+            prefix += "ifos-gpu run "
+        if shutil.which("gamemoderun"):
+            prefix += "gamemoderun "
+        return prefix
 
     # ── starting something, and noticing when it does not start ──────────────
     #  This used to fire and forget: Popen, then main_quit on the next line.

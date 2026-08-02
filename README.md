@@ -193,6 +193,22 @@ a ceiling.
 **HP printers.** The most common brand in a Brazilian school by a wide margin,
 and `gutenprint` covers neither HP's own drivers nor their scanners.
 
+**GameMode, on every game, without anyone asking for it.** For as long as a
+game is open it puts the processor on the performance governor, raises the
+game's scheduling and I/O priority above everything else, and stops the screen
+blanking — and it gives all of that back the moment the game closes. That last
+part is why it can be on by default: it costs a machine nothing while nobody is
+playing. The launcher already knows which tiles are games, so it wraps them,
+the same way it already sends them to the discrete card on a hybrid laptop.
+Nobody has to learn the words `gamemoderun %command%`.
+
+**cups started at every boot, on every machine.** `cups` is socket-activated:
+with `cups.socket` the daemon starts the first time something actually prints
+or opens a printer dialog, and a machine that never sees a printer never starts
+it at all. Enabling `cups.service` instead ran a print daemon on every machine
+in the lab for the benefit of the one with a printer attached. `ifos-update`
+makes the swap on machines that already exist; nothing about printing changes.
+
 **The compositor getting out of a game's way.** picom defaults
 `unredir-if-possible` to false, so a fullscreen game went on being composited:
 every frame the game drew was copied through the compositor before reaching the
