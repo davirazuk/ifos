@@ -9,9 +9,27 @@
 [ -e /dev/dri/renderD128 ] || export LIBGL_ALWAYS_SOFTWARE=1
 
 export QT_QPA_PLATFORMTHEME=qt5ct
+# Qt's own automatic scaling is left off: it disagrees with GTK about how much
+# to scale, so on the same screen half the desktop came out one size and half
+# another. ifos-scale gives both toolkits the same number a few lines down.
 export QT_AUTO_SCREEN_SCALE_FACTOR=0
 export XCURSOR_THEME=Adwaita
 export XCURSOR_SIZE=24
+
+# ── Screen density ───────────────────────────────────────────────────────────
+#  Nothing here used to scale with the screen. A laptop with a 3200x1800 or 4K
+#  panel - an ordinary second-hand machine now, not an exotic one - got a bar
+#  four millimetres tall and text at a third of its intended size, with nothing
+#  in the interface to fix it with.
+#
+#  On an ordinary screen this changes nothing at all: below 120 dpi it sets the
+#  same values that were hardcoded above. It has to be sourced rather than run,
+#  because a child process cannot export into this one.
+if command -v ifos-scale >/dev/null 2>&1; then
+    eval "$(ifos-scale --env 2>/dev/null)"
+    command -v xrdb >/dev/null 2>&1 && ifos-scale --xrdb 2>/dev/null | xrdb -merge -
+fi
+
 export EDITOR=vim
 export VISUAL=vim
 export BROWSER=xdg-open
