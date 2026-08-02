@@ -551,10 +551,12 @@ I: Bus=0003 Vendor=046d Product=c31c Version=0111
 N: Name="Some other keyboard entirely"
 H: Handlers=sysrq kbd event0 
 EOF
+# --test needs the graphical session now, because that is where the buttons
+# are: reading the device directly is what never worked.
 OUT=$(IFOS_MOUSE_DEVICES="$M2/redragon" DISPLAY="" HOME="$M2/home" \
       bash "$MSE" --test 2>&1); RC=$?
-check "--test pega os dois nós do mesmo mouse" says "event4 event5"
-check "e não pega o teclado de verdade"        not_says "event0"
+check "--test sem X recusa e diz por quê"      says "sessão gráfica"
+check "e sai diferente de zero"                rc_is 1
 
 OUT=$(IFOS_MOUSE_DEVICES="$M2/redragon" DISPLAY=:0 PATH="$M2/bin:/usr/bin:/bin" \
       RECORD="$M2/record" HOME="$M2/home" bash "$MSE" 2>&1)
@@ -600,60 +602,114 @@ check "quando dá certo, diz Pronto" says "Pronto."
 check "e sai zero"                  rc_is 0
 
 # ── 18b. A DPI button in software ────────────────────────────────────────────
-#  What the DPI button was being pressed for, done where the computer can see
-#  it. The whole point is the mouse whose DPI button is deaf but whose side
-#  button is not, so the fixtures are exactly that: an ordinary click on the
-#  pointer node, and a keycode on the keyboard-looking sibling.
+#  The first version of this read /dev/input directly and never detected
+#  anything on a real machine: systemd grants a logged-in user access to an
+#  input device only when it is a joystick, so a mouse's event node is
+#  root-only. Everything goes through X now, which needs no privilege and sees
+#  exactly what an application would - so the fake here is xinput's own
+#  test-xi2 output, in the shape the real one prints it.
 case_name "Um botão de DPI em software"
-FAKEIN="$M2/input"; mkdir -p "$FAKEIN"
-python3 - "$FAKEIN" <<'PYEV'
-import struct, sys, pathlib
-SIZE = struct.calcsize("llHHi")
-def ev(kind, code, value):
-    return struct.pack("llHHi", 0, 0, kind, code, value)
-root = pathlib.Path(sys.argv[1])
-# the pointer half: an ordinary left click, which must be ignored
-(root / "event4").write_bytes(ev(1, 0x110, 1) + ev(1, 0x110, 0))
-# the keyboard half: a side button sending keycode 183
-(root / "event5").write_bytes(ev(1, 183, 1) + ev(1, 183, 0))
-PYEV
+cat > "$M2/bin/xinput" <<'EOF'
+#!/bin/bash
+case "$1 $2" in
+  "list --short")
+    printf '\xe2\x8e\x9c   \xe2\x86\xb3 Redragon Gaming Mouse\tid=9\t[slave  pointer  (2)]\n'
+    exit 0 ;;
+  "test-xi2 --root")
+    # An ordinary left click, which --learn must refuse, then the side button.
+    printf 'EVENT type 15 (RawButtonPress)\n    device: 9 (9)\n    detail: 1\n'
+    printf 'EVENT type 15 (RawButtonPress)\n    device: 9 (9)\n    detail: 9\n'
+    exit 0 ;;
+esac
+case "$1" in
+  list-props)
+    printf 'Device "x":\n\tlibinput Accel Speed (300):\t%s\n\tlibinput Accel Profile Enabled (302):\t1, 0\n' \
+        "$(cat "$RECORD.speed" 2>/dev/null || echo 0.000000)"
+    exit 0 ;;
+  set-prop)
+    shift; id=$1; shift; prop=$1; shift
+    printf '%s|%s|%s\n' "$id" "$prop" "$*" >> "$RECORD"
+    [ "$prop" = "libinput Accel Speed" ] && printf '%s' "$*" > "$RECORD.speed"
+    exit 0 ;;
+esac
+exit 1
+EOF
+chmod +x "$M2/bin/xinput"
 
-M3="$M2/learned"; mkdir -p "$M3"
+M3="$M2/learned"; rm -rf "$M3"; mkdir -p "$M3"
 learn_env() {
-    IFOS_MOUSE_DEVICES="$M2/redragon" IFOS_MOUSE_INPUT_DIR="$FAKEIN" DISPLAY=:0 \
+    IFOS_MOUSE_DEVICES="$M2/redragon" DISPLAY=:0 \
     PATH="$M2/bin:/usr/bin:/bin" RECORD="$M2/rec2" \
     XDG_RUNTIME_DIR="$M3" HOME="$M3" "$@"
 }
 rm -f "$M2/rec2" "$M2/rec2.speed"
 
 OUT=$(learn_env timeout 20 bash "$MSE" --learn 2>&1); RC=$?
-check "--learn aprende um botão"        rc_is 0
+check "--learn aprende um botão"          rc_is 0
+check "e nomeia qual foi"                 says "botão lateral"
 OUT=$(cat "$M3/.config/ifos/mouse" 2>/dev/null)
-check "e guarda o código certo"         says "BUTTON=183"
-check "ignorando o clique esquerdo"     not_says "BUTTON=272"
+check "guarda o número do X"              says "BUTTON=button:9"
+check "recusando o clique esquerdo"       not_says "button:1$"
 
-# The daemon: sees that code and steps the speed. It also has to *end* when the
-# devices go away rather than spinning on a descriptor that returns nothing,
-# which is what reaching the end of these files stands in for.
+# The watcher: same stream, acts on the learned one.
 rm -f "$M2/rec2" "$M2/rec2.speed"
 learn_env timeout 15 bash "$MSE" --daemon >/dev/null 2>&1
-RC=$?
 check "--daemon termina sozinho, não gira" rc_is 0
 OUT=$(cat "$M2/rec2" 2>/dev/null)
-check "e mudou a sensibilidade"         says "libinput Accel Speed|0.30"
+check "e mudou a sensibilidade"           says "libinput Accel Speed|0.30"
 
 # Three levels, and back to the start.
 rm -f "$M2/rec2" "$M2/rec2.speed"
 printf 'SPEED=0\n' > "$M3/.config/ifos/mouse"
 for _ in 1 2 3; do learn_env bash "$MSE" --cycle >/dev/null 2>&1; done
 OUT=$(cat "$M2/rec2")
-check "o ciclo passa por três e volta"  says "0.00"
-check "sem parar no meio"               says "0.60"
+check "o ciclo passa por três e volta"    says "0.00"
+check "sem parar no meio"                 says "0.60"
+
+# A value left by the version that read /dev/input is a kernel code, from a
+# device it could never open. Nothing was ever bound through it.
+printf 'BUTTON=183\n' > "$M3/.config/ifos/mouse"
+OUT=$(learn_env bash "$MSE" --daemon 2>&1); RC=$?
+check "ignora o formato antigo"           rc_is 1
 
 OUT=$(learn_env bash "$MSE" --forget 2>&1); RC=$?
-check "--forget sai 0"                  rc_is 0
+check "--forget sai 0"                    rc_is 0
 OUT=$(learn_env bash "$MSE" --daemon 2>&1); RC=$?
-check "e o daemon volta a sair calado"  rc_is 1
+check "e o daemon volta a sair calado"    rc_is 1
+
+# ── 18c. The compositor gets out of the way of a fullscreen game ─────────────
+#  picom defaults unredir-if-possible to false, so a fullscreen game went on
+#  being composited: a frame of latency, a second vsync fighting the game's
+#  own, and GPU time on a machine with none to spare. Invisible - the frame
+#  rate simply reads low.
+case_name "O picom sai da frente de um jogo em tela cheia"
+PICOMCFG="$PROFILE/airootfs/etc/skel/.config/picom/picom.conf"
+OUT=$(cat "$PICOMCFG")
+check "unredir-if-possible ligado"        says "unredir-if-possible = true"
+check "sombra não em tela cheia"          says "fullscreen"
+if command -v picom >/dev/null 2>&1 && command -v Xvfb >/dev/null 2>&1; then
+    pkill -f 'Xvfb :91' 2>/dev/null; (Xvfb :91 -screen 0 800x600x24 >/dev/null 2>&1 &)
+    sleep 1.5
+    OUT=$(DISPLAY=:91 timeout 4 picom --config "$PICOMCFG" 2>&1)
+    # Not "no FATAL ERROR": tearing the display down under it produces one, and
+    # that is this script's doing rather than the configuration's. The parser
+    # is what is being checked.
+    check "picom analisa a configuração"  not_says "Error when reading configuration"
+    check "sem erro de sintaxe"           not_says "syntax error"
+    pkill -f 'Xvfb :91' 2>/dev/null
+fi
+
+# ── 18d. Pointer acceleration off for mice, on for touchpads ─────────────────
+#  libinput's adaptive profile is why a game camera feels wrong: the same hand
+#  movement turns a different amount depending on how fast it was, and no
+#  in-game sensitivity setting can undo it because the distortion happens
+#  before the game sees the movement.
+case_name "Aceleração desligada no mouse, ligada no touchpad"
+OUT=$(cat "$PROFILE/airootfs/etc/X11/xorg.conf.d/31-mouse.conf")
+check "perfil flat para ponteiros"        says 'Option "AccelProfile" "flat"'
+check "e o touchpad fica de fora"         says 'MatchIsTouchpad "off"'
+OUT=$(cat "$PROFILE/airootfs/etc/X11/xorg.conf.d/30-touchpad.conf")
+check "o touchpad mantém o dele"          not_says "AccelProfile"
 
 # ── 19. The system files that are not scripts ────────────────────────────────
 #  udev refuses a whole rules file over one bad line and says so only in the
