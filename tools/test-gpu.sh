@@ -354,6 +354,35 @@ OUT=$(IFOS_GPU_SYSROOT="$M" PATH="$M/bin:/usr/bin:/bin" \
       bash "$GPU" run sh -c 'echo "$__GLX_VENDOR_LIBRARY_NAME"' 2>&1); RC=$?
 check "run exporta as variáveis do offload" says "nvidia"
 
+# ── 15. ifos-term, which is how --fix reaches the screen ─────────────────────
+#  The launcher's repair tile is `ifos-term 'Vídeo e jogos' ifos-gpu --fix`,
+#  handed to /bin/sh -c as one string. Three things have to survive that: the
+#  accented title, the split between title and command, and the arguments -
+#  and none of them is visible until somebody clicks the tile.
+case_name "ifos-term leva o comando até o terminal"
+T="$TMP/term"; mkdir -p "$T/bin"
+cat > "$T/bin/xfce4-terminal" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" > "$RECORD"
+shift 3           # -T <title> -x
+"$@" </dev/null
+EOF
+printf '#!/bin/sh\necho "GPU-ARGS:$*"\n'  > "$T/bin/ifos-gpu"
+printf '#!/bin/sh\nexec "$@"\n'           > "$T/bin/setsid"
+chmod +x "$T"/bin/*
+
+OUT=$(RECORD="$T/record" PATH="$T/bin:/usr/bin:/bin" \
+      bash "$PROFILE/airootfs/usr/local/bin/ifos-term" \
+           'Vídeo e jogos' ifos-gpu --fix </dev/null 2>&1)
+RC=$?
+check "o comando chega inteiro"        says "GPU-ARGS:--fix"
+REC=$(cat "$T/record" 2>/dev/null); OUT=$REC
+check "o título acentuado sobrevive"   says "Vídeo e jogos"
+check "usa -x, não -e, no xfce4-terminal" says -- "-x"
+
+OUT=$(PATH="/usr/bin:/bin" bash "$PROFILE/airootfs/usr/local/bin/ifos-term" 2>&1); RC=$?
+check "sem comando, recusa"            rc_is 2
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"
