@@ -15,9 +15,13 @@
   "logo": {
     "type": "file",
     "source": "/usr/share/ifos/logo.txt",
+    // Three colours, switched inline inside the wordmark: the solid strokes in
+    // the institutional green, the drop shadow in a darker one so the mark has
+    // depth, and the campus line quieter than both.
     "color": {
       "1": "#00a86b",
-      "2": "#b9d4c6"
+      "2": "#24503f",
+      "3": "#b9d4c6"
     },
     "padding": { "top": 1, "left": 2, "right": 3 }
   },

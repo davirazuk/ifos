@@ -79,7 +79,8 @@ SSO_HOSTS = {"accounts.google.com"}
 # session closing the launcher ends the session - so locking the screen there
 # used to log you out. Matched on the command's first word rather than by
 # substring, which is what silently broke when i3lock became ifos-lock.
-KEEP_LAUNCHER_OPEN = {"systemctl", "ifos-lock", "ifos-theme"}
+KEEP_LAUNCHER_OPEN = {"systemctl", "ifos-lock", "ifos-theme",
+                      "ifos-update-terminal"}
 
 # What people type when they are looking for something they already know by
 # another name. Almost everyone arriving here has used Windows, and searching
@@ -480,6 +481,14 @@ class Catalog:
         entries = [
             ("IFOS Software", "Instalar programas, jogos e drivers",
              "system-software-install", "ifos-software", True),
+            # Updating was a command nobody could discover: the only way to
+            # reach it was to already know the words "ifos-update". It runs in
+            # a terminal because it asks questions, reports what it is doing,
+            # and ends with a cancellable countdown before the restart - none
+            # of which survives being run silently in the background.
+            ("Atualizar o IFOS", "Buscar as novidades e atualizar tudo",
+             "system-software-update", "ifos-update-terminal",
+             not os.path.isdir("/run/archiso")),
             ("Instalar o IFOS", "Instalar o sistema neste computador",
              "drive-harddisk", "sudo install-ifos", os.path.isdir("/run/archiso")),
             ("Tema", "Alternar entre o tema IFMS e o Catppuccin",

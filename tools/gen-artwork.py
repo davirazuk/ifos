@@ -289,53 +289,58 @@ def lock_image(source: Image.Image, size: tuple[int, int]) -> Image.Image:
 
 
 # ── Branding derived from the same glyphs as the wallpaper ───────────────────
-def ascii_logo(pixel: str = "██") -> str:
-    """The IFOS wordmark as coloured ASCII, for fastfetch.
+# The wordmark as figlet's "ANSI Shadow" draws it: a solid stroke with a
+# drop shadow along its right and bottom. Written out rather than generated,
+# because it is a typeface, not a bitmap - the 4x5 pixel glyphs used for the
+# wallpaper look like a wallpaper, and blown up to text they looked like
+# something rendered by mistake.
+ANSI_SHADOW = r"""
+██╗███████╗ ██████╗ ███████╗
+██║██╔════╝██╔═══██╗██╔════╝
+██║█████╗  ██║   ██║███████╗
+██║██╔══╝  ██║   ██║╚════██║
+██║██║     ╚██████╔╝███████║
+╚═╝╚═╝      ╚═════╝ ╚══════╝
+"""
 
-    Built from the same 4x5 glyphs the wallpaper uses. $1/$2 are fastfetch
-    colour placeholders.
+# The characters that form the shadow rather than the stroke.
+SHADOW_CHARS = set("╗╝╔╚║═")
 
-    Stacked two letters per line rather than IFOS in a row. Spelled across, the
-    mark is 38 columns wide and fastfetch indents every fact past it, so the
-    system information ended up starting halfway across the terminal. Stacked
-    it is eighteen.
 
-    One text row per pixel row, not two. A character cell is about twice as
-    tall as it is wide, so a pixel two cells wide and two rows tall came out at
-    1:2 - the letters were noticeably stretched vertically. Two cells wide and
-    one row tall is square.
+def ascii_logo() -> str:
+    """The IFOS wordmark as coloured text, for fastfetch.
+
+    Three colours, switched inline: fastfetch honours $1..$9 anywhere in a
+    line, not only at the start, so the solid strokes and the drop shadow can
+    be different greens. That is what makes it read as a wordmark with depth
+    instead of a wall of blocks.
+
+    The previous version was built from the same 4x5 glyphs as the wallpaper,
+    stacked "IF" over "OS" to keep it narrow. It was eighteen columns and it
+    looked like it: at text size those glyphs have no strokes, only squares.
+    This is twenty-eight columns, which is ten more of indent on every line of
+    output - worth it, and still inside 80 columns once the keys and values are
+    added.
     """
-    rows_of = ("IF", "OS")
-    gap = 1                      # blank glyph columns between letters
-    cell = len(pixel)
-
-    def render(chars: str) -> list[str]:
-        out = []
-        for py in range(GLYPH_H):
-            line = ""
-            for i, ch in enumerate(chars):
-                # The glyph's own width, not a fixed four: I and F are three
-                # columns, and padding them to four put a blank column inside
-                # the word.
-                for px in range(GLYPH_W[ch]):
-                    line += pixel if (px, py) in GLYPHS[ch] else " " * cell
-                if i < len(chars) - 1:
-                    line += " " * (cell * gap)
-            out.append(line.rstrip())
-        return out
-
-    block: list[str] = []
-    for i, chars in enumerate(rows_of):
-        if i:
-            block.append("")     # one blank row between the two halves
-        block.extend(render(chars))
-
-    width = max(len(row) for row in block)
+    lines = [l for l in ANSI_SHADOW.strip("\n").split("\n")]
+    width = max(len(l) for l in lines)
 
     out = ["$1"]
-    out.extend(("$1  " + row).rstrip() for row in block)
+    for line in lines:
+        rendered = "  "
+        current = None
+        for ch in line:
+            want = "$2" if ch in SHADOW_CHARS else "$1"
+            if ch == " ":
+                rendered += ch
+                continue
+            if want != current:
+                rendered += want
+                current = want
+            rendered += ch
+        out.append(rendered.rstrip())
     out.append("$1")
-    out.append("$2  " + "IFMS · Campus Dourados".center(width))
+    out.append("$3  " + "IFMS · Campus Dourados".center(width))
     out.append("")
     return "\n".join(out) + "\n"
 
