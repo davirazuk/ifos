@@ -21,13 +21,25 @@ notify() {   # notify <tag> <icon> <label> [value]
     notify-send "${args[@]}" "$icon  $label"
 }
 
+# Font Awesome 4.7 codepoints, the same block the bar and fastfetch use, and
+# one JetBrainsMono Nerd Font carries. Every one of these used to be an empty
+# string: pressing a volume key produced a notification that began with a blank
+# space where the icon belongs. Font Awesome has three speaker glyphs, not
+# five, so the quiet levels share one - mute is told apart by its label
+# ("Som mudo") rather than by having its own picture.
+ICON_VOL_OFF=''      # volume-off
+ICON_VOL_LOW=''      # volume-down
+ICON_VOL_HIGH=''     # volume-up
+ICON_MIC_ON=''       # microphone
+ICON_MIC_OFF=''      # microphone-slash
+ICON_BRIGHT=''       # sun
+
 volume_icon() {
     local v=$1 muted=$2
-    if [[ $muted == true ]]; then printf ''
-    elif   (( v == 0 )); then printf ''
-    elif   (( v < 34 )); then printf ''
-    elif   (( v < 67 )); then printf ''
-    else                      printf ''
+    if [[ $muted == true ]]; then printf '%s' "$ICON_VOL_OFF"
+    elif   (( v == 0 ));   then printf '%s' "$ICON_VOL_OFF"
+    elif   (( v < 67 ));   then printf '%s' "$ICON_VOL_LOW"
+    else                        printf '%s' "$ICON_VOL_HIGH"
     fi
 }
 
@@ -47,9 +59,9 @@ case ${1} in
         if [[ $1 == mic-mute ]]; then
             muted=$(pamixer --default-source --get-mute 2>/dev/null || echo false)
             if [[ $muted == true ]]; then
-                notify ifos-osd-mic "" "Microfone mudo"
+                notify ifos-osd-mic "$ICON_MIC_OFF" "Microfone mudo"
             else
-                notify ifos-osd-mic "" "Microfone ligado"
+                notify ifos-osd-mic "$ICON_MIC_ON" "Microfone ligado"
             fi
             exit 0
         fi
@@ -65,6 +77,6 @@ case ${1} in
         # brightnessctl reports raw values; turn them into a percentage.
         cur=$(brightnessctl -m 2>/dev/null | cut -d, -f4 | tr -d '%')
         [[ -z $cur ]] && cur=0
-        notify ifos-osd-bright "" "Brilho  ${cur}%" "$cur"
+        notify ifos-osd-bright "$ICON_BRIGHT" "Brilho  ${cur}%" "$cur"
         ;;
 esac

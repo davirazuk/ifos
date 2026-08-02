@@ -67,7 +67,7 @@ chmod 755 "$A"/etc/skel/.config/i3/scripts/*.sh "$A"/etc/skel/.config/picom/laun
           "$A"/etc/skel/.config/rofi/*.sh "$A"/etc/skel/.xinitrc 2>/dev/null || true
 chmod 755 "$A"/root/.automated_script.sh 2>/dev/null || true
 # The build tooling itself needs to stay executable too.
-chmod 755 "$PROFILE"/build.sh "$PROFILE"/tools/*.sh "$PROFILE"/tools/gen-artwork.py 2>/dev/null || true
+chmod 755 "$PROFILE"/build.sh "$PROFILE"/tools/*.sh "$PROFILE"/tools/*.py 2>/dev/null || true
 # NB: shadow/gshadow/sudoers stay world-readable *in the profile* - the build
 # runs unprivileged and must be able to read them. profiledef.sh applies the
 # real 0400/0440 modes inside the image.
