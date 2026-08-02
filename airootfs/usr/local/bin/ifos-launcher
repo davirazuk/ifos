@@ -80,7 +80,8 @@ SSO_HOSTS = {"accounts.google.com"}
 # used to log you out. Matched on the command's first word rather than by
 # substring, which is what silently broke when i3lock became ifos-lock.
 KEEP_LAUNCHER_OPEN = {"systemctl", "ifos-lock", "ifos-theme",
-                      "ifos-update-terminal"}
+                      "ifos-update-terminal",
+                      "~/.config/i3/scripts/screens.sh"}
 
 # What people type when they are looking for something they already know by
 # another name. Almost everyone arriving here has used Windows, and searching
@@ -499,6 +500,20 @@ class Catalog:
              "audio-volume-high", "pavucontrol", True),
             ("Monitores", "Resolução e disposição das telas",
              "video-display", "arandr", True),
+            # Everything added for screens so far was a keyboard shortcut, and
+            # a shortcut is only useful to somebody who has been told about it.
+            # A student who plugs in a projector and sees nothing happen is not
+            # going to try Mod+P; they are going to look for something to click.
+            ("Detectar telas", "Reconhecer um projetor ou monitor recém-ligado",
+             "video-joined-displays", "~/.config/i3/scripts/screens.sh", True),
+            ("Melhor resolução", "Usar a maior resolução que o monitor aceita",
+             "preferences-desktop-display",
+             "~/.config/i3/scripts/screens.sh --use-best", True),
+            ("Atalhos do teclado", "A lista completa de atalhos do IFOS",
+             "preferences-desktop-keyboard-shortcuts",
+             "xfce4-terminal --title ifos-help -x sh -c "
+             "'cat /usr/share/ifos/keybindings.txt; "
+             "read -n1 -s -p \"  pressione uma tecla \"'", True),
             ("Arquivos", "Gerenciador de arquivos",
              "system-file-manager", "thunar", True),
             ("Terminal", "Linha de comando",
@@ -1302,21 +1317,75 @@ class Launcher(Gtk.Window):
         if self._prefers_dgpu(entry, info) and self._can_offload():
             command = self._command_for(entry, info)
             if command:
-                self.spawn("ifos-gpu run " + command)
-                Gtk.main_quit()
+                self.launch_watched(entry["name"], "ifos-gpu run " + command)
                 return
 
-        if info is not None:
-            info.launch(None, None)
-            Gtk.main_quit()
-            return
-
-        command = next((p for p in entry.get("packages", []) if shutil.which(p)), None)
+        command = self._command_for(entry, info)
+        if command is None:
+            command = next((p for p in entry.get("packages", []) if shutil.which(p)), None)
         if command:
-            self.spawn(command)
-            Gtk.main_quit()
+            self.launch_watched(entry["name"], command)
         else:
             self.notify("Não foi possível iniciar %s." % entry["name"])
+
+    # ── starting something, and noticing when it does not start ──────────────
+    #  This used to fire and forget: Popen, then main_quit on the next line.
+    #  When the program failed - Steam without its 32-bit libraries is the one
+    #  that keeps happening - the launcher vanished and nothing else appeared,
+    #  and the only way to find out why was to know the program's name and run
+    #  it in a terminal. That is not something to ask of somebody who has never
+    #  opened one.
+    #
+    #  So: start it, hide the window, and watch for a second and a half. A
+    #  program that is still running by then has started, and the launcher
+    #  quits as before. One that has already exited non-zero has failed, and its
+    #  own error message is worth more than anything this could invent.
+    LAUNCH_GRACE_MS = 1500
+
+    def launch_watched(self, name: str, command: str) -> None:
+        try:
+            proc = subprocess.Popen(
+                ["/bin/sh", "-c", command],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            self.notify("Falha ao executar %s:\n%s" % (name, exc))
+            return
+
+        self.hide()
+        GLib.timeout_add(self.LAUNCH_GRACE_MS, self._after_launch, proc, name)
+
+    def _after_launch(self, proc, name: str) -> bool:
+        if proc.poll() is None or proc.returncode == 0:
+            Gtk.main_quit()
+            return False
+
+        # It failed. Read whatever it said, and put the window back so there is
+        # something to read it in.
+        try:
+            _out, err = proc.communicate(timeout=2)
+            message = (err or b"").decode("utf-8", "replace").strip()
+        except (subprocess.SubprocessError, ValueError):
+            message = ""
+        self.show()
+        self.present()
+        self._report_failure(name, message)
+        return False
+
+    def _report_failure(self, name: str, message: str) -> None:
+        # The last few lines: the useful part of a failure is at the end, and a
+        # wall of output is not something anybody reads.
+        tail = "\n".join(message.splitlines()[-6:]) if message else ""
+        body = ("%s fechou logo depois de abrir.\n\n" % name)
+        if tail:
+            body += tail
+        else:
+            body += ("O programa não deixou nenhuma mensagem.\n"
+                     "Se for um jogo, verifique em ifos-software → Hardware se o\n"
+                     "driver de vídeo da sua placa está instalado.")
+        self.notify(body)
 
     # ── the fast graphics chip, without being asked ──────────────────────────
     def _can_offload(self) -> bool:

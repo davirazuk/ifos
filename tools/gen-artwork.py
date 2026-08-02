@@ -240,11 +240,39 @@ def vignette(img: Image.Image) -> Image.Image:
     return Image.alpha_composite(img, dark)
 
 
+def overlay_contours(img: Image.Image, pal) -> Image.Image:
+    """Concentric rounded contours, like a topographic map, very faint.
+
+    Something for the eye to find in the corners without competing with the
+    wordmark or making icons hard to pick out. Drawn as a set of ellipses on
+    one alpha layer and blurred slightly so the lines do not alias.
+    """
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    cx, cy = int(W * 0.78), int(H * 0.28)
+    for i in range(14):
+        rx = 120 + i * 105
+        ry = 90 + i * 78
+        alpha = max(0, 30 - i * 2)
+        d.ellipse([cx - rx, cy - ry, cx + rx, cy + ry],
+                  outline=(*pal["accent"], alpha), width=2)
+    cx2, cy2 = int(W * 0.16), int(H * 0.82)
+    for i in range(10):
+        rx = 100 + i * 95
+        ry = 80 + i * 70
+        alpha = max(0, 22 - i * 2)
+        d.ellipse([cx2 - rx, cy2 - ry, cx2 + rx, cy2 + ry],
+                  outline=(*pal["accent2"], alpha), width=2)
+    layer = layer.filter(ImageFilter.GaussianBlur(1.2))
+    return Image.alpha_composite(img, layer)
+
+
 def wallpaper(name: str) -> Image.Image:
     pal = PALETTES[name]
     img = gradient(pal)
     img = overlay_grid(img, pal)
     img = overlay_glows(img, pal)
+    img = overlay_contours(img, pal)
     img = overlay_rings(img, pal)
     img = draw_wordmark(img, pal)
     img = vignette(img)
