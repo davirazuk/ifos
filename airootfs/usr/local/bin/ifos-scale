@@ -87,15 +87,24 @@ if [[ -n $line ]]; then
 fi
 
 # ── What to do about it ──────────────────────────────────────────────────────
-# The thresholds sit where the two levers stop and start. Below 120 dpi is an
-# ordinary screen and nothing is touched at all - which is every machine in the
-# lab, so the common case changes nothing.
-if   (( DPI >= 180 )); then
+#  Density alone is not enough to justify scaling, and deciding on it alone was
+#  a bug that reached real machines. An 11.6-inch 1080p laptop measures about
+#  190 dpi, which crossed the old 180 threshold and set GDK_SCALE=2 - halving
+#  the desktop to 960x540 logical pixels, which is smaller than most dialogs.
+#  Ordinary 13 to 15 inch 1080p laptops measure 142-166 dpi and were getting a
+#  50% font increase they never needed. Those are the commonest student laptops
+#  there are.
+#
+#  So both things have to be true: the pixels must be small AND there must be
+#  enough of them to give some away. Anything 1080p or below is now left
+#  completely alone, exactly as it behaved before any of this existed.
+if   (( WIDTH >= 3000 && HEIGHT >= 1700 && DPI >= 180 )); then
+    # 4K-class. Doubling leaves 1920x1080 or better to work in.
     GDK_SCALE=2; XFT_DPI=192; CURSOR=48; BAR_HEIGHT=58
-elif (( DPI >= 140 )); then
+elif (( WIDTH >= 2560 && HEIGHT >= 1440 && DPI >= 150 )); then
+    # QHD+ class. Text is scaled but widgets are not: doubling here would leave
+    # 1280x720, which is tighter than it looks once the bar is subtracted.
     GDK_SCALE=1; XFT_DPI=144; CURSOR=36; BAR_HEIGHT=46
-elif (( DPI >= 120 )); then
-    GDK_SCALE=1; XFT_DPI=120; CURSOR=30; BAR_HEIGHT=38
 else
     GDK_SCALE=1; XFT_DPI=96;  CURSOR=24; BAR_HEIGHT=32
 fi

@@ -21,7 +21,13 @@ notify() {
         notify-send -a IFOS -t 3000 "Telas" "$1"
 }
 
-if command -v autorandr >/dev/null 2>&1; then
+# Pressed on a machine with one screen, this should re-enable that screen at
+# its preferred mode and stop - not hand the job to autorandr, whose
+# "horizontal" profile is for arranging several and which on one screen only
+# risks changing a resolution that was fine.
+connected_count=$(xrandr --query 2>/dev/null | grep -c ' connected')
+
+if (( connected_count > 1 )) && command -v autorandr >/dev/null 2>&1; then
     # --skip-options gamma: gammastep owns the colour temperature, and letting
     # autorandr restore a saved gamma undoes the night warmth every time a
     # screen changes.
