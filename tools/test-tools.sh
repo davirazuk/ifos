@@ -438,7 +438,103 @@ check "--pair explica o Xbox"           says "Pair"
 run_ctl --nonsense
 check "opção inválida sai 2"            rc_is 2
 
-# ── 17. ifos-software tells the truth about what it installed ────────────────
+# ── 17. ifos-mouse, against a mouse this machine does not have ───────────────
+#  The reason this is tested rather than eyeballed: the first version parsed
+#  `xinput list --short` with a literal space between the name and the id, and
+#  xinput uses a tab. It matched nothing at all on a real machine while looking
+#  entirely reasonable, and there is no way to notice that without running it
+#  against xinput's actual output.
+case_name "ifos-mouse fala com o xinput de verdade"
+MSE="$PROFILE/airootfs/usr/local/bin/ifos-mouse"
+M2="$TMP/mouse"; mkdir -p "$M2/bin" "$M2/home"
+cat > "$M2/devices" <<'EOF'
+I: Bus=0003 Vendor=046d Product=c539 Version=0111
+N: Name="Logitech G502 HERO Gaming Mouse"
+H: Handlers=sysrq kbd mouse0 event3 
+
+I: Bus=0018 Vendor=06cb Product=ce44 Version=0100
+N: Name="SYNA8004:00 06CB:CE44 Touchpad"
+H: Handlers=mouse1 event7 
+EOF
+# xinput's real output: box-drawing characters, and a TAB before id=.
+cat > "$M2/bin/xinput" <<'EOF'
+#!/bin/bash
+case "$1 $2" in
+  "list --short")
+    printf 'â¡ Virtual core pointer          	id=2	[master pointer  (3)]
+'
+    printf 'â   â³ Logitech G502 HERO Gaming Mouse	id=9	[slave  pointer  (2)]
+'
+    printf 'â   â³ SYNA8004:00 06CB:CE44 Touchpad	id=11	[slave  pointer  (2)]
+'
+    exit 0 ;;
+esac
+case "$1" in
+  list-props)
+    printf 'Device "x":
+	libinput Accel Speed (300):	%s
+	libinput Accel Profile Enabled (302):	1, 0
+' \
+        "$(cat "$RECORD.speed" 2>/dev/null || echo 0.000000)"
+    exit 0 ;;
+  set-prop)
+    shift; id=$1; shift; prop=$1; shift
+    printf '%s|%s|%s
+' "$id" "$prop" "$*" >> "$RECORD"
+    [ "$prop" = "libinput Accel Speed" ] && printf '%s' "$*" > "$RECORD.speed"
+    exit 0 ;;
+esac
+exit 1
+EOF
+chmod +x "$M2/bin/xinput"
+rm -f "$M2/record" "$M2/record.speed"
+
+run_mouse() {
+    OUT=$(IFOS_MOUSE_DEVICES="$M2/devices" DISPLAY=:0 PATH="$M2/bin:/usr/bin:/bin" \
+          RECORD="$M2/record" HOME="$M2/home" bash "$MSE" "$@" 2>&1)
+    RC=$?
+}
+
+run_mouse
+check "lista o mouse"                says "G502"
+check "marca o touchpad como tal"    says "touchpad"
+check "explica o botão de DPI"       says "dentro do próprio"
+
+run_mouse --speed 4
+check "aceita a velocidade"          rc_is 0
+OUT=$(cat "$M2/record")
+check "traduz 4 para o 0.40 do libinput" says "libinput Accel Speed|0.40"
+check "não mexe no touchpad"         not_says "^11|"
+
+OUT=$(cat "$M2/home/.config/ifos/mouse")
+check "salva a escolha"              says "SPEED=4"
+
+run_mouse --faster
+OUT=$(cat "$M2/home/.config/ifos/mouse")
+check "--faster anda dois passos"    says "SPEED=6"
+
+rm -f "$M2/record"
+run_mouse --apply
+OUT=$(cat "$M2/record")
+check "--apply devolve o que foi salvo" says "libinput Accel Speed|0.60"
+
+run_mouse --speed abacaxi
+check "recusa uma velocidade que não é número" rc_is 2
+
+run_mouse --flat
+check "--flat sai 0 quando funciona"  rc_is 0
+OUT=$(cat "$M2/record")
+check "--flat desliga a aceleração"   says "Accel Profile Enabled|0 1"
+
+# No xinput at all: every setting has to refuse rather than claim success.
+OUT=$(IFOS_MOUSE_DEVICES="$M2/devices" DISPLAY=:0 PATH="/usr/bin:/bin" \
+      HOME="$M2/home" bash "$MSE" --flat 2>&1); RC=$?
+check "sem xinput, --flat sai 1"      rc_is 1
+
+run_mouse --nonsense
+check "opção inválida sai 2"         rc_is 2
+
+# ── 18. ifos-software tells the truth about what it installed ────────────────
 #  A catalog entry naming a package that is not in the AUR shipped, and the
 #  install ended with a green "Pronto." under yay's own "no package found for
 #  targets". The person went looking for a program that had never been
@@ -472,7 +568,7 @@ run_sw Bom
 check "quando dá certo, diz Pronto" says "Pronto."
 check "e sai zero"                  rc_is 0
 
-# ── 18. The catalog is well formed ───────────────────────────────────────────
+# ── 19. The catalog is well formed ───────────────────────────────────────────
 #  Four fields, and a source ifos-software knows what to do with. A fifth pipe
 #  or a typo in the source silently drops the line, or sends it to pacman when
 #  it belongs to the AUR.

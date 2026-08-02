@@ -295,6 +295,30 @@ because "o controle não funciona" is three different problems that look
 identical from the sofa. `ifos-controller --test` prints buttons and sticks as
 you press them. It is **Controles** under Sistema in the launcher.
 
+**The DPI button on a gaming mouse is not broken; it is not connected to
+anything.** On almost every one of them that button is resolved inside the
+mouse — it changes the sensor's resolution in firmware and sends nothing at all
+to the computer. Linux cannot show a DPI indicator, cannot bind the button and
+cannot tell you it was pressed, and from the desk that is indistinguishable
+from a dead button.
+
+`ifos-mouse --test` settles which it is in five seconds: it prints what each
+button emits, and says so plainly when the DPI button emits nothing. The speed
+controls in the same tool then do the job the button was being pressed for, on
+any mouse: `--speed -10..10`, `--faster`, `--slower`, `--flat` for no
+acceleration at all, `--natural` to invert scrolling. Choices are saved and put
+back at login, because libinput's per-device properties reset on every one —
+a speed chosen once was gone the next morning.
+
+It is **Mouse** under Sistema in the launcher. Mice whose DPI genuinely can be
+set from the computer are the ones libratbag supports, most Logitech, Razer,
+SteelSeries and Roccat hardware; that is **Piper**, one line in `ifos-software`,
+which also starts `ratbagd` for it.
+
+`xorg-xinput` ships now. Nothing on the machine could look at a pointing device
+or change its speed: libinput's per-device settings live in X properties, and
+xinput is the only thing that reads or writes them.
+
 **The catalog's AUR names are checked too, now.** `check-packages.sh` resolved
 the `repo` and `multilib` entries against a synced database and skipped the
 `aur` ones — so a catalog entry naming a package that is not in the AUR at all

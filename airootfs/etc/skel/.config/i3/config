@@ -53,6 +53,10 @@ exec --no-startup-id ~/.config/i3/scripts/disk-watch.sh
 # working - and says so if it is not, since nothing else about that failure is
 # visible until a game refuses to start.
 exec --no-startup-id ~/.config/i3/scripts/gpu-watch.sh
+# Put the mouse speed back where it was left. libinput's per-device properties
+# are not persisted by anything - they reset to the default on every login, so a
+# speed chosen once was gone the next morning.
+exec --no-startup-id ifos-mouse --apply
 # Lay the screens out before the bar starts, so polybar sees the final set of
 # outputs and puts a bar on each.
 #

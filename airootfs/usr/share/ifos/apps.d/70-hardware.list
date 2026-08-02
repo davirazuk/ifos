@@ -4,6 +4,7 @@ NVIDIA (pré-compilado)|Mesma coisa sem compilar, mas serve só ao kernel princi
 NVIDIA híbrida (prime-run)|Manda um jogo para a placa dedicada num notebook com dois vídeos|nvidia-prime|repo
 Vídeo AMD / Intel (Vulkan)|Drivers Vulkan e bibliotecas de 32 bits para jogos|vulkan-radeon vulkan-intel lib32-vulkan-radeon lib32-vulkan-intel mesa lib32-mesa vulkan-icd-loader lib32-vulkan-icd-loader|multilib
 Monitor de placa de vídeo|nvtop: uso da GPU em tempo real, funciona com NVIDIA, AMD e Intel|nvtop|repo
+Configurar mouse de jogo (Piper)|Muda o DPI, as luzes e o mapeamento dos botões de mouses Logitech, Razer, SteelSeries e Roccat, de dentro do Linux|piper libratbag|repo
 Teste de controles (terminal)|jstest e fftest, para conferir botões, eixos e vibração. O IFOS já traz `ifos-controller --test` sem instalar nada|linuxconsole|repo
 Impressão|CUPS com interface de configuração e drivers comuns|cups cups-pdf system-config-printer gutenprint|repo
 Digitalização|SANE com um programa gráfico para escanear|sane simple-scan|repo

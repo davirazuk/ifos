@@ -572,6 +572,11 @@ PACKAGES=(
     # and xss-lock never gets the cue it locks on. A laptop then sits unlocked
     # with the backlight on until the battery runs out.
     xorg-xset
+    # xinput: the only way to read or set libinput's per-device properties,
+    # which is where the mouse speed and acceleration profile live. ifos-mouse
+    # is built on it, and without it there was nothing on the machine that
+    # could look at a mouse at all.
+    xorg-xinput
     # lspci, which ifos-gpu reads to decide whether the machine has a discrete
     # card - which is how the launcher knows to send a game to it. It was in
     # packages.x86_64 for the ISO but not here, so an installed system had the
