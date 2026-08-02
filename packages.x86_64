@@ -91,6 +91,12 @@ dmidecode
 # ifos-gpu, which is how the launcher knows to run games on the dedicated card.
 # It was arriving only as somebody else's dependency, which is not a guarantee.
 pciutils
+# glxinfo. `ifos-gpu --check` asks it one question - what is actually drawing -
+# and that answer is the difference between "the driver is installed" and "the
+# driver is working". A machine rendering on the CPU looks entirely normal
+# until something asks for a game, so without this the doctor can list missing
+# packages but cannot tell whether the graphics are broken.
+mesa-utils
 
 # Rescue / recovery tooling
 clonezilla

@@ -230,6 +230,39 @@ everything on the slow chip.
 `ifos-gpu` shows what the machine has, for the rare case of starting something
 heavy from outside the launcher.
 
+**When the graphics break, something says so and offers to fix it.** A graphics
+driver that goes missing does not announce itself: X falls back to drawing on
+the processor, everything still appears, and the only symptom is that the
+machine is slow and Steam refuses to open with a message about `libGL`.
+Diagnosing that took `lsmod`, `modinfo` and `glxinfo`, which is not a
+reasonable thing to ask of a first-year student.
+
+`ifos-gpu --check` names the problem in Portuguese and `ifos-gpu --fix` repairs
+it; the launcher has it as **Vídeo e jogos** under Sistema, so no terminal is
+involved. It covers NVIDIA, AMD and Intel and every hybrid combination, and it
+knows the specific ways this actually fails:
+
+| What is wrong | What it says |
+| --- | --- |
+| multilib switched off | Steam's 32-bit libraries cannot even be installed — offers to enable it |
+| `lib32-*` missing | the exact packages Steam needs |
+| No NVIDIA module for the running kernel | names the kernel; rebuilds through DKMS |
+| Prebuilt driver on a machine with two kernels | swaps it for the DKMS one, which follows both |
+| nouveau holding the card | blacklists it and regenerates the initramfs |
+| Driver updated, machine not rebooted | says so, instead of looking like a broken install |
+| `nvidia_drm` without modeset | the cause of flicker and black screens after suspend |
+| Rendering on the CPU | the verdict, with the renderer it found |
+
+An old NVIDIA card running nouveau is reported as correct rather than as a
+fault: nouveau is the right driver for a GTX 750, and nobody gets pushed onto
+one that does not support their hardware.
+
+`tools/test-gpu.sh` runs the doctor against thirteen machines that do not
+exist — a hybrid laptop booted on the LTS kernel with a driver built for the
+other one, an AMD desktop with no multilib, a card that predates the open
+modules — because none of those can be reproduced on the machine IFOS is built
+on, and each one is a student in front of a computer that will not open Steam.
+
 Steam, Lutris, Heroic, Wine, Proton-GE, MangoHud, GameMode and Gamescope are all
 one line in `ifos-software`.
 
@@ -246,6 +279,20 @@ application:
 | Power profile | Cycles power-saver / balanced / performance, showing which is active |
 | Now playing | Play and pause; the scroll wheel skips. Absent entirely when nothing is playing |
 | Battery, volume, CPU, memory | Status at a glance |
+
+Every module is drawn as a rounded pill, workspace numbers included. polybar has
+no `radius` for a module or a label — only for the bar itself — so the ends are
+two half-circle glyphs from the Powerline Extra range, painted in the surface
+colour on the bar's own background. The cap font is sized in points like every
+other font, so setting `dpi` scales the pills along with the text and the bar
+follows a high-density screen without a second set of numbers to keep in sync.
+
+`tools/check-icons.py` knows about this: the caps are glyphs in the same range
+as the icons, so "does this string contain a glyph" stopped being able to tell
+an icon from a rounded corner. It now reads the file as modules and asks each
+one the question that applies to it — a `custom/script` module prints its own
+icon and the config only wraps it, everything else has the icon written in the
+config — and separately checks that the caps come in pairs.
 
 `Mod + Esc` opens a graphical task manager — processes plus CPU, memory and
 network graphs — for when `htop` is not what you want.

@@ -123,6 +123,9 @@ fastfetch_logo() {
 NEW_FILES=(
     .config/gtk-4.0/gtk.css
     .config/i3/scripts/screens.sh
+    .config/i3/scripts/gpu-watch.sh
+    .config/Thunar/thunarrc
+    .config/Thunar/uca.xml
 )
 
 missing_new_files() {
@@ -147,6 +150,48 @@ missing_new_files() {
     done
 }
 
+# ── Repair: a new autostart that no existing i3 config knows about ───────────
+#  Copying a script into ~/.config/i3/scripts/ is half the job; something has to
+#  start it. The i3 config in $HOME is the one file nobody should overwrite -
+#  it is where people put their own keybindings - so this adds the single line
+#  and nothing else, anchored next to the autostarts it belongs with.
+#
+#  Keyed on the script path, so running twice adds nothing the second time.
+# Written with a literal tilde because that is what goes into the i3 config;
+# i3 expands it, and the check below expands it against the home being repaired
+# rather than against whoever is running this - which is root, under
+# --all-users.
+# shellcheck disable=SC2088  # the literal tilde is the point; see above
+I3_EXECS=(
+    '~/.config/i3/scripts/gpu-watch.sh'
+)
+
+i3_new_execs() {
+    local home=$1
+    local cfg="$home/.config/i3/config"
+    local script anchor
+    [[ -f $cfg ]] || return 0
+
+    for script in "${I3_EXECS[@]}"; do
+        grep -qF "$script" "$cfg" && continue
+        # Only if the script is actually there to be started; missing_new_files
+        # runs first, so on a repaired account it is.
+        [[ -x ${script/#\~/$home} ]] || continue
+
+        found "$cfg does not start $(basename "$script")"
+        (( CHECK )) && continue
+
+        # After the last autostart line, so it sits with the others rather than
+        # at the end of the file, where a mode block might swallow it.
+        anchor=$(grep -n '^exec --no-startup-id' "$cfg" | tail -1 | cut -d: -f1)
+        [[ -n $anchor ]] || continue
+
+        edit "$cfg" "${anchor}a\\
+exec --no-startup-id $script" &&
+            fixed "i3 now starts $(basename "$script") at login"
+    done
+}
+
 verify_rofi() {
     local rasi="$1/.config/rofi/ifos.rasi"
     [[ -f $rasi ]] || return 0
@@ -163,6 +208,7 @@ repair_home() {
     rofi_highlight "$home"
     fastfetch_logo "$home"
     missing_new_files "$home"
+    i3_new_execs "$home"
     (( CHECK )) || verify_rofi "$home"
 }
 

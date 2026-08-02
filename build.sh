@@ -64,6 +64,24 @@ if command -v python3 >/dev/null; then
         die "Icons are missing above. Fix them, or edit tools/check-icons.py if a file legitimately changed shape."
 fi
 
+# The graphics doctor, against machines broken in ways this one is not.
+info "Checking the graphics doctor…"
+"$PROFILE/tools/test-gpu.sh" || die "ifos-gpu is answering wrongly; see above."
+
+# The launcher's matching rules, which decide what a tile launches and whether
+# it offers to install something already installed. Needs the python that has
+# gi bindings, which is not necessarily the default python3.
+for py in python3.13 python3.12 python3; do
+    command -v "$py" >/dev/null || continue
+    "$py" -c 'import gi' 2>/dev/null || continue
+    info "Checking the launcher's matching rules…"
+    xvfb=""; command -v xvfb-run >/dev/null && xvfb="xvfb-run -a"
+    # shellcheck disable=SC2086
+    $xvfb "$py" "$PROFILE/tools/test-launcher.py" ||
+        die "ifos-launcher is matching wrongly; see above."
+    break
+done
+
 # ── Build environment ────────────────────────────────────────────────────────
 if ! podman image exists "$IMAGE"; then
     info "Building the $IMAGE container image (one time)…"

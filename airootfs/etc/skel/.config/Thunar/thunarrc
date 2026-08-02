@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  IFOS — Thunar
+#
+#  The colours come from ~/.config/gtk-3.0/gtk.css, which styles the places
+#  sidebar, the path bar and the file list directly. This file is the other
+#  half: what the window is actually set to when it opens for the first time.
+#
+#  Thunar's own defaults are the defaults of a file manager for somebody who
+#  already has opinions - no side pane on some builds, no status bar, icons
+#  small enough to be hard to hit, and a location bar that has to be summoned
+#  with Ctrl+L before you can see where you are. Everything below is aimed at
+#  the opposite: a student who has used Windows Explorer and expects to see
+#  where they are and what is on the disk.
+#
+#  Thunar rewrites this file as the window is used - resizing it, switching
+#  views - so these are starting points, not enforcement.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Configuration]
+# Icons rather than a list: thumbnails of photographs and PDFs are what makes a
+# folder of coursework recognisable at a glance.
+DefaultView=ThunarIconView
+LastView=ThunarIconView
+LastIconViewZoomLevel=THUNAR_ZOOM_LEVEL_100_PERCENT
+LastDetailsViewZoomLevel=THUNAR_ZOOM_LEVEL_38_PERCENT
+
+# The places sidebar, which is where the disks and the pendrive appear. Without
+# it a plugged-in USB stick is reachable only through /run/media/<user>/...,
+# which is not a path anybody guesses.
+LastSidePane=ThunarShortcutsPane
+LastSeparatorPosition=180
+
+# Both bars visible. The status bar is the only thing that ever says how much
+# room is left on a disk, and the menu bar is the only discoverable route to
+# half of what Thunar does - hiding it to save 24 pixels costs far more.
+LastStatusbarVisible=TRUE
+LastMenubarVisible=TRUE
+
+# A path you can read and click, with a text field one Ctrl+L away.
+LastLocationBar=ThunarLocationButtons
+
+LastWindowWidth=1000
+LastWindowHeight=640
+LastWindowMaximized=FALSE
+
+# Hidden files stay hidden. Ctrl+H shows them, and a student who does not know
+# that also does not need to see .cache and .mozilla in their home folder.
+LastShowHidden=FALSE
+
+# Thumbnails for local files only. On a network share every icon becomes a
+# download, and the window fills in over half a minute.
+MiscShowThumbnails=THUNAR_THUMBNAIL_MODE_ONLY_LOCAL
+
+# Double-click to open. Single-click is Thunar's default on some builds and it
+# makes selecting a file - which is what you do before copying it - almost
+# impossible for anybody used to Windows.
+MiscSingleClick=FALSE
+
+MiscFoldersFirst=TRUE
+MiscDateStyle=THUNAR_DATE_STYLE_SHORT
+MiscVolumeManagement=TRUE
+
+# Changing the permissions of a folder asks whether to include what is inside,
+# rather than silently doing one or the other.
+MiscRecursivePermissions=THUNAR_RECURSIVE_PERMISSIONS_ASK
+
+# Double-clicking a .sh asks rather than executing. A script arriving in a
+# downloads folder should not run because somebody opened it to look.
+MiscExecShellScriptsByType=TRUE
+
+MiscMiddleClickInTab=TRUE
+MiscConfirmCloseMultipleTabs=TRUE
+MiscTextBesideIcons=FALSE
+MiscFullPathInTitle=FALSE

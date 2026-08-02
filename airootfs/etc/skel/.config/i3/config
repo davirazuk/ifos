@@ -49,6 +49,10 @@ exec --no-startup-id xset s 600 && xset dpms 0 0 720
 exec --no-startup-id xss-lock --transfer-sleep-lock -- ~/.config/i3/scripts/lock.sh
 exec --no-startup-id ~/.config/i3/scripts/battery-watch.sh
 exec --no-startup-id ~/.config/i3/scripts/disk-watch.sh
+# Checks once, shortly after login, whether the graphics driver is actually
+# working - and says so if it is not, since nothing else about that failure is
+# visible until a game refuses to start.
+exec --no-startup-id ~/.config/i3/scripts/gpu-watch.sh
 # Lay the screens out before the bar starts, so polybar sees the final set of
 # outputs and puts a bar on each.
 #

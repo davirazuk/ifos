@@ -8,38 +8,8 @@
 #  fifteen second countdown that can be cancelled with Ctrl+C. Started without
 #  one it would appear to do nothing at all, and then reboot the machine.
 #
-#  It also has to survive the launcher closing, so the terminal is started in
-#  its own session.
+#  Kept as its own command because the launcher tile, the i3 keybinding and the
+#  README all name it; the terminal handling itself now lives in ifos-term.
 # ─────────────────────────────────────────────────────────────────────────────
 set -u
-
-TERMINAL=""
-for candidate in xfce4-terminal alacritty xterm; do
-    command -v "$candidate" >/dev/null 2>&1 && { TERMINAL=$candidate; break; }
-done
-
-if [[ -z $TERMINAL ]]; then
-    command -v notify-send >/dev/null 2>&1 &&
-        notify-send -a IFOS -u critical "Atualizar o IFOS" \
-            "Nenhum terminal disponível. Execute 'ifos-update' na linha de comando."
-    exit 1
-fi
-
-# xfce4-terminal needs -x to pass a command with arguments; the others use -e.
-case $TERMINAL in
-    xfce4-terminal) RUN=(-T "Atualizar o IFOS" -x) ;;
-    alacritty)      RUN=(-t "Atualizar o IFOS" -e) ;;
-    *)              RUN=(-T "Atualizar o IFOS" -e) ;;
-esac
-
-# `bash -lc` rather than calling ifos-update directly: it ends by asking a
-# question, and when the update finishes or fails the window should stay long
-# enough to read why rather than vanishing.
-exec setsid "$TERMINAL" "${RUN[@]}" bash -lc '
-    ifos-update
-    status=$?
-    if (( status != 0 )); then
-        printf "\n  A atualização terminou com erro (código %s).\n" "$status"
-    fi
-    read -rp "  Pressione Enter para fechar… "
-'
+exec ifos-term "Atualizar o IFOS" ifos-update
