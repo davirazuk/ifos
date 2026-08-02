@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -516,19 +517,58 @@ class Catalog:
         self.sections.append(("sistema", "Sistema", items))
 
     # matching ---------------------------------------------------------------
+    @staticmethod
+    def _is_the_program(info) -> bool:
+        """True when this entry *is* its program, not something that runs it.
+
+        Steam writes a .desktop file per installed game, and every one of them
+        has `Exec=steam steam://rungameid/<id>`. Their executable is therefore
+        "steam", exactly like Steam's own entry - so matching a catalog item to
+        a desktop file by executable name matched whichever of them
+        Gio.AppInfo.get_all() happened to return first. On a machine with games
+        installed that is a game: the Steam tile drew Hollow Knight's icon, and
+        clicking it ran `steam steam://rungameid/367520`, which starts Steam and
+        then launches Hollow Knight - which is also why Steam appeared to take
+        forever to open and then not be Steam.
+
+        The distinguishing feature is the argument. `steam %U` takes whatever
+        you give it; `steam steam://rungameid/367520` has a target baked in.
+        Anything left after dropping the binary, the desktop-entry field codes
+        and the options means this entry launches something specific.
+        """
+        line = info.get_commandline() or ""
+        try:
+            tokens = shlex.split(line)
+        except ValueError:
+            tokens = line.split()
+        for token in tokens[1:]:
+            if re.fullmatch(r"%[a-zA-Z]", token) or token.startswith("-"):
+                continue
+            return False
+        return True
+
     def find_appinfo(self, entry: dict):
         if entry.get("kind") == "app":
             return entry["appinfo"]
         wanted = {p.lower() for p in entry.get("packages", [])}
         wanted.add(entry["name"].split()[0].lower())
+
+        # Ordered, most specific first. The desktop id is the only one of these
+        # that is unique, so it is asked before anything that several entries
+        # can answer to.
         for info in self.appinfos:
             ident = (info.get_id() or "").lower().removesuffix(".desktop")
-            executable = os.path.basename(info.get_executable() or "").lower()
-            if ident in wanted or executable in wanted:
+            if ident in wanted:
                 return info
+
         target = entry["name"].lower()
         for info in self.appinfos:
             if (info.get_display_name() or "").lower() == target:
+                return info
+
+        for info in self.appinfos:
+            executable = os.path.basename(info.get_executable() or "").lower()
+            if executable in wanted and self._is_the_program(info):
                 return info
         return None
 
