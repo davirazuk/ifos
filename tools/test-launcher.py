@@ -241,6 +241,45 @@ Icon=com.discordapp.Discord
         "Krita" not in names[:2],
     )
 
+    print("\n  \033[2mCom que um jogo é embrulhado\033[0m")
+    # Two wrappers, both only for games and both invisible: the discrete card
+    # on a hybrid laptop, and gamemode - which puts the processor on the
+    # performance governor for as long as the game is open and gives it back
+    # the moment it closes.
+    launcher = module.Launcher.__new__(module.Launcher)
+    launcher._offload_gpu = False
+    hollow = next(e for e in gaming if e["name"] == "Hollow Knight")
+    firefox = next(e for _k, _t, ents in catalog_obj.sections for e in ents
+                   if e["name"] == "Firefox")
+
+    check(
+        "sem gamemoderun instalado, nada é acrescentado",
+        launcher._game_prefix(hollow, hollow["appinfo"]) == "",
+    )
+
+    # With gamemoderun on PATH.
+    write_stub(bins, "gamemoderun")
+    check(
+        "um jogo ganha o gamemoderun",
+        launcher._game_prefix(hollow, hollow["appinfo"]) == "gamemoderun ",
+        repr(launcher._game_prefix(hollow, hollow["appinfo"])),
+    )
+    check(
+        "e o que não é jogo não ganha nada",
+        launcher._game_prefix(firefox, None) == "",
+        repr(launcher._game_prefix(firefox, None)),
+    )
+
+    # And on a hybrid laptop, both, in the order that works: the offload
+    # wrapper outside, since it is what chooses the card the game then runs on.
+    launcher._offload_gpu = True
+    check(
+        "num notebook híbrido, os dois na ordem certa",
+        launcher._game_prefix(hollow, hollow["appinfo"]) == "ifos-gpu run gamemoderun ",
+        repr(launcher._game_prefix(hollow, hollow["appinfo"])),
+    )
+    os.remove(os.path.join(bins, "gamemoderun"))
+
     print("\n  \033[2mTiles de sistema sem nada por trás\033[0m")
     check("um comando que existe passa", module.command_exists("sh -c true"))
     check(

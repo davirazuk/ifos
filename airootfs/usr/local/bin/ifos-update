@@ -282,6 +282,32 @@ install_missing_packages() {
         || warn "Alguns pacotes novos falharam ao instalar."
 }
 
+# ── cups: the socket, not the service ────────────────────────────────────────
+# Enabling cups.service runs a print daemon at every boot of every machine, for
+# the benefit of the one with a printer attached. cups is socket-activated:
+# with cups.socket the daemon starts the first time something actually prints
+# or opens a printer dialog, and a machine that never sees a printer never
+# starts it at all. New installs get this from install-ifos; an existing one
+# needs the swap made.
+#
+# Nothing is lost. Printing still works, the printer dialog still works, and
+# `systemctl enable cups.service` puts it back for anyone who wants a daemon
+# sitting there.
+configure_cups() {
+    command -v systemctl >/dev/null || return 0
+    systemctl list-unit-files cups.socket &>/dev/null || return 0
+    [[ $(systemctl is-enabled cups.service 2>/dev/null) == enabled ]] || return 0
+
+    if (( CHECK_ONLY )); then
+        info "O cups passaria a iniciar sob demanda, em vez de a cada boot."
+        return 0
+    fi
+    info "Deixando o cups iniciar sob demanda em vez de a cada boot…"
+    $SUDO systemctl enable cups.socket >/dev/null 2>&1
+    $SUDO systemctl disable cups.service >/dev/null 2>&1 &&
+        ok "cups agora inicia quando alguém for imprimir"
+}
+
 # ── Services this system should have running but might not ───────────────────
 # The mirror of install_missing_packages, for the other half of the same gap: a
 # service added to install-ifos after a machine was set up is enabled on new
@@ -438,6 +464,7 @@ ok "Arquivos do IFOS atualizados para $NEW_COMMIT"
 configure_sddm
 configure_grub
 configure_power_profiles
+configure_cups
 enable_missing_services
 
 # ── The user's own configuration ─────────────────────────────────────────────

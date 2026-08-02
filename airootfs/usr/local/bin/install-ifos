@@ -576,6 +576,14 @@ PACKAGES=(
     pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber
     pavucontrol pamixer playerctl brightnessctl power-profiles-daemon
     zram-generator
+    # For as long as a game is open: the processor on the performance governor,
+    # the game's scheduling and I/O priority above everything else, and the
+    # screen not blanking. It ends when the game does, so it costs a machine
+    # nothing while nobody is playing - which is why the launcher can turn it
+    # on for every game without asking. lib32-gamemode, for the 32-bit half,
+    # is one line in ifos-software; without it a 32-bit game simply does not
+    # get the treatment.
+    gamemode
     # Running out of memory on a 4 GiB machine does not produce an error, it
     # produces a machine that stops responding for minutes while the kernel
     # thrashes, and often never recovers - the kernel's own OOM killer waits
@@ -767,7 +775,12 @@ systemctl enable bluetooth.service
 systemctl enable sddm.service
 systemctl enable systemd-timesyncd.service
 systemctl enable fstrim.timer
-systemctl enable cups.service
+# The socket, not the service. cups is socket-activated: with cups.socket the
+# daemon is started the first time something actually prints or opens a printer
+# dialog, and a machine that never sees a printer never starts it at all.
+# Enabling the service instead ran a daemon at every boot of every machine in
+# the lab for the benefit of the one with a printer attached.
+systemctl enable cups.socket
 systemctl enable ufw.service
 systemctl enable paccache.timer
 # Without this the bar's power profile module has nothing to talk to and stays
