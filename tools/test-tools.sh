@@ -599,7 +599,27 @@ run_sw Bom
 check "quando dá certo, diz Pronto" says "Pronto."
 check "e sai zero"                  rc_is 0
 
-# ── 19. The catalog is well formed ───────────────────────────────────────────
+# ── 19. The system files that are not scripts ────────────────────────────────
+#  udev refuses a whole rules file over one bad line and says so only in the
+#  journal, at boot, on a machine nobody is watching. Two of these decide
+#  whether a controller rumbles and whether a spinning disk freezes the desktop.
+case_name "As regras do udev e o earlyoom estão válidos"
+if command -v udevadm >/dev/null 2>&1; then
+    OUT=$(udevadm verify "$PROFILE"/airootfs/etc/udev/rules.d/*.rules 2>&1); RC=$?
+    check "udevadm aceita todas as regras" rc_is 0
+    check "e não reprova nenhuma"          says "Fail:    0"
+else
+    printf '    %s·%s udevadm não está aqui; regras não verificadas\n' "$c_dim" "$c_reset"
+fi
+
+# systemd splits $EARLYOOM_ARGS at whitespace and does *not* remove quotes, so
+# a pattern written as '...' arrives with the quote characters still in it and
+# matches nothing, silently. No argument may contain one.
+OUT=$(grep '^EARLYOOM_ARGS=' "$PROFILE/airootfs/etc/default/earlyoom" || true)
+check "earlyoom tem argumentos"        says "EARLYOOM_ARGS="
+check "e nenhuma aspa neles"           not_says "'"
+
+# ── 20. The catalog is well formed ───────────────────────────────────────────
 #  Four fields, and a source ifos-software knows what to do with. A fifth pipe
 #  or a typo in the source silently drops the line, or sends it to pacman when
 #  it belongs to the AUR.

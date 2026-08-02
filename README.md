@@ -163,6 +163,36 @@ is that adapting may only ever make a machine do *less* work than the default,
 never more: the worst case of guessing wrong is a plainer desktop, not a slower
 one.
 
+Four things that were missing entirely, and that matter most on exactly this
+hardware:
+
+**Video decoded by the graphics chip.** Decoding 1080p H.264 in software is
+most of both cores of a 2013 laptop — the fan runs, the battery goes, and it
+stutters anyway. The same clip through VA-API is close to idle, on a decoder
+that was sitting there unused. Both Intel drivers are installed deliberately:
+iHD covers Broadwell and newer, i965 the generations before it, they do not
+conflict and libva picks by device at run time. Choosing one from the marketing
+name in `lspci` would be a guess, and guessing wrong is silent. AMD decodes
+through mesa, which was already there. `ifos-gpu` reports whether it is
+actually working.
+
+**Not freezing when memory runs out.** The kernel's own OOM killer waits until
+there is no memory left at all, and by then a 4 GiB machine has been thrashing
+and unresponsive for minutes — often without ever coming back. Every "meu
+notebook travou" is this. `earlyoom` acts at 6% free while the machine still
+answers, never at the session itself, preferring the browser and the compiler:
+losing one tab instead of losing everything open.
+
+**A disk scheduler chosen per kind of disk.** The kernel uses mq-deadline for
+everything with a queue, and on a spinning disk that lets a `pacman` upgrade
+starve the desktop for as long as it runs. BFQ is the one written for the
+opposite priority. Applied to rotational disks and eMMC, deliberately not to
+NVMe — where the kernel already chooses `none`, and BFQ's single queue would be
+a ceiling.
+
+**HP printers.** The most common brand in a Brazilian school by a wide margin,
+and `gutenprint` covers neither HP's own drivers nor their scanners.
+
 | the machine has | what changes |
 | --- | --- |
 | no GPU render node | picom uses the software backend, no animations |

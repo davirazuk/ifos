@@ -381,6 +381,19 @@ MESA_SET="mesa lib32-mesa vulkan-icd-loader lib32-vulkan-icd-loader"
 [[ $GPUS == *intel* ]] && MESA_SET+=" vulkan-intel lib32-vulkan-intel"
 [[ $GPUS == *amd*   ]] && MESA_SET+=" vulkan-radeon lib32-vulkan-radeon"
 
+# Playing video on the graphics chip instead of the processor. This is the
+# single largest difference available to an old laptop and it was missing:
+# decoding 1080p H.264 in software is most of both cores of a 2013 machine -
+# the fan runs, the battery goes, and it stutters anyway - while the same clip
+# through VA-API is close to idle, on a decoder that was sitting there unused.
+#
+# Both Intel drivers, deliberately. iHD covers Broadwell and newer, i965 the
+# generations before it; they do not conflict and libva picks by device at run
+# time. Choosing one from the marketing name in lspci would be a guess, and
+# guessing wrong is silent. AMD decodes through mesa, which is already here.
+MESA_SET+=" libva-utils"
+[[ $GPUS == *intel* ]] && MESA_SET+=" intel-media-driver libva-intel-driver"
+
 if [[ $GPUS == *nvidia* ]]; then
     nv_label="Driver NVIDIA + bibliotecas de 32 bits (recomendado)"
     [[ $GPUS == *intel* || $GPUS == *amd* ]] &&
@@ -563,6 +576,15 @@ PACKAGES=(
     pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber
     pavucontrol pamixer playerctl brightnessctl power-profiles-daemon
     zram-generator
+    # Running out of memory on a 4 GiB machine does not produce an error, it
+    # produces a machine that stops responding for minutes while the kernel
+    # thrashes, and often never recovers - the kernel's own OOM killer waits
+    # until there is no memory left at all, by which time the desktop has been
+    # unusable for a long time. earlyoom watches the free-memory figure and
+    # kills the single worst offender while the machine is still answering.
+    # On the hardware this distribution exists for, that is the difference
+    # between losing one browser tab and losing the session.
+    earlyoom
     bluez bluez-utils blueman
 
     # ── desktop ──────────────────────────────────────────────────────────────
@@ -751,6 +773,7 @@ systemctl enable paccache.timer
 # Without this the bar's power profile module has nothing to talk to and stays
 # blank, since powerprofilesctl reaches the daemon over D-Bus.
 systemctl enable power-profiles-daemon.service
+systemctl enable earlyoom.service
 ufw default deny incoming  || true
 ufw default allow outgoing || true
 ufw --force enable         || true

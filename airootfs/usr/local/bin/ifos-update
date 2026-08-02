@@ -282,6 +282,48 @@ install_missing_packages() {
         || warn "Alguns pacotes novos falharam ao instalar."
 }
 
+# ── Services this system should have running but might not ───────────────────
+# The mirror of install_missing_packages, for the other half of the same gap: a
+# service added to install-ifos after a machine was set up is enabled on new
+# installs and on nothing else. earlyoom is the one that prompted this - the
+# package arrives through the function above and then sits there switched off,
+# which is indistinguishable from not having it.
+#
+# Read from install-ifos rather than listed here, so there is one place to add a
+# service and not two. Enabling something already enabled is a no-op, and a unit
+# that does not exist on this machine is skipped rather than reported.
+enable_missing_services() {
+    local installer="$REPO_DIR/airootfs/usr/local/bin/install-ifos"
+    [[ -f $installer ]] || return 0
+    command -v systemctl >/dev/null || return 0
+
+    local -a wanted
+    mapfile -t wanted < <(
+        grep -oE '^systemctl enable [a-zA-Z0-9@._-]+' "$installer" | awk '{print $3}'
+    )
+    (( ${#wanted[@]} )) || return 0
+
+    local -a turned_on=() unit
+    for unit in "${wanted[@]}"; do
+        # A unit file that is not installed is not a problem to report: the
+        # package it belongs to may legitimately not be on this machine.
+        systemctl list-unit-files "$unit" &>/dev/null || continue
+        [[ $(systemctl is-enabled "$unit" 2>/dev/null) == disabled ]] || continue
+        if (( CHECK_ONLY )); then
+            turned_on+=("$unit")
+        elif $SUDO systemctl enable --now "$unit" >/dev/null 2>&1; then
+            turned_on+=("$unit")
+        fi
+    done
+
+    (( ${#turned_on[@]} )) || return 0
+    if (( CHECK_ONLY )); then
+        info "Serviços que seriam ligados: ${turned_on[*]}"
+    else
+        ok "Serviços ligados: ${turned_on[*]}"
+    fi
+}
+
 # ── Repairs for home directories that already exist ──────────────────────────
 # Prefer the copy in the fresh checkout: on a machine whose ifos-update is a
 # release behind, that is the only one carrying the newest repairs.
@@ -396,6 +438,7 @@ ok "Arquivos do IFOS atualizados para $NEW_COMMIT"
 configure_sddm
 configure_grub
 configure_power_profiles
+enable_missing_services
 
 # ── The user's own configuration ─────────────────────────────────────────────
 if (( DO_DOTFILES )) && [[ $EUID -eq 0 ]]; then
