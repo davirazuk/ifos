@@ -193,6 +193,17 @@ a ceiling.
 **HP printers.** The most common brand in a Brazilian school by a wide margin,
 and `gutenprint` covers neither HP's own drivers nor their scanners.
 
+**The compositor getting out of a game's way.** picom defaults
+`unredir-if-possible` to false, so a fullscreen game went on being composited:
+every frame the game drew was copied through the compositor before reaching the
+screen. That is a frame of latency, a second vsync fighting the game's own, and
+GPU time on a machine with none to spare — and none of it is visible. The frame
+rate simply reads low and the mouse feels late. picom now stops redirecting as
+soon as a window covers the screen, and goes back to compositing the moment
+anything else appears. Fullscreen windows also stop getting shadows and rounded
+corners, which were a shader over the whole window every frame for edges that
+are off the screen anyway.
+
 | the machine has | what changes |
 | --- | --- |
 | no GPU render node | picom uses the software backend, no animations |
@@ -344,15 +355,29 @@ acceleration at all, `--natural` to invert scrolling. Choices are saved and put
 back at login, because libinput's per-device properties reset on every one —
 a speed chosen once was gone the next morning.
 
+**A game camera that felt wrong was pointer acceleration.** libinput's default
+profile is adaptive: the faster the mouse moves, the further the pointer goes
+for the same distance travelled. On a desktop that helps. In a game it means
+turning ninety degrees takes a different flick depending on how fast you
+flicked, and no in-game sensitivity setting can undo it, because the distortion
+happens before the game sees the movement. Mice now get the flat profile —
+one-to-one, what every game assumes — while touchpads keep the adaptive one,
+since ten centimetres of travel genuinely needs it. `ifos-mouse --adaptive`
+reverses it and is remembered.
+
 **And when a button does reach the computer, it can become the DPI button.**
 On these mice it is usually a side button that works even when the DPI one is
 deaf. `ifos-mouse --learn` asks for a press, records whatever code arrives, and
 from then on that button steps the pointer through three levels with the
 current one named on screen — which is what the DPI button was being pressed
-for, done where the computer can see it. Not an X keybinding: a mouse button
-above the ninth has no X button number and a keycode the mouse invents may map
-to nothing X can name, while both are perfectly readable straight from the
-event device, which also works the same in the Big Picture session.
+for, done where the computer can see it. Buttons are read from X, not from the input
+device — and that is not a preference. systemd grants a logged-in user access
+to an input device only when it is a joystick, so a mouse's event node is
+root-only and reading it as a student silently found nothing at all. That was
+the first version, and it was the reason the DPI button was never detected.
+Going through X is also the better answer on its own terms: what it sees is
+exactly what an application would see, so a button that does not appear there
+is one no program on the machine can use.
 
 It is **Mouse** under Sistema in the launcher. Mice whose DPI genuinely can be
 set from the computer are the ones libratbag supports, most Logitech, Razer,

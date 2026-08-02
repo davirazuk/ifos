@@ -43,8 +43,10 @@ echo "==> Applying IFOS branding to ${TARGET:-/}"
 # Desktop defaults for every new account
 copy /etc/skel
 
-# Input. Tap-to-click, which libinput leaves off by default.
+# Input. Tap-to-click, which libinput leaves off by default; and pointer
+# acceleration off for mice, which is why a game camera felt wrong.
 copy /etc/X11/xorg.conf.d/30-touchpad.conf
+copy /etc/X11/xorg.conf.d/31-mouse.conf
 
 # Compressed swap in RAM, so machines installed before this reach it too.
 copy /etc/systemd/zram-generator.conf

@@ -32,6 +32,19 @@
 #  levels with the current one named on screen. That is what the DPI button was
 #  for; this is the same thing done where the computer can see it.
 #
+#  Buttons are read from X, not from /dev/input. That is not a preference, it
+#  is the only thing that works: systemd grants a logged-in user access to an
+#  input device only when it is a joystick - see the "joysticks" stanza in
+#  /usr/lib/udev/rules.d/70-uaccess.rules - so a mouse's event node is
+#  root-only, and reading it as a student silently found nothing at all. That
+#  was the first version of this, and it was the reason the DPI button was
+#  never detected.
+#
+#  Going through X is also the better answer on its own terms. X already
+#  delivers every button and key the mouse sends to the session, so what this
+#  sees is exactly what an application would see: if the button does not show
+#  up here, no program on the machine can use it, and that is the answer.
+#
 #  Mice whose DPI really can be set from the computer are the ones libratbag
 #  supports, which is most Logitech, Razer, SteelSeries and Roccat hardware.
 #  That is `piper` in the IFOS Software catalog, under Hardware.
@@ -53,10 +66,6 @@ PIDFILE="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/ifos-mouse.pid"
 # A variable so the test suite can point it at a file describing a mouse this
 # machine does not have.
 DEVICES=${IFOS_MOUSE_DEVICES:-/proc/bus/input/devices}
-# Where the event devices themselves are. Overridable for the same reason: the
-# suite writes real input_event records into ordinary files and points this at
-# them, which is how --learn and --daemon get tested without a mouse.
-INPUT_DIR=${IFOS_MOUSE_INPUT_DIR:-/dev/input}
 
 PROP_SPEED="libinput Accel Speed"
 PROP_PROFILE="libinput Accel Profile Enabled"
@@ -96,36 +105,6 @@ kernel_mice() {       # emits: <event device>\t<name>\t<vendor>:<product>
                     [[ -n $event ]] && printf '%s\t%s\t%s:%s\n' "$event" "$name" "$vendor" "$product"
                 fi
                 name=""; handlers=""; ids="" ;;
-        esac
-    done < "$DEVICES" 2>/dev/null
-}
-
-# Every event device belonging to one physical mouse.
-#
-# A gaming mouse is usually two devices, not one: the pointer, and a second
-# node the kernel treats as a keyboard, which is where the extra buttons send
-# their keycodes. Watching only the first meant that a DPI or side button that
-# *does* reach the computer looked exactly like one that does not - the test
-# was listening to the wrong half. They share a vendor and product id, which is
-# what ties them back together.
-sibling_events() {   # sibling_events <vendor:product>
-    local want=$1 ids="" handlers="" event word
-    while IFS= read -r line; do
-        case $line in
-            'I: '*) ids=$line ;;
-            'H: Handlers='*)
-                handlers=${line#*=}
-                local vendor product
-                vendor=$(sed -n 's/.*Vendor=\([0-9a-f]*\).*/\1/p' <<<"$ids")
-                product=$(sed -n 's/.*Product=\([0-9a-f]*\).*/\1/p' <<<"$ids")
-                if [[ "$vendor:$product" == "$want" ]]; then
-                    event=""
-                    for word in $handlers; do
-                        [[ $word == event* ]] && event=$word
-                    done
-                    [[ -n $event ]] && printf '%s\n' "$event"
-                fi
-                ids=""; handlers="" ;;
         esac
     done < "$DEVICES" 2>/dev/null
 }
@@ -242,14 +221,44 @@ cycle_speed() {
     return 0
 }
 
-# Watch the mouse for the learned button and cycle when it is pressed.
+# Everything the mouse sends, as X sees it.
 #
-# Not an X keybinding. A mouse button above the ninth has no X button number,
-# and a keycode the mouse invents may map to nothing X can name - both are
-# perfectly readable straight from the event device, which is also the only
-# thing that works the same in the Big Picture session. The daemon is one
-# python process reading a file descriptor; it costs nothing while nobody is
-# pressing anything.
+# `xinput test-xi2 --root` asks the server for raw events on the root window:
+# every button and every key, whatever has focus, with no grab and no special
+# privilege. Two lines matter - the event type, then the detail on the line
+# after it - so the type is remembered until its detail arrives.
+#
+# Emits "button N" or "key N". A key detail is an X keycode, which is the
+# kernel code plus eight; it is kept as X sees it, since that is the only form
+# anything else here will ever compare against.
+x_events() {
+    xinput test-xi2 --root 2>/dev/null |
+    awk '
+        /RawButtonPress/ { kind = "button"; next }
+        /RawKeyPress/    { kind = "key";    next }
+        /^ *detail:/     { if (kind != "") { print kind, $2; fflush(); kind = "" } next }
+        /^EVENT/         { kind = "" }
+    '
+}
+
+# What to call an X button number, for somebody reading the output.
+button_name() {
+    case $1 in
+        1) echo "botão esquerdo" ;;
+        2) echo "botão do meio" ;;
+        3) echo "botão direito" ;;
+        4|5) echo "rodinha" ;;
+        6|7) echo "rodinha para o lado" ;;
+        8) echo "botão lateral (voltar)" ;;
+        9) echo "botão lateral (avançar)" ;;
+        *) echo "botão $1" ;;
+    esac
+}
+
+# Watch for the learned button and cycle when it is pressed.
+#
+# Through X for the same reason as everything else above, and it costs nothing:
+# xinput blocks on the X socket until something is pressed.
 stop_daemon() {
     local pid
     [[ -r $PIDFILE ]] || return 0
@@ -264,142 +273,69 @@ stop_daemon() {
 }
 
 watch_button() {
-    local code; code=$(load BUTTON)
-    [[ -n $code ]] || return 1
+    local want; want=$(load BUTTON)
+    # A bare number is what the first version stored: a kernel event code,
+    # from a device it was never able to read. Nothing was ever bound through
+    # it, so it is ignored rather than migrated.
+    [[ $want == button:* || $want == key:* ]] || return 1
+    have_x || return 1
 
     mkdir -p "$(dirname "$PIDFILE")" 2>/dev/null
     printf '%s\n' "$$" > "$PIDFILE" 2>/dev/null
     trap 'rm -f "$PIDFILE"' EXIT
 
-    local ids="" name="" _event
-    while IFS=$'\t' read -r _event name ids; do
-        is_touchpad "$name" && continue
-        break
-    done < <(kernel_mice)
-    [[ -n $ids ]] || return 1
-
-    local -a nodes=()
-    local node
-    while IFS= read -r node; do
-        [[ -n $node && -r $INPUT_DIR/$node ]] && nodes+=("$INPUT_DIR/$node")
-    done < <(sibling_events "$ids")
-    (( ${#nodes[@]} )) || return 1
-
-    # The python half only reports; the cycling stays here, so there is one
-    # implementation of what a press means.
-    python3 -c '
-import os, select, struct, sys
-SIZE = struct.calcsize("llHHi")
-want = int(sys.argv[1])
-fds = {}
-for path in sys.argv[2:]:
-    try:
-        fds[os.open(path, os.O_RDONLY | os.O_NONBLOCK)] = path
-    except OSError:
-        pass
-if not fds:
-    raise SystemExit(1)
-while fds:
-    ready, _, _ = select.select(list(fds), [], [], None)
-    for fd in ready:
-        try:
-            data = os.read(fd, SIZE * 32)
-        except BlockingIOError:
-            continue
-        except OSError:
-            data = b""
-        if not data:
-            # The mouse was unplugged. Without this the descriptor stays
-            # readable forever and returns nothing, and the loop spins a core
-            # until the session ends.
-            os.close(fd)
-            del fds[fd]
-            continue
-        for off in range(0, len(data) - SIZE + 1, SIZE):
-            _s, _u, kind, code, value = struct.unpack("llHHi", data[off:off + SIZE])
-            if kind == 0x01 and value == 1 and code == want:
-                print("press", flush=True)
-' "$code" "${nodes[@]}" 2>/dev/null |
-    while IFS= read -r _line; do
+    local kind=${want%%:*} number=${want#*:}
+    local seen_kind seen_number
+    x_events |
+    while read -r seen_kind seen_number; do
+        [[ $seen_kind == "$kind" && $seen_number == "$number" ]] || continue
         cycle_speed >/dev/null
     done
 }
 
 learn_button() {
-    local ids="" name="" _event
-    while IFS=$'\t' read -r _event name ids; do
-        is_touchpad "$name" && continue
-        break
-    done < <(kernel_mice)
-    if [[ -z $ids ]]; then
-        printf '\n  Nenhum mouse encontrado.\n\n'
-        return 1
-    fi
-
-    local -a nodes=()
-    local node
-    while IFS= read -r node; do
-        [[ -n $node && -r $INPUT_DIR/$node ]] && nodes+=("$INPUT_DIR/$node")
-    done < <(sibling_events "$ids")
-    if (( ! ${#nodes[@]} )); then
-        printf '\n  %s✗%s Sem permissão para ler o mouse.\n\n' "$c_red" "$c_reset"
+    if ! have_x; then
+        printf '\n  %s✗%s Isto precisa da sessão gráfica; abra pelo menu do IFOS.\n\n' \
+               "$c_red" "$c_reset"
         return 1
     fi
 
     printf '\n  %sAperte agora o botão que você quer usar para trocar a sensibilidade.%s\n' \
            "$c_b" "$c_reset"
-    printf '  Pode ser o de DPI, se ele funcionar, ou um dos laterais.\n'
-    printf '  %sOs três botões normais não valem — eles já têm função.%s\n\n' \
+    printf '  Pode ser o de DPI, se ele chegar até aqui, ou um dos laterais.\n'
+    printf '  %sOs três botões normais e a rodinha não valem — já têm função.%s\n\n' \
            "$c_dim" "$c_reset"
 
-    local code
-    code=$(timeout 30 python3 -c '
-import os, select, struct, sys
-SIZE = struct.calcsize("llHHi")
-ORDINARY = {0x110, 0x111, 0x112}   # left, right, middle
-fds = {}
-for path in sys.argv[1:]:
-    try:
-        fds[os.open(path, os.O_RDONLY | os.O_NONBLOCK)] = path
-    except OSError:
-        pass
-if not fds:
-    raise SystemExit(1)
-while fds:
-    ready, _, _ = select.select(list(fds), [], [], 30)
-    if not ready:
-        raise SystemExit(2)
-    for fd in ready:
-        try:
-            data = os.read(fd, SIZE * 32)
-        except BlockingIOError:
-            continue
-        except OSError:
-            data = b""
-        if not data:
-            os.close(fd)
-            del fds[fd]
-            continue
-        for off in range(0, len(data) - SIZE + 1, SIZE):
-            _s, _u, kind, code, value = struct.unpack("llHHi", data[off:off + SIZE])
-            if kind == 0x01 and value == 1 and code not in ORDINARY:
-                print(code)
-                raise SystemExit(0)
-raise SystemExit(2)
-' "${nodes[@]}" 2>/dev/null)
+    # Buttons 1-7 are left, middle, right and the wheel: taking one of those
+    # would cost somebody their left click.
+    #
+    # Process substitution rather than a pipe, so the loop runs in this shell
+    # and what it captures survives it.
+    local kind="" number="" k n
+    while read -r k n; do
+        case "$k:$n" in button:[1-7]) continue ;; esac
+        kind=$k; number=$n
+        break
+    done < <(timeout 30 bash -c "$(declare -f x_events); x_events" 2>/dev/null)
 
-    if [[ -z $code ]]; then
-        printf '  Nenhum botão chegou ao computador em 30 segundos.\n\n'
+    if [[ -z $kind || -z $number ]]; then
+        printf '  Nenhum botão chegou ao X em 30 segundos.\n\n'
         printf '  Se você apertou o botão de DPI, é porque ele é resolvido dentro do\n'
-        printf '  mouse e não manda nada — não há como usá-lo. Tente de novo com um\n'
-        printf '  botão lateral, que quase sempre chega:\n\n'
+        printf '  mouse e não manda nada — nenhum programa desta máquina consegue vê-lo,\n'
+        printf '  e não há como usá-lo. Tente de novo com um botão lateral, que quase\n'
+        printf '  sempre chega:\n\n'
         printf '    %sifos-mouse --learn%s\n\n' "$c_b" "$c_reset"
         return 1
     fi
 
-    save BUTTON "$code"
-    printf '  %s✓%s Pronto. Esse botão agora passa entre %s.\n\n' \
-           "$c_grn" "$c_reset" "${CYCLE_NAMES[*]}"
+    save BUTTON "$kind:$number"
+    if [[ $kind == button ]]; then
+        printf '  %s✓%s %s: agora ele passa entre %s.\n\n' \
+               "$c_grn" "$c_reset" "$(button_name "$number")" "${CYCLE_NAMES[*]}"
+    else
+        printf '  %s✓%s A tecla que esse botão manda (código %s) agora passa entre %s.\n\n' \
+               "$c_grn" "$c_reset" "$number" "${CYCLE_NAMES[*]}"
+    fi
 
     # Working immediately, not after the next login. Telling somebody their new
     # button will start working tomorrow is most of the way to it never being
@@ -501,131 +437,50 @@ EOF
 
 # ── Test ─────────────────────────────────────────────────────────────────────
 test_buttons() {
-    local event="" name="" ids="" chosen_name="" chosen_ids=""
-    while IFS=$'\t' read -r event name ids; do
+    if ! have_x; then
+        printf '\n  %s✗%s Isto precisa da sessão gráfica; abra pelo menu do IFOS.\n\n' \
+               "$c_red" "$c_reset"
+        return 1
+    fi
+
+    local name="" _event _ids
+    while IFS=$'\t' read -r _event name _ids; do
         is_touchpad "$name" && continue
-        chosen_name=$name
-        chosen_ids=$ids
         break
     done < <(kernel_mice)
 
-    if [[ -z ${event:-} || -z $chosen_name ]]; then
-        printf '\n  Nenhum mouse encontrado para testar.\n\n'
-        return 1
-    fi
-
-    # Every node of this mouse, not just the pointer one: the extra buttons
-    # live on the keyboard-looking sibling, and that is exactly where a DPI
-    # button would show up if it shows up at all.
-    local -a nodes=() unreadable=()
-    local node
-    while IFS= read -r node; do
-        [[ -n $node ]] || continue
-        if [[ -r $INPUT_DIR/$node ]]; then
-            nodes+=("$INPUT_DIR/$node")
-        else
-            unreadable+=("$node")
-        fi
-    done < <(sibling_events "$chosen_ids")
-
-    if (( ! ${#nodes[@]} )); then
-        printf '\n  %s✗%s Sem permissão para ler %s.\n\n' \
-               "$c_red" "$c_reset" "${unreadable[*]:-$INPUT_DIR/$event}"
-        return 1
-    fi
-
-    printf '\n  %sTestando: %s%s\n' "$c_b" "$chosen_name" "$c_reset"
-    printf '  %s%d dispositivo(s) deste mouse: %s%s\n' \
-           "$c_dim" "${#nodes[@]}" "${nodes[*]##*/}" "$c_reset"
-    printf '  Aperte todos os botões, inclusive o de DPI.\n'
+    printf '\n  %sTestando: %s%s\n' "$c_b" "${name:-o mouse}" "$c_reset"
+    printf '  Aperte todos os botões, inclusive o de DPI, e gire a rodinha.\n'
+    printf '  %sIsto mostra o que o X recebe — ou seja, exatamente o que um\n' "$c_dim"
+    printf '  programa qualquer receberia.%s\n' "$c_reset"
     printf '  %sCtrl+C para sair.%s\n\n' "$c_dim" "$c_reset"
 
-    python3 - "${nodes[@]}" <<'PY'
-import os
-import select
-import struct
-import sys
+    local kind number extra=0
+    while read -r kind number; do
+        if [[ $kind == button ]]; then
+            printf '  %s  %s(botão %s)%s\n' "$(button_name "$number")" \
+                   "$c_dim" "$number" "$c_reset"
+            (( number > 7 )) && extra=1
+        else
+            printf '  tecla, código %s  %s(o mouse está enviando uma tecla)%s\n' \
+                   "$number" "$c_dim" "$c_reset"
+            extra=1
+        fi
+    done < <(x_events)
 
-# struct input_event: two longs of timestamp, then type, code and value.
-SIZE = struct.calcsize("llHHi")
-EV_KEY = 0x01
-
-BUTTONS = {
-    0x110: "botão esquerdo",
-    0x111: "botão direito",
-    0x112: "botão do meio",
-    0x113: "botão lateral (voltar)",
-    0x114: "botão lateral (avançar)",
-    0x115: "botão extra (forward)",
-    0x116: "botão extra (back)",
-    0x117: "botão extra (task)",
-}
-
-# The keys a gaming mouse most often sends from a side or DPI button, because
-# that is what its Windows software binds by default.
-KEYS = {
-    0x01: "Esc", 0x0e: "Backspace", 0x0f: "Tab", 0x1c: "Enter",
-    0x1d: "Ctrl esquerdo", 0x2a: "Shift esquerdo", 0x38: "Alt esquerdo",
-    0x3b: "F1", 0x3c: "F2", 0x3d: "F3", 0x3e: "F4", 0x3f: "F5", 0x40: "F6",
-    0x41: "F7", 0x42: "F8", 0x43: "F9", 0x44: "F10", 0x57: "F11", 0x58: "F12",
-    0x9d: "Ctrl direito", 0x64: "Alt direito", 0x7d: "tecla Super/Windows",
-    0x8f: "Copiar", 0x83: "Colar", 0x9b: "Recortar",
-    0x9e: "Voltar (navegador)", 0x9f: "Avançar (navegador)",
-}
-
-handles = {}
-for path in sys.argv[1:]:
-    try:
-        handles[os.open(path, os.O_RDONLY | os.O_NONBLOCK)] = path
-    except OSError as error:
-        print("  não deu para abrir %s: %s" % (path, error))
-
-if not handles:
-    raise SystemExit(1)
-
-seen = set()
-try:
-    while True:
-        # Several devices at once: the pointer, and the keyboard-looking node
-        # the same mouse also presents. Reading them one at a time would block
-        # on whichever was quiet and miss the button being pressed.
-        ready, _, _ = select.select(list(handles), [], [], None)
-        for fd in ready:
-            try:
-                data = os.read(fd, SIZE * 32)
-            except (BlockingIOError, OSError):
-                continue
-            for offset in range(0, len(data) - SIZE + 1, SIZE):
-                _sec, _usec, kind, code, value = struct.unpack(
-                    "llHHi", data[offset:offset + SIZE])
-                if kind != EV_KEY or value != 1:   # presses only, not releases
-                    continue
-                if code in BUTTONS:
-                    print("  %s" % BUTTONS[code])
-                elif 0x100 <= code <= 0x151:
-                    print("  botão sem nome (código %d) — dá para usar em atalhos" % code)
-                elif code in KEYS:
-                    print("  o mouse enviou a tecla %s (código %d)" % (KEYS[code], code))
-                else:
-                    # A keyboard keycode is the good case: it means the button
-                    # does reach the computer and can be bound to something.
-                    print("  o mouse enviou uma tecla de teclado (código %d)" % code)
-                seen.add(code)
-                sys.stdout.flush()
-except KeyboardInterrupt:
-    pass
-
-extra = [c for c in seen if c not in (0x110, 0x111, 0x112)]
-print()
-if not extra:
-    print("  Só os três botões normais apareceram.")
-    print("  Se o botão de DPI não imprimiu nada, ele é resolvido dentro do")
-    print("  mouse e não chega ao computador — não há o que consertar aqui.")
-    print("  Use  ifos-mouse --speed N  para mudar a sensibilidade.")
-else:
-    print("  Os botões acima chegam ao computador e podem virar atalhos.")
-    print("  Anote o código e diga qual é; dá para amarrar a qualquer coisa.")
-PY
+    printf '\n'
+    if (( ! extra )); then
+        printf '  Só os botões normais apareceram.\n'
+        printf '  Se o de DPI não imprimiu nada, ele é resolvido dentro do mouse e não\n'
+        printf '  chega ao X — nenhum programa desta máquina consegue vê-lo, e não há o\n'
+        printf '  que consertar. Use  %sifos-mouse --speed N%s  para a sensibilidade,\n' \
+               "$c_b" "$c_reset"
+        printf '  ou  %sifos-mouse --learn%s  para pôr essa função num botão lateral.\n\n' \
+               "$c_b" "$c_reset"
+    else
+        printf '  Os botões acima chegam ao X e podem virar o botão de sensibilidade:\n'
+        printf '    %sifos-mouse --learn%s\n\n' "$c_b" "$c_reset"
+    fi
 }
 
 # ── Entry points ─────────────────────────────────────────────────────────────
