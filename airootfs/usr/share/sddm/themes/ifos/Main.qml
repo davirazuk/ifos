@@ -82,10 +82,60 @@ Rectangle {
             }
 
             Text {
-                text: "Bem-vindo de volta"
-                font.pixelSize: 13
+                text: "IFMS · Campus Dourados"
+                font.pixelSize: 11
                 color: "#7fa392"
                 anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            // The accounts on this machine, as things to click.
+            //
+            // Typing your username is a small barrier and an entirely
+            // unnecessary one: the greeter already knows who exists. A student
+            // sitting down at a lab machine should be able to point at their
+            // name. The text field is still underneath for anything the list
+            // does not cover - a domain account, or a machine with more users
+            // than fit - so nothing is lost.
+            Flow {
+                id: userList
+                width: parent.width
+                spacing: 6
+                visible: userModel.count > 0 && userModel.count <= 6
+
+                Repeater {
+                    model: userModel
+                    delegate: Rectangle {
+                        property bool current: userField.text === model.name
+                        radius: 8
+                        height: 34
+                        width: Math.max(72, nameText.implicitWidth + 26)
+                        color: current ? "#00a86b"
+                             : (userMouse.containsMouse ? "#24503f" : "#1b3a2e")
+                        border.color: current ? "#00a86b" : "#24503f"
+                        border.width: 1
+
+                        Text {
+                            id: nameText
+                            anchors.centerIn: parent
+                            text: model.realName !== "" ? model.realName : model.name
+                            color: parent.current ? "#10241d" : "#e8f5e9"
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+
+                        MouseArea {
+                            id: userMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                userField.text = model.name
+                                passField.text = ""
+                                passField.forceActiveFocus()
+                            }
+                        }
+                    }
+                }
             }
 
             TextField {
