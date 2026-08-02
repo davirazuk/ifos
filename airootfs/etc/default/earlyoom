@@ -1,0 +1,36 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  IFOS — earlyoom
+#
+#  Running out of memory on a 4 GiB machine does not produce an error message.
+#  It produces a computer that stops answering for minutes while the kernel
+#  thrashes the page cache, and frequently never comes back: the kernel's own
+#  OOM killer only acts once there is no memory left at all, and by then the
+#  desktop has been unusable for a long time. Every student who has said "meu
+#  notebook travou" was describing this.
+#
+#  earlyoom watches the free-memory figure and kills the single worst offender
+#  while the machine is still responding. The result is losing one browser tab
+#  instead of losing the session.
+#
+#  Read by earlyoom.service as an EnvironmentFile. Note what that means for
+#  quoting: systemd splits $EARLYOOM_ARGS at whitespace and does *not* remove
+#  quotes, so a pattern written as '...' would reach earlyoom with the quote
+#  characters still in it and match nothing at all, silently. Every pattern
+#  below therefore contains no whitespace - the process names that do have a
+#  space in them use `.` where the space goes.
+# ─────────────────────────────────────────────────────────────────────────────
+
+#  -m 6 -s 6   act at 6% free memory *and* 6% free swap, not at zero. Both have
+#              to be low: zram makes swap real memory here, so a machine with
+#              swap left is not actually out of anything yet.
+#  -r 0        do not print a memory report every second. It writes to the
+#              journal forever, on a laptop whose journal is already capped.
+#  --avoid     never the session itself. Killing Xorg, sddm or i3 to free memory
+#              logs the person out, which is the outcome this exists to prevent
+#              - and it takes everything they had open with it.
+#  --prefer    the things that are actually eating it and that are built to lose
+#              a process: a browser reopens the tab, a compiler can be run
+#              again. Named as they really appear in /proc/*/comm, which is
+#              truncated to fifteen characters: "Isolated.Web.Co", not
+#              "Isolated Web Content".
+EARLYOOM_ARGS=-m 6 -s 6 -r 0 --avoid ^(systemd|Xorg|sddm|sddm-greeter|i3|polybar|dunst|pipewire|wireplumber|NetworkManager|sshd)$ --prefer ^(firefox|Web.Content|Isolated.Web.Co|chrome|chromium|steam|steamwebhelper|java|cc1plus|ld|rustc|node|code)$

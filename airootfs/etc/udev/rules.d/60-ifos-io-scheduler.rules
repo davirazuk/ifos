@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  IFOS — I/O scheduler per kind of disk
+#
+#  The kernel picks mq-deadline for everything with a queue and none for NVMe.
+#  mq-deadline is a throughput scheduler: it is fair to whoever is asking, and
+#  on a spinning disk that means a pacman upgrade or a large copy can starve
+#  the desktop for as long as it runs. Windows stop redrawing, the menu takes
+#  seconds to open, and the machine reads as broken rather than busy.
+#
+#  BFQ is the one written for the opposite priority: it keeps the interactive
+#  process responsive while something else saturates the disk. On the hardware
+#  this distribution exists for - laptops with 5400 rpm drives, and the cheap
+#  eMMC in the small ones - that is the difference between using the machine
+#  during an update and waiting for it.
+#
+#  Not applied to NVMe. There the queue depth is deep enough that scheduling in
+#  software costs more than it saves, which is exactly why the kernel already
+#  chooses none for them, and BFQ's single-queue design would be a ceiling.
+#
+#  SATA SSDs get mq-deadline rather than BFQ: they have no seek penalty for
+#  BFQ's fairness to recover, so its extra work buys nothing.
+#
+#  No modules-load.d entry is needed and one should not be added: writing "bfq"
+#  to queue/scheduler makes the block layer request_module("bfq-iosched"), and
+#  the module carries that alias. Loading it eagerly instead would log a failure
+#  on every boot of a kernel that has it built in.
+# ─────────────────────────────────────────────────────────────────────────────
+
+ACTION!="add|change", GOTO="ifos_scheduler_end"
+KERNEL!="sd[a-z]*|mmcblk[0-9]*", GOTO="ifos_scheduler_end"
+# Partitions inherit the parent device's queue; setting it on them is a no-op
+# that only produces errors in the journal.
+ENV{DEVTYPE}=="partition", GOTO="ifos_scheduler_end"
+
+# Spinning disks and eMMC.
+ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
+KERNEL=="mmcblk[0-9]*",      ATTR{queue/scheduler}="bfq"
+
+# SATA and USB solid state.
+KERNEL=="sd[a-z]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"
+
+LABEL="ifos_scheduler_end"

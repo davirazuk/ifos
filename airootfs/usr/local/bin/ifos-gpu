@@ -148,6 +148,7 @@ PROBLEMS=()   # human sentences
 GOOD=()       # things checked and found fine, so a clean report says something
 MISSING=()    # package names, without which something is broken
 SUGGEST=()    # package names worth having, whose absence is not a fault
+NOTES=()      # true, worth saying, and not a fault either
 ACTIONS=()    # tokens: multilib dkms initramfs reboot modeset nouveau-blacklist
 
 # Without pacman there is no way to tell what is installed, and reporting every
@@ -162,11 +163,17 @@ problem() { PROBLEMS+=("$1"); }
 # but says nothing at all about whether the graphics work.
 suggest() { have_pacman || return 0
             local p; for p in "$@"; do pkg "$p" || SUGGEST+=("$p"); done; }
+# Something worth knowing that is not a fault. The login notification says "a
+# placa de vídeo não está funcionando direito", and it must go on meaning that:
+# a machine whose 3D is perfect and whose video decoder is missing is slower
+# than it could be, not broken, and waking somebody up over it devalues the
+# warning that matters.
+note()    { NOTES+=("$1"); }
 good()    { GOOD+=("$1"); }
 action()  { local a; for a in "${ACTIONS[@]:-}"; do [[ $a == "$1" ]] && return; done; ACTIONS+=("$1"); }
 
 diagnose() {
-    PROBLEMS=(); GOOD=(); MISSING=(); SUGGEST=(); ACTIONS=()
+    PROBLEMS=(); GOOD=(); MISSING=(); SUGGEST=(); NOTES=(); ACTIONS=()
 
     if ! command -v lspci >/dev/null 2>&1; then
         problem "O pciutils não está instalado, então nem dá para saber que placa é esta."
@@ -199,6 +206,7 @@ diagnose() {
 
     has_vendor intel  && diagnose_intel
     has_vendor amd    && diagnose_amd
+    diagnose_video_decode
     has_vendor nvidia && diagnose_nvidia
 
     # The verdict that matters, asked last so the specific causes above are
@@ -211,6 +219,44 @@ diagnose() {
 
     if [[ ! -e $SYSROOT/dev/dri/renderD128 ]]; then
         problem "Não existe /dev/dri/renderD128: o kernel não abriu nenhuma placa de vídeo para uso dos programas."
+    fi
+}
+
+# Playing video on the graphics chip instead of the processor.
+#
+# This is the single largest difference available to an old laptop, and it was
+# missing entirely. Decoding 1080p H.264 in software is most of both cores of a
+# 2013 machine - the fan runs, the battery goes, and the video stutters anyway.
+# The same clip through VA-API is close to idle, because every one of these
+# chips has a dedicated decoder sitting there unused.
+#
+# Suggested rather than required. Nothing is *broken* without it: the video
+# plays, badly. Making it a fault would put a critical notification at every
+# login of every machine installed before this existed, which is not what that
+# notification is for.
+diagnose_video_decode() {
+    # vainfo is how anybody, including this, can tell whether it works at all.
+    command -v vainfo >/dev/null 2>&1 || suggest libva-utils
+
+    if has_vendor intel; then
+        # Both drivers, deliberately. iHD covers Broadwell and newer, i965 the
+        # generations before it, and they do not conflict - libva picks by
+        # device at run time. Choosing one from the marketing name in lspci
+        # would be a guess, and guessing wrong here is silent: video simply
+        # goes on being decoded by the processor.
+        suggest intel-media-driver libva-intel-driver
+    fi
+
+    # AMD and the open NVIDIA path decode through mesa, which is already
+    # required above, so there is nothing extra to install for them.
+
+    # And the verdict, when there is something that can answer it.
+    if command -v vainfo >/dev/null 2>&1 && [[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]]; then
+        if timeout 10 vainfo 2>/dev/null | grep -q 'VAProfile'; then
+            good "Vídeo decodificado pela placa, não pelo processador"
+        else
+            note "Nenhum decodificador de vídeo por hardware ativo: vídeo em alta resolução vai gastar o processador inteiro e esquentar a máquina. Instalar o que falta acima resolve."
+        fi
     fi
 }
 
@@ -381,6 +427,12 @@ print_findings() {
     fi
     if (( ${#SUGGEST[@]} )); then
         printf '\n    %s·%s Ajudaria ter: %s\n' "$c_dim" "$c_reset" "${SUGGEST[*]}"
+    fi
+    if (( ${#NOTES[@]} )); then
+        printf '\n'
+        for item in "${NOTES[@]}"; do
+            printf '    %s·%s %s\n' "$c_dim" "$c_reset" "$(fold_text "$item")"
+        done
     fi
     printf '\n'
 }

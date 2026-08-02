@@ -64,6 +64,12 @@ copy /etc/sysctl.d/99-ifos.conf
 # rumble, because /dev/hidraw is root-only and nothing tags it for the user.
 copy /etc/udev/rules.d/70-ifos-game-controllers.rules
 
+# The disk scheduler, so a big copy or a pacman upgrade stops freezing the
+# desktop on a spinning disk, and earlyoom's settings, so running out of memory
+# costs one browser tab instead of the whole session.
+copy /etc/udev/rules.d/60-ifos-io-scheduler.rules
+copy /etc/default/earlyoom
+
 copy /etc/systemd/journald.conf.d/ifos-limits.conf
 copy /etc/systemd/system/paccache.service.d/ifos-keep-one.conf
 
