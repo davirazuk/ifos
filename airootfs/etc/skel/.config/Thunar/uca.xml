@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  IFOS — ações do menu de contexto do Thunar
+
+  Four things a student wants to do with a file and currently cannot without
+  knowing something else first: open a terminal already in this folder, put
+  this photograph on the desktop, take the path of this file somewhere else,
+  and send this to a phone over Bluetooth.
+
+  Archives are deliberately absent: thunar-archive-plugin is installed and
+  already contributes "Extrair aqui" and "Criar arquivo compactado", and a
+  second copy of both would be worse than none.
+
+  Thunar rewrites this file when actions are edited in its own dialog, so the
+  comments here do not survive a change made through the interface.
+-->
+<actions>
+
+<action>
+	<icon>utilities-terminal</icon>
+	<name>Abrir terminal aqui</name>
+	<submenu></submenu>
+	<unique-id>ifos-terminal</unique-id>
+	<command>xfce4-terminal --working-directory %f</command>
+	<description>Abre a linha de comando já nesta pasta</description>
+	<range></range>
+	<patterns>*</patterns>
+	<startup-notify/>
+	<directories/>
+</action>
+
+<action>
+	<icon>preferences-desktop-wallpaper</icon>
+	<name>Definir como papel de parede</name>
+	<submenu></submenu>
+	<unique-id>ifos-wallpaper</unique-id>
+	<command>feh --no-fehbg --bg-fill %f</command>
+	<description>Usa esta imagem como fundo da área de trabalho</description>
+	<range></range>
+	<patterns>*</patterns>
+	<image-files/>
+</action>
+
+<action>
+	<icon>edit-copy</icon>
+	<name>Copiar caminho</name>
+	<submenu></submenu>
+	<unique-id>ifos-copy-path</unique-id>
+	<!-- bash, and `echo -n` rather than printf: Thunar rewrites %-sequences in
+	     this string before running it, so a printf format would be eaten on the
+	     way through, and dash's echo does not understand -n. The trailing
+	     newline matters - pasted into a terminal it would run the line. -->
+	<command>bash -c &apos;echo -n &quot;$1&quot; | xclip -selection clipboard&apos; _ %f</command>
+	<description>Copia o endereço completo do arquivo para colar em outro lugar</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+
+<action>
+	<icon>bluetooth</icon>
+	<name>Enviar por Bluetooth</name>
+	<submenu></submenu>
+	<unique-id>ifos-bluetooth-send</unique-id>
+	<command>blueman-sendto %F</command>
+	<description>Envia para um celular ou outro aparelho pareado</description>
+	<range>*</range>
+	<patterns>*</patterns>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+
+</actions>

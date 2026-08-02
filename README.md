@@ -280,6 +280,20 @@ application:
 | Now playing | Play and pause; the scroll wheel skips. Absent entirely when nothing is playing |
 | Battery, volume, CPU, memory | Status at a glance |
 
+Every module is drawn as a rounded pill, workspace numbers included. polybar has
+no `radius` for a module or a label — only for the bar itself — so the ends are
+two half-circle glyphs from the Powerline Extra range, painted in the surface
+colour on the bar's own background. The cap font is sized in points like every
+other font, so setting `dpi` scales the pills along with the text and the bar
+follows a high-density screen without a second set of numbers to keep in sync.
+
+`tools/check-icons.py` knows about this: the caps are glyphs in the same range
+as the icons, so "does this string contain a glyph" stopped being able to tell
+an icon from a rounded corner. It now reads the file as modules and asks each
+one the question that applies to it — a `custom/script` module prints its own
+icon and the config only wraps it, everything else has the icon written in the
+config — and separately checks that the caps come in pairs.
+
 `Mod + Esc` opens a graphical task manager — processes plus CPU, memory and
 network graphs — for when `htop` is not what you want.
 
