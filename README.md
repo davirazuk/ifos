@@ -155,8 +155,27 @@ or a cable swapped mid-class.
 
 ## Old machines
 
-IFOS is built for the machines a school actually has, so two things are set up
-for them by default.
+IFOS is built for the machines a school actually has, and what the machine gets
+is measured rather than assumed. `ifos-scale --machine` prints
+every decision in one place — memory, cores, whether there is a working GPU,
+the screen's density, and what the desktop did with each. The rule throughout
+is that adapting may only ever make a machine do *less* work than the default,
+never more: the worst case of guessing wrong is a plainer desktop, not a slower
+one.
+
+| the machine has | what changes |
+| --- | --- |
+| no GPU render node | picom uses the software backend, no animations |
+| under 3.5 GiB RAM, or fewer than 4 cores | still composited — rounded corners, shadows, fading — but windows do not animate. `IFOS_PICOM_ANIMATIONS=1` overrides |
+| a small disk | the swap file default is capped at a tenth of the root partition; below 1 GiB there is none, since zram covers it |
+| a high-density screen | fonts, widgets, cursor and bar scale — see *Whatever screen the machine has* |
+
+Two things used to grow to fill whatever disk they were given, on every
+machine. systemd sizes the journal at 10% of the filesystem — about 3 GiB on a
+32 GiB eMMC laptop — and `paccache` keeps three versions of every package it
+has ever downloaded, which on a rolling release is the largest thing on the
+disk after a few months. The journal is capped at 200 MiB and the cache keeps
+one version, with uninstalled packages dropped entirely.
 
 **Compressed swap.** `zram-generator` puts swap in RAM, compressed, sized to
 half the memory and never more than 4 GiB. Swapping to a mechanical disk is the

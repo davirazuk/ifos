@@ -56,6 +56,13 @@ copy /etc/systemd/zram-generator.conf
 # nothing to explain why.
 copy /etc/sysctl.d/99-ifos.conf
 
+# Bounds on the two things that otherwise grow to fill the disk: the journal,
+# which systemd sizes at 10% of the filesystem, and the pacman cache, which
+# keeps three versions of every package. Both hurt most on the small eMMC
+# laptops, and neither was ever set on an installed system.
+copy /etc/systemd/journald.conf.d/ifos-limits.conf
+copy /etc/systemd/system/paccache.service.d/ifos-keep-one.conf
+
 # Look and feel
 copy /usr/share/backgrounds/ifos.png
 copy /usr/share/backgrounds/ifos-ifms.png

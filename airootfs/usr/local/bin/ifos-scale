@@ -7,6 +7,8 @@
 #      ifos-scale --env      shell assignments to eval in .xprofile
 #      ifos-scale --xrdb     X resource lines to pipe into xrdb -merge
 #      ifos-scale --bar      the polybar height and dpi for this screen
+#      ifos-scale --machine  everything this machine was measured at, and what
+#                            the desktop decided to do about it
 #
 #  Nothing here scaled with the screen. A laptop with a 3200x1800 or 4K panel -
 #  which is an ordinary second-hand machine now, not an exotic one - got a
@@ -134,6 +136,32 @@ case ${1:-report} in
         ;;
     --dpi)
         printf '%s\n' "$DPI"
+        ;;
+    --machine)
+        # One place to see every decision the desktop makes from the hardware,
+        # so "why does mine look different from his" has an answer that does not
+        # involve reading four scripts.
+        ram_kb=$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null)
+        cores=$(nproc 2>/dev/null)
+        printf 'Memória     %s MiB\n' "$(( ${ram_kb:-0} / 1024 ))"
+        printf 'Núcleos     %s\n' "${cores:-?}"
+        printf 'Vídeo       %s\n' \
+            "$( [ -e /dev/dri/renderD128 ] && echo 'aceleração por hardware' \
+                                           || echo 'software (sem driver de GPU)' )"
+        printf 'Tela        %sx%s, %s dpi (%s)\n' "$WIDTH" "$HEIGHT" "$DPI" "$SOURCE"
+        printf '\n'
+        printf 'Escala      fontes %s dpi, widgets %sx, cursor %s px\n' \
+            "$XFT_DPI" "$GDK_SCALE" "$CURSOR"
+        printf 'Barra       %s px de altura, %s dpi\n' "$BAR_HEIGHT" "$XFT_DPI"
+        if [ ! -e /dev/dri/renderD128 ]; then
+            printf 'Composição  xrender (software)\n'
+        elif [ "${ram_kb:-99999999}" -lt 3670016 ] || [ "${cores:-99}" -lt 4 ]; then
+            printf 'Composição  sem animações (máquina modesta)\n'
+        else
+            printf 'Composição  com animações\n'
+        fi
+        printf '\nzram        %s\n' \
+            "$(swapon --show=NAME,SIZE --noheadings 2>/dev/null | grep zram || echo 'não ativo')"
         ;;
     *)
         printf 'Tela      %sx%s\n' "$WIDTH" "$HEIGHT"
