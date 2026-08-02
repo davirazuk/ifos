@@ -138,8 +138,9 @@ post_install_hint() {
         flatpak)    $SUDO flatpak remote-add --if-not-exists flathub \
                         https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null ;;
         syncthing)  systemctl --user enable --now syncthing.service 2>/dev/null ;;
-        nvidia|nvidia-open)
-                    warn "Reinicie depois de instalar drivers de vídeo." ;;
+        nvidia|nvidia-open|nvidia-open-dkms|nvidia-dkms)
+                    warn "Reinicie depois de instalar drivers de vídeo."
+                    warn "Se algo continuar estranho: ifos-gpu --check" ;;
     esac
 }
 

@@ -97,18 +97,21 @@ Type=Application
 Name=Steam
 Exec=steam %U
 Icon=steam
+Categories=Network;FileTransfer;Game;
 """)
     write_desktop(apps, "0000-hollow-knight.desktop", """[Desktop Entry]
 Type=Application
 Name=Hollow Knight
 Exec=steam steam://rungameid/367520
 Icon=steam_icon_367520
+Categories=Game;
 """)
     write_desktop(apps, "0001-celeste.desktop", """[Desktop Entry]
 Type=Application
 Name=Celeste
 Exec=steam steam://rungameid/504230
 Icon=steam_icon_504230
+Categories=Game;ActionGame;
 """)
     # Discord installed as a Flatpak: no `discord` binary anywhere, a desktop
     # entry that runs flatpak, and pacman has never heard of it. The Exec is an
@@ -121,6 +124,11 @@ Name=Discord
 Exec={os.path.join(bins, "flatpak")} run --branch=stable com.discordapp.Discord
 Icon=com.discordapp.Discord
 """)
+
+    # A second section, so the key-versus-title matching has something to get
+    # wrong: this one is "browsers" on disk and "Internet" on screen.
+    with open(os.path.join(catalog, "10-browsers.list"), "w", encoding="utf-8") as handle:
+        handle.write("Firefox|Navegador da Mozilla|firefox|repo\n")
 
     with open(os.path.join(catalog, "20-gaming.list"), "w", encoding="utf-8") as handle:
         handle.write(
@@ -203,6 +211,36 @@ Icon=com.discordapp.Discord
         bool(kit and not kit["installed"]),
     )
 
+    print("\n  \033[2mOs jogos que a máquina tem\033[0m")
+    gaming = next(
+        (entries for key, _t, entries in catalog_obj.sections if key == "gaming"), []
+    )
+    names = [e["name"] for e in gaming]
+    check(
+        "os jogos instalados vêm antes da loja",
+        names[:2] == ["Celeste", "Hollow Knight"],
+        str(names[:4]),
+    )
+    check(
+        "o Steam não aparece duas vezes",
+        names.count("Steam") == 1,
+        str(names),
+    )
+    check(
+        "o tile do jogo abre o jogo, não a loja",
+        all(e.get("kind") == "app" for e in gaming[:2]),
+    )
+    hollow = next(e for e in gaming if e["name"] == "Hollow Knight")
+    check(
+        "e abre com o id do jogo",
+        "rungameid/367520" in (module.Launcher._command_for(hollow, hollow["appinfo"]) or ""),
+        str(module.Launcher._command_for(hollow, hollow["appinfo"])),
+    )
+    check(
+        "o Krita, que não é jogo, fica fora",
+        "Krita" not in names[:2],
+    )
+
     print("\n  \033[2mTiles de sistema sem nada por trás\033[0m")
     check("um comando que existe passa", module.command_exists("sh -c true"))
     check(
@@ -236,6 +274,24 @@ Icon=com.discordapp.Discord
             break
     else:
         check("todo tile de sistema tem um comando que existe", True)
+
+    print("\n  \033[2mEm que seção o launcher abre\033[0m")
+    # The section keys come from the catalog filenames and the names on screen
+    # come from a table; "jogos" is the second, "gaming" the first, and every
+    # caller types the one they can see.
+    keys = [k for k, _t, _e in catalog_obj.sections]
+    titles = [t for _k, t, _e in catalog_obj.sections]
+    for asked, expected in (("jogos", "gaming"),
+                            ("gaming", "gaming"),
+                            ("Internet", "browsers"),
+                            ("Sistema", "sistema")):
+        index = module.Launcher.section_for(asked, keys, titles)
+        landed = keys[index] if index is not None else None
+        check(f"--category {asked} abre em {expected}", landed == expected, str(landed))
+    check(
+        "uma seção que não existe não muda nada",
+        module.Launcher.section_for("nao-existe", keys, titles) is None,
+    )
 
     print("\n  \033[2mProcura\033[0m")
     check("acento não atrapalha", module.fold("Vídeo") == module.fold("video"))
