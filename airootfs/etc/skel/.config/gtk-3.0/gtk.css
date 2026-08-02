@@ -1,71 +1,259 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   IFOS — GTK accent override
+   IFOS — GTK 3
 
-   adw-gtk3-dark gives a good dark base but keeps Adwaita's blue accent, so
-   Thunar, GParted, pavucontrol and every other GTK application looked like a
-   different distribution to the rest of the desktop. This repaints only the
-   accent, leaving the theme's shading alone.
+   This used to be an accent override on top of adw-gtk3-dark: it repainted
+   Adwaita's blue and left everything else to that theme. Which would be fine,
+   except adw-gtk3 was in neither package list. GTK falls back silently when a
+   named theme is missing, so what actually shipped was stock Adwaita wearing a
+   green selection bar - and on a desktop that is dark green throughout,
+   opening Thunar or GParted produced a window from a different distribution.
 
-   ifos-theme rewrites the colours here when you switch schemes.
+   So this stands on its own now. It assumes nothing about the theme underneath
+   and states every colour it needs, which means the file manager looks the
+   same on a machine that has adw-gtk3 and one that does not.
+
+   The palette is the desktop's, hex for hex, because ifos-theme switches
+   schemes by substituting those exact strings:
+
+     #10241d base      #1b3a2e surface   #24503f hover     #04150f deep
+     #e8f5e9 text      #b9d4c6 subtext   #7fa392 dim
+     #00a86b accent    #7ed957 accent-2  #00c47d bright
    ───────────────────────────────────────────────────────────────────────── */
 
-@define-color accent_color #00a86b;
-@define-color accent_bg_color #00a86b;
-@define-color accent_fg_color #04150f;
-@define-color theme_selected_bg_color #00a86b;
-@define-color theme_selected_fg_color #04150f;
+@define-color ifos_base    #10241d;
+@define-color ifos_surface #1b3a2e;
+@define-color ifos_hover   #24503f;
+@define-color ifos_deep    #04150f;
+@define-color ifos_text    #e8f5e9;
+@define-color ifos_subtext #b9d4c6;
+@define-color ifos_dim     #7fa392;
+@define-color ifos_accent  #00a86b;
+@define-color ifos_accent2 #7ed957;
+@define-color ifos_bright  #00c47d;
 
-/* Selections, checkboxes, switches, progress */
-selection,
-:selected,
-*:selected:focus {
-    background-color: #00a86b;
-    color: #04150f;
+/* The names GTK and most themes look for, so an application that asks the
+   theme for a colour rather than being styled by selector still lands on the
+   IFOS palette. */
+@define-color theme_bg_color @ifos_base;
+@define-color theme_fg_color @ifos_text;
+@define-color theme_base_color @ifos_base;
+@define-color theme_text_color @ifos_text;
+@define-color theme_selected_bg_color @ifos_accent;
+@define-color theme_selected_fg_color @ifos_deep;
+@define-color insensitive_bg_color @ifos_base;
+@define-color insensitive_fg_color @ifos_dim;
+@define-color borders #24503f;
+@define-color accent_color @ifos_accent;
+@define-color accent_bg_color @ifos_accent;
+@define-color accent_fg_color @ifos_deep;
+@define-color window_bg_color @ifos_base;
+@define-color window_fg_color @ifos_text;
+@define-color view_bg_color @ifos_base;
+@define-color view_fg_color @ifos_text;
+@define-color headerbar_bg_color @ifos_surface;
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
+window, dialog, messagedialog, .background {
+    background-color: @ifos_base;
+    color: @ifos_text;
 }
 
-check:checked,
-radio:checked,
-checkbutton check:checked,
-radiobutton radio:checked {
-    background-color: #00a86b;
-    border-color: #00a86b;
-    color: #04150f;
+headerbar, .titlebar, toolbar, .toolbar, actionbar {
+    background-color: @ifos_surface;
+    color: @ifos_text;
+    border-color: @ifos_hover;
+}
+headerbar { box-shadow: inset 0 -1px @ifos_hover; }
+
+.statusbar, statusbar {
+    background-color: @ifos_deep;
+    color: @ifos_dim;
+    font-size: 90%;
 }
 
-switch:checked {
-    background-color: #00a86b;
+/* ── Controls ───────────────────────────────────────────────────────────── */
+button {
+    background-image: none;
+    background-color: @ifos_surface;
+    color: @ifos_text;
+    border: 1px solid @ifos_hover;
+    border-radius: 7px;
+    padding: 4px 10px;
+    transition: background-color 120ms ease-out;
 }
+button:hover  { background-color: @ifos_hover; border-color: @ifos_accent; }
+button:active,
+button:checked { background-color: @ifos_accent; color: @ifos_deep;
+                 border-color: @ifos_accent; }
+button:disabled { background-color: @ifos_base; color: @ifos_dim;
+                  border-color: @ifos_surface; }
+button.flat { background-color: transparent; border-color: transparent; }
+button.flat:hover { background-color: @ifos_hover; border-color: transparent; }
+button.suggested-action { background-color: @ifos_accent; color: @ifos_deep;
+                          border-color: @ifos_accent; }
+button.destructive-action { background-color: #f38ba8; color: @ifos_deep;
+                            border-color: #f38ba8; }
 
-progressbar progress,
-levelbar block.filled,
-scale highlight {
-    background-color: #00a86b;
+entry, spinbutton {
+    background-color: @ifos_deep;
+    color: @ifos_text;
+    border: 1px solid @ifos_hover;
+    border-radius: 7px;
+    caret-color: @ifos_accent;
 }
-
-entry:focus,
-entry:focus-within,
-spinbutton:focus {
-    border-color: #00a86b;
-    box-shadow: inset 0 0 0 1px #00a86b;
+entry:focus, entry:focus-within, spinbutton:focus {
+    border-color: @ifos_accent;
+    box-shadow: inset 0 0 0 1px @ifos_accent;
 }
+entry placeholder, entry text placeholder { color: @ifos_dim; }
 
-button.suggested-action {
-    background-color: #00a86b;
-    color: #04150f;
+check, radio {
+    background-color: @ifos_deep;
+    border: 1px solid @ifos_hover;
 }
-
-notebook > header > tabs > tab:checked {
-    box-shadow: inset 0 -3px #00a86b;
-    color: #e8f5e9;
+check:checked, radio:checked,
+checkbutton check:checked, radiobutton radio:checked {
+    background-color: @ifos_accent;
+    border-color: @ifos_accent;
+    color: @ifos_deep;
 }
+switch { background-color: @ifos_hover; }
+switch:checked { background-color: @ifos_accent; }
 
-/* Sidebars and file lists read better a touch darker than the theme default */
-placessidebar row:selected,
+progressbar progress, levelbar block.filled, scale highlight {
+    background-color: @ifos_accent;
+}
+scale trough, progressbar trough { background-color: @ifos_hover; }
+
+/* ── Selection ──────────────────────────────────────────────────────────── */
+selection, *:selected, *:selected:focus {
+    background-color: @ifos_accent;
+    color: @ifos_deep;
+}
+/* A selected row in a window that has lost focus should stay legible rather
+   than turning into grey on grey. */
+*:selected:backdrop { background-color: @ifos_hover; color: @ifos_text; }
+
+/* ── The file manager ───────────────────────────────────────────────────────
+   Thunar is built from these widgets: a places sidebar, a path bar of linked
+   toggle buttons, a treeview for the detailed list and an iconview for the
+   grid. Styling them here reaches Thunar, and every other GTK application
+   that lists files, without needing a selector only Thunar answers to.       */
+
+placessidebar, .sidebar {
+    background-color: @ifos_deep;
+    color: @ifos_subtext;
+}
+placessidebar list, .sidebar list { background-color: transparent; }
+placessidebar row, .sidebar row {
+    border-radius: 7px;
+    margin: 1px 5px;
+    min-height: 30px;
+}
+/* The row's own label and icon, explicitly. Colour set on the sidebar does not
+   reach them - they were rendering close to the near-black background, so the
+   shortcuts were legible only if you already knew what they said. */
+placessidebar row label, .sidebar row label,
+placessidebar row image, .sidebar row image { color: @ifos_subtext; }
+placessidebar row:hover label, .sidebar row:hover label,
+placessidebar row:hover image, .sidebar row:hover image { color: @ifos_text; }
+placessidebar row:selected label, .sidebar row:selected label,
+placessidebar row:selected image, .sidebar row:selected image { color: @ifos_deep; }
+placessidebar row:hover, .sidebar row:hover { background-color: @ifos_hover; }
+placessidebar row:selected, .sidebar row:selected,
 list row:selected {
-    background-color: #00a86b;
-    color: #04150f;
+    background-color: @ifos_accent;
+    color: @ifos_deep;
+}
+placessidebar separator { background-color: @ifos_hover; }
+
+treeview.view, iconview {
+    background-color: @ifos_base;
+    color: @ifos_text;
+}
+/* No alternating-row rule here: GTK 3 dropped rules-hint, and :nth-child on a
+   treeview matches the widget rather than its rows, so it silently did nothing.
+   The hover highlight is what makes a long list followable. */
+treeview.view:hover { background-color: @ifos_hover; }
+treeview.view:selected, iconview:selected, iconview .cell:selected {
+    background-color: @ifos_accent;
+    color: @ifos_deep;
+}
+treeview.view:selected:backdrop { background-color: @ifos_hover; color: @ifos_text; }
+treeview.view expander { color: @ifos_dim; }
+treeview.view expander:hover { color: @ifos_accent2; }
+
+/* Column headers. They look like buttons because they are, and they do sort. */
+treeview.view header button {
+    background-color: @ifos_surface;
+    color: @ifos_subtext;
+    border: none;
+    border-right: 1px solid @ifos_hover;
+    border-bottom: 1px solid @ifos_hover;
+    border-radius: 0;
+    padding: 5px 8px;
+    font-weight: normal;
+}
+treeview.view header button:hover { background-color: @ifos_hover; color: @ifos_text; }
+treeview.view header button:active { background-color: @ifos_accent; color: @ifos_deep; }
+
+/* The path bar: linked toggle buttons, the current directory being the checked
+   one. It should be obvious which that is. */
+.path-bar button, .linked > button { border-radius: 0; border-right-width: 0; }
+.path-bar button:first-child, .linked > button:first-child {
+    border-top-left-radius: 7px; border-bottom-left-radius: 7px;
+}
+.path-bar button:last-child, .linked > button:last-child {
+    border-top-right-radius: 7px; border-bottom-right-radius: 7px;
+    border-right-width: 1px;
+}
+.path-bar button:checked { background-color: @ifos_accent; color: @ifos_deep; }
+
+/* ── Menus, tabs, tooltips ──────────────────────────────────────────────── */
+menu, .menu, popover.background {
+    background-color: @ifos_surface;
+    color: @ifos_text;
+    border: 1px solid @ifos_hover;
+    border-radius: 8px;
+}
+menuitem:hover, .menu menuitem:hover, popover modelbutton:hover {
+    background-color: @ifos_accent;
+    color: @ifos_deep;
+}
+menu separator, popover separator { background-color: @ifos_hover; }
+
+notebook > header { background-color: @ifos_surface; border-color: @ifos_hover; }
+notebook > header > tabs > tab { color: @ifos_dim; border-color: transparent; }
+notebook > header > tabs > tab:checked {
+    color: @ifos_text;
+    box-shadow: inset 0 -3px @ifos_accent;
+}
+notebook > header > tabs > tab:hover { color: @ifos_text; }
+
+tooltip, tooltip.background {
+    background-color: @ifos_deep;
+    color: @ifos_text;
+    border: 1px solid @ifos_hover;
+    border-radius: 7px;
 }
 
-*:link, button.link {
-    color: #7ed957;
+/* ── Scrollbars ─────────────────────────────────────────────────────────────
+   The launcher's treatment: thin, dark, and only solid enough to find, so a
+   grey stock scrollbar does not show through the green.                     */
+scrollbar { background-color: transparent; border: none; }
+scrollbar trough { background-color: transparent; border: none; }
+scrollbar slider {
+    background-color: alpha(@ifos_text, 0.16);
+    border: none;
+    border-radius: 8px;
+    min-width: 7px;
+    min-height: 40px;
+    margin: 2px;
 }
+scrollbar slider:hover  { background-color: alpha(@ifos_text, 0.30); }
+scrollbar slider:active { background-color: @ifos_accent; }
+
+separator { background-color: @ifos_hover; }
+*:link, button.link { color: @ifos_accent2; }
+infobar.warning { background-color: #f9e2af; color: @ifos_deep; }
+infobar.error   { background-color: #f38ba8; color: @ifos_deep; }

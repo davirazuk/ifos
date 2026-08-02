@@ -57,6 +57,55 @@ else
     xrandr "${args[@]}" 2>/dev/null
 fi
 
+# ── Is the screen running at everything it can do? ───────────────────────────
+#  `--auto` picks the mode the monitor marks preferred, which is normally its
+#  native one - but not always. A screen driven over a cable that cannot carry
+#  its full resolution, or one whose EDID was not read, offers a shorter list
+#  and the preferred entry in that list is smaller than the panel. The result
+#  is a 1440p or 4K monitor quietly running at 1080, which looks like a setting
+#  nobody changed rather than like a fault.
+#
+#  xrandr already knows the largest mode each output can do. If the current one
+#  is smaller, say so - and offer to use it, since that is a decision for the
+#  person looking at the screen, not for a script that runs at every login.
+best_mode() {   # best_mode <output> -> "WIDTHxHEIGHT" with the most pixels
+    xrandr --query 2>/dev/null | awk -v want="$1" '
+        $1 == want { inblock = 1; next }
+        /^[^ \t]/   { inblock = 0 }
+        inblock && $1 ~ /^[0-9]+x[0-9]+$/ {
+            split($1, d, "x")
+            if (d[1] * d[2] > best) { best = d[1] * d[2]; mode = $1 }
+        }
+        END { if (mode != "") print mode }'
+}
+
+current_mode() {   # current_mode <output>
+    xrandr --query 2>/dev/null |
+        sed -n "s/^$1 connected\( primary\)\? \([0-9]*x[0-9]*\).*/\2/p" | head -1
+}
+
+primary=$(xrandr --query 2>/dev/null |
+          sed -n 's/^\([^ ]*\) connected primary .*/\1/p' | head -1)
+[[ -z $primary ]] && primary=$(xrandr --query 2>/dev/null |
+          sed -n 's/^\([^ ]*\) connected .*/\1/p' | head -1)
+
+if [[ -n ${primary:-} ]]; then
+    now=$(current_mode "$primary")
+    best=$(best_mode "$primary")
+    if [[ -n $now && -n $best && $now != "$best" ]]; then
+        now_px=$(( ${now%x*} * ${now#*x} ))
+        best_px=$(( ${best%x*} * ${best#*x} ))
+        if (( best_px > now_px )); then
+            if [[ ${1:-} == --use-best ]]; then
+                xrandr --output "$primary" --mode "$best" 2>/dev/null &&
+                    notify "$primary agora em $best."
+            else
+                notify "$primary está em $now, mas aceita $best. Mod+P de novo com --use-best, ou use o Monitores no lançador."
+            fi
+        fi
+    fi
+fi
+
 count=$(xrandr --query 2>/dev/null | grep -c ' connected')
 notify "$count tela(s) em uso."
 

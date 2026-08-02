@@ -87,6 +87,12 @@ bindsym $mod+n         exec --no-startup-id ~/.config/i3/scripts/nightlight.sh
 # Re-detect the screens, for when a projector is plugged into a machine whose
 # udev rule did not fire, or when the room's cable is swapped mid-class.
 bindsym $mod+p         exec --no-startup-id ~/.config/i3/scripts/screens.sh
+# ...and switch the screen to the largest mode it advertises, for a monitor
+# being driven below what it can do - a 1440p or 4K panel running at 1080
+# because the preferred mode in its list is not its native one. Separate from
+# Mod+P because changing someone's resolution should be something they asked
+# for, not something a script decides at login.
+bindsym $mod+Shift+p   exec --no-startup-id ~/.config/i3/scripts/screens.sh --use-best
 bindsym $mod+Shift+a   exec $termrun ifos-software
 bindsym $mod+Shift+i   exec $termrun sudo install-ifos
 bindsym $mod+q         kill
