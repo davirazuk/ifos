@@ -55,9 +55,10 @@ then how to use the disk. There are three disk modes:
 | --- | --- |
 | **alongside** | Creates IFOS in unallocated free space and reuses the existing EFI partition. Nothing else is formatted, resized or removed — your other OS keeps working, and GRUB is configured with `os-prober` so it stays in the boot menu. |
 | **partition** | Formats exactly the one partition you pick. |
-| **wipe** | Erases the whole disk. Requires typing `ERASE`. |
+| **wipe** | Erases the whole disk. Requires typing `APAGAR`. |
 
-Nothing is written until you type `YES` at the summary screen. The whole run is
+Nothing is written until you type `SIM` at the summary screen. The installer
+asks its questions in Portuguese. The whole run is
 logged to `/var/log/ifos-install.log`.
 
 > **Before a dual-boot install:** shrink your existing partition with GParted
@@ -129,6 +130,28 @@ links live in `airootfs/usr/share/ifos/escola.list` — plain text, edit freely.
 
 Picking **IFOS Big Picture** at the login screen boots straight into it, console
 style: the launcher *is* the session, and closing it ends the session.
+
+## Whatever screen the machine has
+
+Two things used to be assumed and are now detected.
+
+**Density.** A laptop with a 3200x1800 or 4K panel — an ordinary second-hand
+machine now, not an exotic one — got a 32-pixel bar about four millimetres
+tall, text at a third of its intended size, and a cursor you could lose, with
+nothing in the interface to fix it with. `ifos-scale` reads the panel's size
+out of EDID at login and sets the font DPI, the widget scale, the cursor size
+and the bar's height and DPI to match. Below 120 dpi it sets exactly the values
+that used to be hardcoded, so on the machines in the lab nothing changes at
+all. An EDID that reports 0mm — which projectors routinely do, and some laptop
+panels — is ignored in favour of the pixel count. Run `ifos-scale` on its own
+to see what it decided.
+
+**Screens.** Plugging a projector in did nothing: X saw the output, i3 did not
+configure it, and the second screen stayed dark. `autorandr` now notices the
+change and lays the screens out side by side, without anyone having saved a
+profile for that room's projector first, and polybar puts a bar on each one.
+`Mod+P` re-runs the detection by hand for a dock that presents its output late
+or a cable swapped mid-class.
 
 ## Old machines
 

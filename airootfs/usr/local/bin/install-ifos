@@ -545,6 +545,9 @@ PACKAGES=(
     sddm qt5-quickcontrols2 polkit polkit-gnome plymouth
     xdg-user-dirs xdg-utils xdg-desktop-portal xdg-desktop-portal-gtk
     maim xclip xdotool arandr htop xfce4-taskmanager fastfetch dialog gammastep
+    # Notices a projector being plugged in and lays the screens out; see the
+    # note in packages.x86_64.
+    autorandr
     webkit2gtk-4.1 python-gobject adwaita-icon-theme adwaita-cursors
 
     # ── the applications a student actually needs on day one ─────────────────

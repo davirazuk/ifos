@@ -22,6 +22,14 @@ while pgrep -u "$UID" -x polybar >/dev/null; do sleep 0.5; done
 LOG="${XDG_RUNTIME_DIR:-/tmp}/polybar-$UID.log"
 : >"$LOG"
 
+# The bar's height and font size come from the screen's density. .xprofile
+# normally exports these before i3 starts, but this script is also run by hand
+# and by Mod+Shift+R, and a bar reloaded that way should not shrink back to the
+# 32-pixel default on a 4K panel.
+if [[ -z ${IFOS_BAR_HEIGHT:-} ]] && command -v ifos-scale >/dev/null 2>&1; then
+    eval "$(ifos-scale --env 2>/dev/null)"
+fi
+
 # polybar -m lists connected outputs as "NAME: WxH+X+Y", one per line. If it
 # tells us nothing - no RandR, or a display polybar cannot read - fall back to
 # the single bar this always started, which is still better than none.

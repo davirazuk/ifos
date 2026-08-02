@@ -229,6 +229,13 @@ maim
 xclip
 xdotool
 arandr
+# Plugging a projector in did nothing at all: X sees the output, i3 does not
+# configure it, and the second screen stayed dark. autorandr ships the udev
+# rule and the systemd user unit that notice a display change, and its built-in
+# "horizontal" profile lays out whatever it finds side by side - so an unknown
+# projector in an unfamiliar room works without anyone having saved a profile
+# for it first.
+autorandr
 # Warms the screen after sunset. Coordinates are pinned to Dourados in
 # /etc/skel, so this needs no geolocation service and works offline.
 gammastep

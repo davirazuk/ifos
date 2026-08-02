@@ -49,7 +49,15 @@ exec --no-startup-id xset s 600 && xset dpms 0 0 720
 exec --no-startup-id xss-lock --transfer-sleep-lock -- ~/.config/i3/scripts/lock.sh
 exec --no-startup-id ~/.config/i3/scripts/battery-watch.sh
 exec --no-startup-id ~/.config/i3/scripts/disk-watch.sh
-exec_always --no-startup-id ~/.config/polybar/launch.sh
+# Lay the screens out before the bar starts, so polybar sees the final set of
+# outputs and puts a bar on each. autorandr's own udev rule handles the case of
+# a projector arriving later; this is the one at login.
+#
+# --default horizontal means an unfamiliar projector in an unfamiliar room is
+# placed beside the laptop screen rather than ignored - no saved profile
+# needed. --skip-options gamma leaves gammastep's night warmth alone, which
+# autorandr would otherwise reset every time a screen changed.
+exec_always --no-startup-id sh -c 'command -v autorandr >/dev/null && autorandr --change --default horizontal --skip-options gamma; exec ~/.config/polybar/launch.sh'
 
 # Welcome screen: offers the installer on live media, first-run tips once on an
 # installed system, then never again.
@@ -73,6 +81,9 @@ bindsym $mod+g         exec ifos-launcher
 # to htop in a terminal if the graphical one is not installed.
 bindsym $mod+Escape    exec --no-startup-id sh -c 'command -v xfce4-taskmanager >/dev/null && exec xfce4-taskmanager || exec xfce4-terminal --title htop -e htop'
 bindsym $mod+n         exec --no-startup-id ~/.config/i3/scripts/nightlight.sh
+# Re-detect the screens, for when a projector is plugged into a machine whose
+# udev rule did not fire, or when the room's cable is swapped mid-class.
+bindsym $mod+p         exec --no-startup-id ~/.config/i3/scripts/screens.sh
 bindsym $mod+Shift+a   exec $termrun ifos-software
 bindsym $mod+Shift+i   exec $termrun sudo install-ifos
 bindsym $mod+q         kill

@@ -122,6 +122,7 @@ fastfetch_logo() {
 #  may have edited stays the business of `ifos-update --dotfiles`.
 NEW_FILES=(
     .config/gtk-4.0/gtk.css
+    .config/i3/scripts/screens.sh
 )
 
 missing_new_files() {
