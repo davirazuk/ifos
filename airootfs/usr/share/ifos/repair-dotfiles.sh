@@ -126,6 +126,8 @@ NEW_FILES=(
     .config/i3/scripts/gpu-watch.sh
     .config/Thunar/thunarrc
     .config/Thunar/uca.xml
+    .config/rofi/notifications.sh
+    .config/polybar/scripts/notifications.sh
 )
 
 missing_new_files() {

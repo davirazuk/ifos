@@ -32,18 +32,6 @@ def is_glyph(ch: str) -> bool:
     return 0xE000 <= ord(ch) <= 0xF8FF or 0xF0000 <= ord(ch) <= 0xFFFFD
 
 
-# The rounded ends of polybar's pills, U+E0B6 and U+E0B4. They are glyphs in
-# the same range as the icons, so a format string that lost its icon but kept
-# its caps would still look fine to the check above - which is the whole class
-# of bug this file exists for. Counted separately, and never counted as the
-# icon.
-CAPS = "\ue0b6\ue0b4"
-
-
-def is_cap(ch: str) -> bool:
-    return ch in CAPS
-
-
 # (path, description, regex whose group(1) is the string that needs a glyph)
 #
 # Each pattern is deliberately narrow. A rule that matched every quoted string
@@ -56,6 +44,10 @@ SLOTS = [
      re.compile(r'^\s*display-(?:drun|run|window):\s*"([^"]*)"', re.M)),
     ("etc/skel/.config/fastfetch/config.jsonc", "fastfetch key",
      re.compile(r'"key"\s*:\s*"([^"]*)"')),
+    # The notification centre's three commands. Written by codepoint after the
+    # glyphs were lost in transit once already - which is what this file is for.
+    ("etc/skel/.config/rofi/notifications.sh", "notification centre entry",
+     re.compile(r'^ICON_\w+="([^"]*)"', re.M)),
     ("etc/skel/.config/i3/scripts/osd.sh", "on-screen display icon",
      re.compile(r'^ICON_\w+=\'([^\']*)\'', re.M)),
     ("etc/skel/.config/rofi/powermenu.sh", "power menu entry",
@@ -71,6 +63,7 @@ COUNTS = [
     ("etc/skel/.config/polybar/scripts/bluetooth.sh", 3),
     ("etc/skel/.config/polybar/scripts/network.sh", 4),
     ("etc/skel/.config/polybar/scripts/media.sh", 2),
+    ("etc/skel/.config/polybar/scripts/notifications.sh", 2),
     ("etc/skel/.config/polybar/scripts/power-profile.sh", 4),
     ("etc/skel/.config/rofi/network-menu.sh", 4),
     ("etc/skel/.config/rofi/bluetooth-menu.sh", 4),
@@ -86,17 +79,12 @@ NO_GLYPHS = ["root/.config/fastfetch/config.jsonc"]
 def check_polybar(listing: bool) -> tuple[int, list[str]]:
     """The bar's icons, judged per module rather than per line.
 
-    Every status module now opens with a pill cap, which is a glyph in the same
-    range as the icons - so "does this string contain a glyph" stopped being
-    able to tell an icon from a rounded corner. Worse, deleting the icon from a
-    capped prefix leaves a string that still looks like a deliberate pill
-    opener.
-
-    Which modules must carry an icon in the config is not a property of the
-    string, it is a property of the module: a custom/script prints its own icon
-    and the config only wraps it, while everything else has the icon written
-    here. So the file is read as modules, and each is asked the question that
-    applies to it.
+    Which modules must carry an icon is not a property of the string, it is a
+    property of the module: a custom/script prints its own icon and the config
+    never mentions one, while every other module has the icon written here. A
+    regex over the whole file cannot tell those apart, and flagged the script
+    modules as blank on every run. So the file is read as modules, and each is
+    asked the question that applies to it.
     """
     rel = "etc/skel/.config/polybar/config.ini"
     path = os.path.join(ROOT, rel)
@@ -133,7 +121,7 @@ def check_polybar(listing: bool) -> tuple[int, list[str]]:
             continue
         for key, value in slots:
             checked += 1
-            icons = [c for c in value if is_glyph(c) and not is_cap(c)]
+            icons = [c for c in value if is_glyph(c)]
             if not icons:
                 problems.append("%s: [module/%s] %s has no icon: %r"
                                 % (rel, name, key, value))
@@ -141,16 +129,6 @@ def check_polybar(listing: bool) -> tuple[int, list[str]]:
                 print("  %-30s %-22s %s" % (rel.rsplit("/", 1)[-1],
                                             "[module/%s]" % name,
                                             " ".join("U+%04X" % ord(c) for c in icons)))
-
-    # Pill caps come in pairs. An odd number means one end of some pill was
-    # dropped in an edit, which draws as a block with one square end.
-    left, right = text.count(CAPS[0]), text.count(CAPS[1])
-    checked += 1
-    if left != right:
-        problems.append("%s: %d left pill caps and %d right ones - every pill "
-                        "needs both" % (rel, left, right))
-    elif listing:
-        print("  %-30s %d pill caps" % (rel.rsplit("/", 1)[-1], left + right))
 
     return checked, problems
 
@@ -177,12 +155,11 @@ def main() -> int:
             continue
         for value in found:
             checked += 1
-            if not any(is_glyph(c) and not is_cap(c) for c in value):
+            if not any(is_glyph(c) for c in value):
                 problems.append("%s: %s is blank: %r" % (rel, what, value))
             elif listing:
                 print("  %-46s %s  %s" % (rel, " ".join(
-                    "U+%04X" % ord(c) for c in value
-                    if is_glyph(c) and not is_cap(c)), value.strip()))
+                    "U+%04X" % ord(c) for c in value if is_glyph(c)), value.strip()))
 
     for rel, least in COUNTS:
         path = os.path.join(ROOT, rel)

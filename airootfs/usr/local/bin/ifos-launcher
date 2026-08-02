@@ -578,6 +578,13 @@ class Catalog:
             # and glxinfo. Now it takes clicking this.
             ("Vídeo e jogos", "Verificar e consertar os drivers da placa de vídeo",
              "video-display", "ifos-term 'Vídeo e jogos' ifos-gpu --fix", True),
+            # "O controle não funciona" is three different problems that look
+            # identical from the sofa: no driver, no access to /dev/hidraw so
+            # there is no rumble and the buttons are named wrong, or a
+            # Bluetooth pad nobody knows the pairing combination for.
+            ("Controles", "Ver os controles ligados e como parear",
+             "input-gaming",
+             "ifos-term 'Controles' ifos-controller", True),
             ("Monitores", "Resolução e disposição das telas",
              "video-display", "arandr", True),
             # Everything added for screens so far was a keyboard shortcut, and

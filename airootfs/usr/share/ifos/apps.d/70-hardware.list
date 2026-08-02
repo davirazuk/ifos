@@ -10,7 +10,8 @@ Digitalização|SANE com um programa gráfico para escanear|sane simple-scan|rep
 Codecs de áudio Bluetooth|Suporte a AAC, LDAC e aptX em fones|libfreeaptx sbc|repo
 Gerenciamento de energia (TLP)|Substitui o botão de modo de energia da barra: TLP e power-profiles-daemon mexem nos mesmos ajustes e não podem rodar juntos|tlp tlp-rdw|repo
 Leitor de digital|fprintd, integrado ao PAM|fprintd|repo
-Controle de Xbox|Driver xpadneo para controles sem fio do Xbox|xpadneo-dkms|aur
+Controle de Xbox (Bluetooth)|Driver xpadneo: melhora a vibração e os gatilhos dos controles do Xbox por Bluetooth|xpadneo-dkms|aur
+Controles em geral|Os controles de PlayStation, Nintendo, Xbox e 8BitDo já funcionam sem instalar nada. Isto acrescenta o teste gráfico de botões e eixos|jstest-gtk|aur
 Atualização de firmware|fwupd, firmware do fabricante pelo LVFS|fwupd|repo
 Leitor de tela no console|espeakup: lê o terminal em voz alta. O menu de boot do pendrive oferece isso; num sistema instalado precisa ser instalado|espeakup|repo
 Linha braille|brltty, para displays braille. Cuidado: costuma ocupar adaptadores USB-serial, o que atrapalha Arduino e afins|brltty|repo

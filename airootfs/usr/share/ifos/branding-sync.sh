@@ -60,6 +60,10 @@ copy /etc/sysctl.d/99-ifos.conf
 # which systemd sizes at 10% of the filesystem, and the pacman cache, which
 # keeps three versions of every package. Both hurt most on the small eMMC
 # laptops, and neither was ever set on an installed system.
+# Game controllers. Without this a DualSense is a nameless generic pad with no
+# rumble, because /dev/hidraw is root-only and nothing tags it for the user.
+copy /etc/udev/rules.d/70-ifos-game-controllers.rules
+
 copy /etc/systemd/journald.conf.d/ifos-limits.conf
 copy /etc/systemd/system/paccache.service.d/ifos-keep-one.conf
 
@@ -102,7 +106,7 @@ copy /usr/share/ifos/archinstall-preset.json
 
 # Tools
 for t in ifos-software ifos-welcome ifos-post-install ifos-theme ifos-launcher \
-         ifos-bigpicture ifos-update ifos-update-terminal ifos-term ifos-lock ifos-gpu \
+         ifos-bigpicture ifos-update ifos-update-terminal ifos-term ifos-lock ifos-gpu ifos-controller \
          ifos-scale install-yay; do
     copy "/usr/local/bin/$t" 0755
 done
