@@ -50,14 +50,17 @@ exec --no-startup-id xss-lock --transfer-sleep-lock -- ~/.config/i3/scripts/lock
 exec --no-startup-id ~/.config/i3/scripts/battery-watch.sh
 exec --no-startup-id ~/.config/i3/scripts/disk-watch.sh
 # Lay the screens out before the bar starts, so polybar sees the final set of
-# outputs and puts a bar on each. autorandr's own udev rule handles the case of
-# a projector arriving later; this is the one at login.
+# outputs and puts a bar on each.
 #
-# --default horizontal means an unfamiliar projector in an unfamiliar room is
-# placed beside the laptop screen rather than ignored - no saved profile
-# needed. --skip-options gamma leaves gammastep's night warmth alone, which
-# autorandr would otherwise reset every time a screen changed.
-exec_always --no-startup-id sh -c 'command -v autorandr >/dev/null && autorandr --change --default horizontal --skip-options gamma; exec ~/.config/polybar/launch.sh'
+# Only when there is more than one screen. On a single-screen machine there is
+# nothing to lay out and autorandr can only do harm: --default horizontal
+# applies each output's preferred mode, which on a laptop that was running
+# anything else changes the resolution out from under the person using it. That
+# is not hypothetical - it went out and broke a machine.
+#
+# --skip-options gamma leaves gammastep's night warmth alone, which autorandr
+# would otherwise reset every time a screen changed.
+exec_always --no-startup-id sh -c 'if command -v autorandr >/dev/null && [ "$(xrandr --query | grep -c " connected")" -gt 1 ]; then autorandr --change --default horizontal --skip-options gamma; fi; exec ~/.config/polybar/launch.sh'
 
 # Welcome screen: offers the installer on live media, first-run tips once on an
 # installed system, then never again.
