@@ -13,6 +13,7 @@
     Mod + g                IFOS Launcher — tela cheia: jogos, escola, Moodle
     Mod + Esc              gerenciador de tarefas — processos e desempenho
     Mod + n                luz noturna (liga/desliga o filtro de luz azul)
+    Mod + Shift + n        central de notificações — o que você não viu, e Não perturbe
     Mod + p                redetectar telas (projetor, dock, cabo trocado)
     Mod + Shift + p        usar a maior resolução que o monitor aceita
     Mod + Shift + a        IFOS Software — install apps on demand

@@ -64,9 +64,9 @@ if command -v python3 >/dev/null; then
         die "Icons are missing above. Fix them, or edit tools/check-icons.py if a file legitimately changed shape."
 fi
 
-# The graphics doctor, against machines broken in ways this one is not.
-info "Checking the graphics doctor…"
-"$PROFILE/tools/test-gpu.sh" || die "ifos-gpu is answering wrongly; see above."
+# The shell tools, against machines broken in ways this one is not.
+info "Checking the ifos-* tools…"
+"$PROFILE/tools/test-tools.sh" || die "One of the ifos-* tools is answering wrongly; see above."
 
 # The launcher's matching rules, which decide what a tile launches and whether
 # it offers to install something already installed. Needs the python that has

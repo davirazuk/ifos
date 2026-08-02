@@ -58,6 +58,7 @@ file_permissions=(
   ["/usr/local/bin/ifos-lock"]="0:0:755"
   ["/usr/local/bin/ifos-gpu"]="0:0:755"
   ["/usr/local/bin/ifos-term"]="0:0:755"
+  ["/usr/local/bin/ifos-controller"]="0:0:755"
   ["/usr/local/bin/ifos-update-terminal"]="0:0:755"
   ["/usr/local/bin/ifos-scale"]="0:0:755"
   ["/etc/skel/.config/polybar/scripts/network.sh"]="0:0:755"

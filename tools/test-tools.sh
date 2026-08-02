@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  test-gpu.sh — run ifos-gpu --check against machines that do not exist
+#  test-tools.sh — run the ifos-* shell tools against machines that do not exist
 #
-#  The graphics doctor exists to diagnose machines that are broken in specific
+#  These tools exist to diagnose hardware that is broken or absent in specific
 #  ways: an NVIDIA module built for the kernel that is not running, nouveau
 #  holding the card the proprietary driver wanted, multilib switched off so
-#  Steam's 32-bit libraries cannot even be installed. None of those can be
-#  reproduced on the machine this is developed on, and every one of them is a
-#  student sitting in front of a computer that will not open Steam.
+#  Steam's 32-bit libraries cannot even be installed, a DualSense the machine
+#  running this has never seen. None of that can be reproduced here, and every
+#  one of them is a student in front of a computer that will not open Steam or
+#  will not read their controller.
 #
 #  So each case below builds a fake machine - an lspci that lists chosen cards,
 #  a pacman that knows a chosen package list, a /proc/modules with chosen
-#  modules in it - and checks that the doctor says the right thing about it.
+#  modules in it, a /proc/bus/input/devices describing a chosen controller -
+#  and checks that the tool says the right thing about it.
 #
-#      ./tools/test-gpu.sh
+#  Covers ifos-gpu, ifos-term and ifos-controller.
+#
+#      ./tools/test-tools.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
@@ -382,6 +386,57 @@ check "usa -x, não -e, no xfce4-terminal" says -- "-x"
 
 OUT=$(PATH="/usr/bin:/bin" bash "$PROFILE/airootfs/usr/local/bin/ifos-term" 2>&1); RC=$?
 check "sem comando, recusa"            rc_is 2
+
+# ── 16. ifos-controller, against controllers this machine does not have ──────
+#  /proc/bus/input/devices is the kernel's own list and the same shape on every
+#  machine, so a file describing a DualSense is a DualSense as far as the tool
+#  can tell. The one thing worth checking is that it recognises the families by
+#  their ids rather than by anything in the name, because the name is whatever
+#  the driver felt like calling it.
+case_name "ifos-controller reconhece os controles"
+CTL="$PROFILE/airootfs/usr/local/bin/ifos-controller"
+DEV="$TMP/devices"
+
+pads() { printf '%s\n' "$@" > "$DEV"; }
+run_ctl() { OUT=$(IFOS_CONTROLLER_DEVICES="$DEV" bash "$CTL" "$@" 2>&1); RC=$?; }
+
+# What the kernel prints for a DualSense on USB, cut down to the lines read.
+pads 'I: Bus=0003 Vendor=054c Product=0ce6 Version=8111' \
+     'N: Name="Sony Interactive Entertainment DualSense Wireless Controller"' \
+     'H: Handlers=event4 js0 ' \
+     '' \
+     'I: Bus=0011 Vendor=0001 Product=0001 Version=ab41' \
+     'N: Name="AT Translated Set 2 keyboard"' \
+     'H: Handlers=sysrq kbd event0 '
+run_ctl
+check "acha o DualSense"                says "DualSense (PS5)"
+check "não confunde o teclado com um controle" not_says "AT Translated"
+check "diz onde ele está"               says "js0"
+
+pads 'I: Bus=0005 Vendor=057e Product=2009 Version=0001' \
+     'N: Name="Pro Controller"' \
+     'H: Handlers=event7 js0 '
+run_ctl
+check "acha o Switch Pro"               says "Switch Pro"
+
+pads 'I: Bus=0003 Vendor=045e Product=0b12 Version=0407' \
+     'N: Name="Microsoft Xbox Series S|X Controller"' \
+     'H: Handlers=event6 js1 '
+run_ctl
+check "acha o controle do Xbox"         says "controle do Xbox"
+
+pads 'I: Bus=0011 Vendor=0001 Product=0001 Version=ab41' \
+     'N: Name="AT Translated Set 2 keyboard"' \
+     'H: Handlers=sysrq kbd event0 '
+run_ctl
+check "sem controle, diz que não há"    says "Nenhum controle conectado"
+check "e manda parear"                  says "--pair"
+
+run_ctl --pair
+check "--pair explica o DualSense"      says "Create"
+check "--pair explica o Xbox"           says "Pair"
+run_ctl --nonsense
+check "opção inválida sai 2"            rc_is 2
 
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"

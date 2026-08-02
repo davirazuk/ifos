@@ -257,7 +257,7 @@ An old NVIDIA card running nouveau is reported as correct rather than as a
 fault: nouveau is the right driver for a GTX 750, and nobody gets pushed onto
 one that does not support their hardware.
 
-`tools/test-gpu.sh` runs the doctor against thirteen machines that do not
+`tools/test-tools.sh` runs the doctor against fourteen machines that do not
 exist — a hybrid laptop booted on the LTS kernel with a driver built for the
 other one, an AMD desktop with no multilib, a card that predates the open
 modules — because none of those can be reproduced on the machine IFOS is built
@@ -275,6 +275,26 @@ still goes to the discrete card on its own.
 The Big Picture session opens straight there, which is the difference between a
 console and a catalogue when the machine is across the room with a gamepad.
 
+**Controllers work as controllers, not as generic pads.** A DualSense on a
+fresh Arch install half works, and the missing half is invisible: the kernel
+driver claims it, so the buttons do something, but SDL — which is what almost
+every game and emulator actually reads — also wants `/dev/hidraw*` for the
+parts that are not buttons. Rumble, the gyroscope, the light bar, the adaptive
+triggers, and the report saying *which* controller this is so the game can draw
+the right prompts. `/dev/hidraw*` is root-only and nothing tags it, so the pad
+ends up nameless, silent, with PlayStation buttons labelled A/B/X/Y.
+
+`/etc/udev/rules.d/70-ifos-game-controllers.rules` tags it, for PlayStation,
+Nintendo, Xbox, 8BitDo and Valve hardware. Steam ships rules of its own that
+cover much of this; these exist so a machine without Steam — an emulator, a
+Godot project, the launcher's own gamepad support — behaves the same way.
+
+`ifos-controller` says which controllers are connected, whether this account can
+actually reach them, and how to put each family into Bluetooth pairing mode —
+because "o controle não funciona" is three different problems that look
+identical from the sofa. `ifos-controller --test` prints buttons and sticks as
+you press them. It is **Controles** under Sistema in the launcher.
+
 Steam, Lutris, Heroic, Wine, Proton-GE, MangoHud, GameMode and Gamescope are all
 one line in `ifos-software`.
 
@@ -291,20 +311,31 @@ application:
 | Power profile | Cycles power-saver / balanced / performance, showing which is active |
 | Now playing | Play and pause; the scroll wheel skips. Absent entirely when nothing is playing |
 | Battery, volume, CPU, memory | Status at a glance |
+| Bell | Everything the machine said and you did not catch, plus Não perturbe. Right-click silences without opening anything |
 
-Every module is drawn as a rounded pill, workspace numbers included. polybar has
-no `radius` for a module or a label — only for the bar itself — so the ends are
-two half-circle glyphs from the Powerline Extra range, painted in the surface
-colour on the bar's own background. The cap font is sized in points like every
-other font, so setting `dpi` scales the pills along with the text and the bar
-follows a high-density screen without a second set of numbers to keep in sync.
+The bar is flat: coloured icons and dim text straight on the background, with
+no box around each module. Two attempts at giving the modules a filled
+background — first squares, then rounded pills — both made it worse and were
+taken back out. The launcher button keeps a filled background because it is a
+button rather than a readout.
 
-`tools/check-icons.py` knows about this: the caps are glyphs in the same range
-as the icons, so "does this string contain a glyph" stopped being able to tell
-an icon from a rounded corner. It now reads the file as modules and asks each
-one the question that applies to it — a `custom/script` module prints its own
-icon and the config only wraps it, everything else has the icon written in the
-config — and separately checks that the caps come in pairs.
+`tools/check-icons.py` reads the bar config as modules rather than as one file,
+because which modules must carry an icon is a property of the module: a
+`custom/script` prints its own and the config never mentions one, while every
+other module has the icon written in the config.
+
+**A notification that times out is gone.** Everything the machine has to say —
+the battery warning, the disk warning, the graphics check, "reinicie depois de
+instalar o driver" — appeared for eight seconds in a corner and then existed
+nowhere. Someone looking away, or typing, or in a game, never saw it.
+
+The bell in the bar keeps the count and `Mod + Shift + N` opens the history:
+every notification still kept, newest first, with the application and how long
+ago it arrived. Picking one shows it again *with its buttons* — the graphics
+check sends a notification whose action opens the repair, and that action
+survives the notification timing out. Left-clicking a notification now runs its
+action before closing, which is what "clique aqui para consertar" always
+implied and never did; it was on middle click, where nobody would find it.
 
 `Mod + Esc` opens a graphical task manager — processes plus CPU, memory and
 network graphs — for when `htop` is not what you want.

@@ -88,6 +88,10 @@ bindsym $mod+g         exec ifos-launcher
 # to htop in a terminal if the graphical one is not installed.
 bindsym $mod+Escape    exec --no-startup-id sh -c 'command -v xfce4-taskmanager >/dev/null && exec xfce4-taskmanager || exec xfce4-terminal --title htop -e htop'
 bindsym $mod+n         exec --no-startup-id ~/.config/i3/scripts/nightlight.sh
+# The notification centre: everything the machine said and you did not catch,
+# plus Não perturbe. The bell in the bar is the discoverable way in; this is
+# for the people who would rather not reach for the mouse.
+bindsym $mod+Shift+n   exec --no-startup-id ~/.config/rofi/notifications.sh
 # Re-detect the screens, for when a projector is plugged into a machine whose
 # udev rule did not fire, or when the room's cable is swapped mid-class.
 bindsym $mod+p         exec --no-startup-id ~/.config/i3/scripts/screens.sh
