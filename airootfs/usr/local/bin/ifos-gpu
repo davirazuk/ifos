@@ -146,7 +146,8 @@ software_rendering() {
 
 PROBLEMS=()   # human sentences
 GOOD=()       # things checked and found fine, so a clean report says something
-MISSING=()    # package names
+MISSING=()    # package names, without which something is broken
+SUGGEST=()    # package names worth having, whose absence is not a fault
 ACTIONS=()    # tokens: multilib dkms initramfs reboot modeset nouveau-blacklist
 
 # Without pacman there is no way to tell what is installed, and reporting every
@@ -155,11 +156,17 @@ ACTIONS=()    # tokens: multilib dkms initramfs reboot modeset nouveau-blacklist
 want()    { have_pacman || return 0
             local p; for p in "$@"; do pkg "$p" || MISSING+=("$p"); done; }
 problem() { PROBLEMS+=("$1"); }
+# Wanted, but not a fault. --fix installs these; --check does not go red over
+# them, and neither does the notification at login. glxinfo is the case this
+# exists for: without it the renderer cannot be read, which weakens the check
+# but says nothing at all about whether the graphics work.
+suggest() { have_pacman || return 0
+            local p; for p in "$@"; do pkg "$p" || SUGGEST+=("$p"); done; }
 good()    { GOOD+=("$1"); }
 action()  { local a; for a in "${ACTIONS[@]:-}"; do [[ $a == "$1" ]] && return; done; ACTIONS+=("$1"); }
 
 diagnose() {
-    PROBLEMS=(); GOOD=(); MISSING=(); ACTIONS=()
+    PROBLEMS=(); GOOD=(); MISSING=(); SUGGEST=(); ACTIONS=()
 
     if ! command -v lspci >/dev/null 2>&1; then
         problem "O pciutils não está instalado, então nem dá para saber que placa é esta."
@@ -183,6 +190,12 @@ diagnose() {
     # below are plugins for it. Missing, every Vulkan game and all of Proton
     # fails, with an error that names neither.
     want vulkan-icd-loader lib32-vulkan-icd-loader
+
+    # glxinfo, which is the only way to ask what is actually drawing. An
+    # installed system that predates this tool will not have it, and the check
+    # that matters most - "is this machine rendering on its processor" - is
+    # simply skipped until it does.
+    command -v glxinfo >/dev/null 2>&1 || suggest mesa-utils
 
     has_vendor intel  && diagnose_intel
     has_vendor amd    && diagnose_amd
@@ -366,6 +379,9 @@ print_findings() {
     if (( ${#MISSING[@]} )); then
         printf '\n    %s!%s Faltando instalar: %s\n' "$c_yel" "$c_reset" "${MISSING[*]}"
     fi
+    if (( ${#SUGGEST[@]} )); then
+        printf '\n    %s·%s Ajudaria ter: %s\n' "$c_dim" "$c_reset" "${SUGGEST[*]}"
+    fi
     printf '\n'
 }
 
@@ -380,6 +396,10 @@ fold_text() {
 }
 
 healthy() { (( ! ${#PROBLEMS[@]} && ! ${#MISSING[@]} )); }
+
+# Something for --fix to do, which is a wider question than whether anything is
+# wrong: a machine with nothing broken can still be missing glxinfo.
+nothing_to_do() { healthy && (( ! ${#SUGGEST[@]} && ! ${#ACTIONS[@]} )); }
 
 # ── Offload ──────────────────────────────────────────────────────────────────
 
@@ -428,7 +448,7 @@ enable_multilib() {
 fix() {
     local rc=0
 
-    if ! healthy; then
+    if (( ${#PROBLEMS[@]} )); then
         printf '  %sO que vai ser feito%s\n\n' "$c_b" "$c_reset"
     fi
 
@@ -461,6 +481,8 @@ fix() {
         enable_multilib ||
             { printf '    %s✗%s Não deu para ligar o multilib.\n' "$c_red" "$c_reset"; rc=1; }
     fi
+
+    (( ${#SUGGEST[@]} )) && MISSING+=("${SUGGEST[@]}")
 
     if (( ${#MISSING[@]} )); then
         # Deduplicated: the vendor checks and the NVIDIA offer both ask for
@@ -549,7 +571,7 @@ case ${1:-} in
         print_cards
         printf '  %sSituação%s\n\n' "$c_b" "$c_reset"
         print_findings
-        if healthy; then
+        if nothing_to_do; then
             printf '  Está tudo certo — nada a consertar.\n\n'
             exit 0
         fi

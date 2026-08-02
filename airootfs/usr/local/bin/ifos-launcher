@@ -879,7 +879,13 @@ class Launcher(Gtk.Window):
         now = datetime.now()
         self.clock.set_text(now.strftime("%H:%M"))
         try:
-            self.clockdate.set_text(now.strftime("%A, %d de %B").capitalize())
+            # Uppercase the first letter and leave the rest alone. str.capitalize
+            # lowercases everything after it, which is invisible in Portuguese -
+            # "domingo, 02 de agosto" is lowercase to begin with - and mangles
+            # every locale where a month name is capitalised: an account left on
+            # English read "Sunday, 02 de august".
+            stamp = now.strftime("%A, %d de %B")
+            self.clockdate.set_text(stamp[:1].upper() + stamp[1:])
         except ValueError:
             self.clockdate.set_text(now.strftime("%d/%m/%Y"))
         return True
@@ -1070,6 +1076,12 @@ class Launcher(Gtk.Window):
         name = Gtk.Label(label=entry["name"])
         name.get_style_context().add_class("tile-name")
         name.set_line_wrap(True)
+        # Break between words, never inside one. The default also breaks at any
+        # character when a word does not fit, and the names this list is full of
+        # are exactly the ones that suffer for it: "Compiladores C/C++" came out
+        # as "Compiladores C/C+" over "+", which reads as a typo rather than as
+        # a wrap. Anything genuinely too long is ellipsised two lines down.
+        name.set_line_wrap_mode(Pango.WrapMode.WORD)
         name.set_justify(Gtk.Justification.CENTER)
         name.set_max_width_chars(16)
         name.set_lines(2)
