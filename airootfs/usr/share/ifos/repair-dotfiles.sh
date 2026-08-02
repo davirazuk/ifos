@@ -172,6 +172,7 @@ I3_EXECS=(
 # directory: there is no file to copy, only a line to add.
 I3_EXEC_COMMANDS=(
     'ifos-mouse --apply'
+    'ifos-mouse --daemon'
 )
 
 i3_new_execs() {
