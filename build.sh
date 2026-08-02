@@ -55,6 +55,15 @@ command -v podman >/dev/null || die "podman is not installed."
 info "Checking profile integrity…"
 "$PROFILE/tools/fix-symlinks.sh"
 
+# Icons that are a space rather than a glyph. This has shipped three times -
+# the whole bar, most of fastfetch, and every on-screen display - because "  "
+# and " " are indistinguishable in a diff and nothing errors. Cheap to check,
+# invisible otherwise.
+if command -v python3 >/dev/null; then
+    python3 "$PROFILE/tools/check-icons.py" ||
+        die "Icons are missing above. Fix them, or edit tools/check-icons.py if a file legitimately changed shape."
+fi
+
 # ── Build environment ────────────────────────────────────────────────────────
 if ! podman image exists "$IMAGE"; then
     info "Building the $IMAGE container image (one time)…"
