@@ -3,7 +3,10 @@
 # host can be any distribution with podman, and no sudo is required.
 FROM docker.io/library/archlinux:latest
 
-RUN pacman -Syu --noconfirm archiso && pacman -Scc --noconfirm
+# curl and python are for check-packages.sh, which asks the AUR whether the
+# catalog's `aur` entries exist. The base image has neither, and archiso does
+# not pull them in.
+RUN pacman -Syu --noconfirm archiso curl python && pacman -Scc --noconfirm
 
 # mkarchiso only takes its unprivileged code path (pacstrap -N, which bind-mounts
 # /dev instead of mounting devtmpfs) when it is *not* run as root - no user

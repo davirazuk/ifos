@@ -161,6 +161,12 @@ install_selection() {
     clear
     printf '%s\n  IFOS — instalando %d item(ns)\n%s\n\n' "$c_blue" "$#" "$c_reset"
 
+    # What did not work. The summary at the bottom used to be an unconditional
+    # green "Pronto." - so a build that failed, or a package name that does not
+    # exist at all, ended with a tick and the person went looking for a program
+    # that had never been installed.
+    local -a failed=()
+
     (( need_multilib )) && enable_multilib
 
     if (( ${#repo_pkgs[@]} )); then
@@ -177,8 +183,18 @@ install_selection() {
             local helper; helper=$(aur_helper)
             info "Instalando do AUR com o $helper:"
             printf '    %s\n' "${aur_pkgs[*]}"
-            "$helper" -S --needed "${aur_pkgs[@]}" || warn "Algumas compilações do AUR falharam."
+            if ! "$helper" -S --needed "${aur_pkgs[@]}"; then
+                failed+=("${aur_pkgs[@]}")
+                warn "Não deu para instalar do AUR: ${aur_pkgs[*]}"
+                # The common cause, and the one nothing else explains: the
+                # package is not in the AUR under that name. yay says "no
+                # package found for targets" and moves on, which reads like a
+                # network hiccup.
+                warn "Diz 'no package found' acima? Então esse pacote não existe"
+                warn "mais com esse nome — avise em github.com/davirazuk/ifos."
+            fi
         else
+            failed+=("${aur_pkgs[@]}")
             warn "Pacotes do AUR ignorados: ${aur_pkgs[*]}"
         fi
     fi
@@ -187,8 +203,12 @@ install_selection() {
         if ensure_flatpak; then
             info "Instalando do Flathub:"
             printf '    %s\n' "${flatpak_ids[*]}"
-            $SUDO flatpak install -y flathub "${flatpak_ids[@]}" || warn "Algumas instalações de Flatpak falharam."
+            $SUDO flatpak install -y flathub "${flatpak_ids[@]}" || {
+                failed+=("${flatpak_ids[@]}")
+                warn "Algumas instalações de Flatpak falharam."
+            }
         else
+            failed+=("${flatpak_ids[@]}")
             warn "Pacotes Flatpak ignorados: ${flatpak_ids[*]}"
         fi
     fi
@@ -196,8 +216,14 @@ install_selection() {
     local p
     for p in "${repo_pkgs[@]}" "${aur_pkgs[@]}"; do post_install_hint "$p"; done
 
-    printf '\n'; ok "Pronto."
+    printf '\n'
+    if (( ${#failed[@]} )); then
+        warn "Terminou, mas ${#failed[@]} pacote(s) não foram instalados."
+    else
+        ok "Pronto."
+    fi
     read -rp "  Pressione Enter para voltar ao menu… "
+    (( ${#failed[@]} == 0 ))
 }
 
 # ── Text-mode UI (used when dialog is unavailable) ───────────────────────────

@@ -295,6 +295,15 @@ because "o controle não funciona" is three different problems that look
 identical from the sofa. `ifos-controller --test` prints buttons and sticks as
 you press them. It is **Controles** under Sistema in the launcher.
 
+**The catalog's AUR names are checked too, now.** `check-packages.sh` resolved
+the `repo` and `multilib` entries against a synced database and skipped the
+`aur` ones — so a catalog entry naming a package that is not in the AUR at all
+shipped, and the first anyone knew was a student watching yay say `no package
+found for targets` and give up. The names cannot be checked from a machine
+without access to the AUR, so the check runs in the build container that
+already has it, against the AUR's own API. Thirty catalog entries had never
+been verified by anything.
+
 Steam, Lutris, Heroic, Wine, Proton-GE, MangoHud, GameMode and Gamescope are all
 one line in `ifos-software`.
 

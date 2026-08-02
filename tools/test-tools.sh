@@ -438,6 +438,60 @@ check "--pair explica o Xbox"           says "Pair"
 run_ctl --nonsense
 check "opção inválida sai 2"            rc_is 2
 
+# ── 17. ifos-software tells the truth about what it installed ────────────────
+#  A catalog entry naming a package that is not in the AUR shipped, and the
+#  install ended with a green "Pronto." under yay's own "no package found for
+#  targets". The person went looking for a program that had never been
+#  installed. Whatever the reason a package does not arrive, the last line has
+#  to say so.
+case_name "ifos-software não diz Pronto depois de falhar"
+SW="$PROFILE/airootfs/usr/local/bin/ifos-software"
+SWD="$TMP/sw"; mkdir -p "$SWD/bin" "$SWD/apps.d"
+printf 'Bom|Existe|pacote-bom|repo\nRuim|Não existe no AUR|pacote-ruim|aur\n' \
+    > "$SWD/apps.d/10-teste.list"
+printf '#!/bin/sh\nexec "$@"\n'                       > "$SWD/bin/sudo"
+printf '#!/bin/sh\nexit 0\n'                          > "$SWD/bin/pacman"
+printf '#!/bin/sh\necho "no package found for targets" >&2\nexit 1\n' > "$SWD/bin/yay"
+printf '#!/bin/sh\nexit 0\n'                          > "$SWD/bin/pacman-conf"
+chmod +x "$SWD"/bin/*
+
+run_sw() {
+    OUT=$(IFOS_CATALOG_DIR="$SWD/apps.d" PATH="$SWD/bin:/usr/bin:/bin" \
+          bash "$SW" -i "$1" </dev/null 2>&1)
+    RC=$?
+}
+
+run_sw Ruim
+check "não termina com Pronto"      not_says "Pronto."
+check "diz que faltou instalar"     says "não foram instalados"
+check "nomeia o pacote"             says "pacote-ruim"
+check "explica o 'no package found'" says "esse pacote não existe"
+check "sai diferente de zero"       [ "$RC" != 0 ]
+
+run_sw Bom
+check "quando dá certo, diz Pronto" says "Pronto."
+check "e sai zero"                  rc_is 0
+
+# ── 18. The catalog is well formed ───────────────────────────────────────────
+#  Four fields, and a source ifos-software knows what to do with. A fifth pipe
+#  or a typo in the source silently drops the line, or sends it to pacman when
+#  it belongs to the AUR.
+case_name "O catálogo está bem formado"
+BAD=$(awk -F'|' '!/^#/ && NF>1 && NF!=4 {print FILENAME": "$0}' \
+      "$PROFILE"/airootfs/usr/share/ifos/apps.d/*.list)
+OUT=$BAD
+check "toda linha tem quatro campos" [ -z "$BAD" ]
+
+BAD=$(awk -F'|' '!/^#/ && NF==4 && $4!="repo" && $4!="multilib" && $4!="aur" && $4!="flatpak" \
+      {print FILENAME": "$4}' "$PROFILE"/airootfs/usr/share/ifos/apps.d/*.list)
+OUT=$BAD
+check "toda origem é conhecida"      [ -z "$BAD" ]
+
+BAD=$(awk -F'|' '!/^#/ && NF==4 && $3 !~ /^[a-zA-Z0-9@._+-]+( [a-zA-Z0-9@._+-]+)*$/ \
+      {print FILENAME": "$3}' "$PROFILE"/airootfs/usr/share/ifos/apps.d/*.list)
+OUT=$BAD
+check "todo nome de pacote é plausível" [ -z "$BAD" ]
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"
