@@ -55,9 +55,10 @@ then how to use the disk. There are three disk modes:
 | --- | --- |
 | **alongside** | Creates IFOS in unallocated free space and reuses the existing EFI partition. Nothing else is formatted, resized or removed — your other OS keeps working, and GRUB is configured with `os-prober` so it stays in the boot menu. |
 | **partition** | Formats exactly the one partition you pick. |
-| **wipe** | Erases the whole disk. Requires typing `ERASE`. |
+| **wipe** | Erases the whole disk. Requires typing `APAGAR`. |
 
-Nothing is written until you type `YES` at the summary screen. The whole run is
+Nothing is written until you type `SIM` at the summary screen. The installer
+asks its questions in Portuguese. The whole run is
 logged to `/var/log/ifos-install.log`.
 
 > **Before a dual-boot install:** shrink your existing partition with GParted
