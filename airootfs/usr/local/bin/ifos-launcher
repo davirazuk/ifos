@@ -80,7 +80,7 @@ SSO_HOSTS = {"accounts.google.com"}
 # used to log you out. Matched on the command's first word rather than by
 # substring, which is what silently broke when i3lock became ifos-lock.
 KEEP_LAUNCHER_OPEN = {"systemctl", "ifos-lock", "ifos-theme",
-                      "ifos-update-terminal",
+                      "ifos-update-terminal", "ifos-term",
                       "~/.config/i3/scripts/screens.sh"}
 
 # What people type when they are looking for something they already know by
@@ -315,6 +315,24 @@ button:focus, button:focus-visible,
 """
 
 
+def command_exists(command: str) -> bool:
+    """Is the first word of this shell command something that can be run?
+
+    The Sistema section is a fixed list, and it was drawn in full whether or
+    not the machine had the program behind each tile. On an install without
+    arandr the "Monitores" tile did nothing; without xfce4-terminal, so did
+    "Terminal". A tile that cannot work is worse than a missing one - it reads
+    as the system being broken rather than as the program not being there.
+    """
+    words = shlex.split(command) or [""]
+    first = words[0]
+    if first == "sudo" and len(words) > 1:
+        first = words[1]
+    if first.startswith(("~", "/", ".")):
+        return os.access(os.path.expanduser(first), os.X_OK)
+    return shutil.which(first) is not None
+
+
 def sh(cmd: list[str]) -> str:
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=20).stdout
@@ -336,6 +354,7 @@ class Catalog:
         self.appinfos = [a for a in Gio.AppInfo.get_all() if a.should_show()]
         self.sections: list[tuple[str, str, list[dict]]] = []   # (key, title, entries)
         self._load_catalog()
+        self._reconcile_with_desktop()
         self._add_all_apps()
         self._add_system()
         self._add_recent()
@@ -452,6 +471,11 @@ class Catalog:
                     entry["installed"] = self._is_installed(
                         entry["packages"], entry.get("source", "repo")
                     )
+        # A fresh install may well have landed a desktop entry rather than a
+        # package pacman recognises by the catalog's name, so ask again the same
+        # way the first pass did.
+        self.appinfos = [a for a in Gio.AppInfo.get_all() if a.should_show()]
+        self._reconcile_with_desktop()
 
     def _is_installed(self, packages: list[str], source: str) -> bool:
         if source == "flatpak":
@@ -498,6 +522,14 @@ class Catalog:
              "network-wireless", "nm-connection-editor", True),
             ("Áudio", "Volume e dispositivos de som",
              "audio-volume-high", "pavucontrol", True),
+            # Graphics is the one part of the machine that breaks in a way
+            # nothing on screen explains: the driver goes missing after an
+            # update, X quietly falls back to drawing on the processor, and the
+            # only symptom is that everything is slow and Steam refuses to open
+            # with a message about libGL. Diagnosing that took lsmod, modinfo
+            # and glxinfo. Now it takes clicking this.
+            ("Vídeo e jogos", "Verificar e consertar os drivers da placa de vídeo",
+             "video-display", "ifos-term 'Vídeo e jogos' ifos-gpu --fix", True),
             ("Monitores", "Resolução e disposição das telas",
              "video-display", "arandr", True),
             # Everything added for screens so far was a keyboard shortcut, and
@@ -511,9 +543,8 @@ class Catalog:
              "~/.config/i3/scripts/screens.sh --use-best", True),
             ("Atalhos do teclado", "A lista completa de atalhos do IFOS",
              "preferences-desktop-keyboard-shortcuts",
-             "xfce4-terminal --title ifos-help -x sh -c "
-             "'cat /usr/share/ifos/keybindings.txt; "
-             "read -n1 -s -p \"  pressione uma tecla \"'", True),
+             "ifos-term 'Atalhos do teclado' "
+             "cat /usr/share/ifos/keybindings.txt", True),
             ("Arquivos", "Gerenciador de arquivos",
              "system-file-manager", "thunar", True),
             ("Terminal", "Linha de comando",
@@ -536,9 +567,43 @@ class Catalog:
                 "installed": True,
             }
             for name, desc, icon, command, show in entries
-            if show
+            if show and command_exists(command)
         ]
         self.sections.append(("sistema", "Sistema", items))
+
+    # ── making the list agree with the machine ───────────────────────────────
+    def _reconcile_with_desktop(self) -> None:
+        """Mark catalog entries whose program is demonstrably already here.
+
+        "Installed" was decided purely by asking pacman whether it owned every
+        package on the line. That is right for the common case and wrong every
+        time a program arrived by another road: Steam as a Flatpak, VS Code
+        built from the AUR under a different package name, anything installed
+        before IFOS was. Those all sat in the catalog offering to install
+        something the machine already had, and clicking the tile started a
+        download instead of the program - which is the launcher disagreeing
+        with the system in the most visible way it can.
+
+        Only ever turns "missing" into "present", and only on evidence: a
+        binary on PATH, or a desktop entry by that name. Nothing here can hide
+        something that really is not installed.
+        """
+        by_name = {
+            (info.get_display_name() or "").strip().lower()
+            for info in self.appinfos
+        }
+        for _key, _title, entries in self.sections:
+            for entry in entries:
+                if entry.get("kind") != "package" or entry["installed"]:
+                    continue
+                packages = entry.get("packages", [])
+                # One package, one program: a binary by that name is proof.
+                # Multi-package entries are kits - "Kit Redes" is nine tools -
+                # and one of the nine being present says nothing about the rest.
+                if len(packages) == 1 and shutil.which(packages[0]):
+                    entry["installed"] = True
+                elif entry["name"].strip().lower() in by_name:
+                    entry["installed"] = True
 
     # matching ---------------------------------------------------------------
     @staticmethod

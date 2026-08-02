@@ -371,7 +371,13 @@ GPU_SEEN=$(lspci 2>/dev/null | grep -Ei 'vga|3d controller|display controller' |
 # Mesa and its 32-bit half are wanted in every case: they drive Intel and AMD,
 # and on a hybrid laptop they still drive the integrated chip that everything
 # except games runs on.
-MESA_SET="mesa lib32-mesa"
+#
+# The Vulkan loader is in every case too. It is what a game links against - the
+# vendor drivers below are plugins for it - and every Vulkan title, all of
+# Proton included, fails without it in a way that names neither the loader nor
+# the driver. It usually arrives as a dependency of vulkan-radeon or
+# vulkan-intel, which is a guarantee only for as long as those are installed.
+MESA_SET="mesa lib32-mesa vulkan-icd-loader lib32-vulkan-icd-loader"
 [[ $GPUS == *intel* ]] && MESA_SET+=" vulkan-intel lib32-vulkan-intel"
 [[ $GPUS == *amd*   ]] && MESA_SET+=" vulkan-radeon lib32-vulkan-radeon"
 
@@ -405,8 +411,17 @@ fi
 
 case $GPU_CHOICE in
     nvidia)
+        # nvidia-open-dkms, not nvidia-open. This image installs two kernels -
+        # linux and linux-lts - and nvidia-open is a module prebuilt against
+        # linux alone. Booting the LTS kernel, which exists precisely for when
+        # the main one breaks, would have found no NVIDIA module at all; and
+        # even on the main kernel the prebuilt module and the kernel have to
+        # move in lockstep, so an update that lands one without the other
+        # leaves the machine on software rendering with nothing to explain it.
+        # DKMS rebuilds for every installed kernel. Both kernels' headers are
+        # already in PACKAGES, so nothing else is needed.
         # shellcheck disable=SC2206
-        GPU_PKGS=(nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils $MESA_SET)
+        GPU_PKGS=(nvidia-open-dkms dkms nvidia-utils nvidia-settings lib32-nvidia-utils $MESA_SET)
         # A hybrid laptop needs prime-run to send a game to the discrete chip;
         # without it every game runs on the integrated one and nobody can tell
         # why the machine is slow.
@@ -562,6 +577,11 @@ PACKAGES=(
     # packages.x86_64 for the ISO but not here, so an installed system had the
     # tool and nothing for it to read.
     pciutils
+    # glxinfo, which answers the one question `ifos-gpu --check` cannot get from
+    # the package list: what is actually drawing. Without it a machine with
+    # every driver installed and still rendering on the CPU - the exact state
+    # that stops Steam from opening - reports itself as healthy.
+    mesa-utils
     i3-wm i3lock xss-lock libnotify polybar rofi picom dunst feh
     xfce4-terminal alacritty xterm
     thunar thunar-volman thunar-archive-plugin gvfs gvfs-mtp gvfs-smb tumbler
