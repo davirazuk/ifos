@@ -1065,6 +1065,41 @@ OUT=$(cat "$PROFILE/airootfs/usr/local/bin/install-ifos")
 check "o instalador consulta a tabela"   says "lsblk -dno PTTYPE"
 check "e diz por que não deu, em vez de sumir com a opção" says "As outras opções continuam"
 
+# ── Nothing may be destroyed before the last thing that can refuse ───────────
+#  The "partition" mode reuses an existing EFI partition rather than creating
+#  one, and the check that there *was* one lived after mkfs. On a UEFI machine
+#  whose disk had no ESP the installer formatted the partition the student
+#  chose - destroying whatever was on it - and only then gave up, saying it had
+#  nowhere to put the bootloader. Nothing was gained by the formatting and
+#  there was no way back.
+#
+#  So the invariant, checked by line number: every refusal comes before the
+#  first command that writes to a disk.
+case_name "O instalador recusa antes de escrever, nunca depois"
+INST="$PROFILE/airootfs/usr/local/bin/install-ifos"
+
+FIRST_WRITE=$(grep -nE '^[[:space:]]*(wipefs -af|sgdisk (--zap-all|-n )|mkfs\.(ext4|btrfs|vfat) )' \
+              "$INST" | head -1 | cut -d: -f1)
+ESP_CHECK=$(grep -n 'não tem partição de sistema EFI' "$INST" | head -1 | cut -d: -f1)
+ESP_IS_TARGET=$(grep -n 'é a partição de sistema EFI do disco' "$INST" | head -1 | cut -d: -f1)
+ALONGSIDE_CHECK=$(grep -n 'Não dá para instalar ao lado:' "$INST" | head -1 | cut -d: -f1)
+OUT="primeira escrita em disco: linha $FIRST_WRITE
+falta de EFI:              linha $ESP_CHECK
+EFI escolhida como alvo:   linha $ESP_IS_TARGET
+instalar ao lado:          linha $ALONGSIDE_CHECK"
+
+check "existe uma primeira escrita para comparar" [ -n "$FIRST_WRITE" ]
+check "a falta de partição EFI é recusada antes" \
+      [ "${ESP_CHECK:-999999}" -lt "$FIRST_WRITE" ]
+check "formatar a própria EFI é recusado antes" \
+      [ "${ESP_IS_TARGET:-999999}" -lt "$FIRST_WRITE" ]
+check "instalar ao lado é recusado antes" \
+      [ "${ALONGSIDE_CHECK:-999999}" -lt "$FIRST_WRITE" ]
+
+OUT=$(cat "$INST")
+check "e as recusas dizem que nada foi alterado" \
+      [ "$(grep -c 'Nada foi alterado no disco' "$INST")" -ge 2 ]
+
 # ── The installer's first step used to stop on a working network ─────────────
 #  ICMP is blocked on a great many school and campus networks. A single ping
 #  as the connectivity test meant the installer refused to start on a machine

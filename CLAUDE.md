@@ -124,6 +124,13 @@ accent #00a86b accent-2 #7ed957  bright #00c47d
   de GPT.
 - **`grub-install --target=i386-pc` num disco GPT precisa de partição `ef02`**,
   senão falha no último passo da instalação.
+- **No `install-ifos`, toda recusa tem que vir antes da primeira escrita em
+  disco.** Isso é testado por número de linha em `test-tools.sh`. Já houve uma
+  recusa depois do `mkfs`: a máquina formatava a partição do aluno e só então
+  desistia por não ter partição EFI.
+- **`check` no `test-tools.sh` sempre retorna 0.** Escrever
+  `check "..." [ a ] && [ b ]` faz o `[ b ]` rodar solto e o resultado ser
+  jogado fora — o teste passa sempre. Use uma condição só por `check`.
 - **`picom` tem `unredir-if-possible` desligado por padrão**, o que deixa jogo
   em tela cheia composto — foi a causa do "megabonk travando".
 
