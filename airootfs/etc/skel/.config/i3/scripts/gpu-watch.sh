@@ -26,10 +26,18 @@ command -v notify-send >/dev/null 2>&1 || exit 0
 # the installer already asks about drivers. Nagging there is noise.
 [[ -d /run/archiso ]] && exit 0
 
-ifos-gpu --check >/dev/null 2>&1 && exit 0
+# --why is --check with the answer on one line. The generic version of this
+# notification said "a placa de vídeo não está funcionando direito" for every
+# machine and every fault alike, which tells somebody that something is wrong
+# and nothing about what - so the second time it appears it reads as noise. The
+# sentence naming the actual fault was already being computed and thrown away.
+WHY=$(ifos-gpu --why 2>/dev/null) && exit 0
 
 TITLE="A placa de vídeo não está funcionando direito"
 BODY="Os jogos e o Steam podem não abrir. Clique aqui para o IFOS verificar e consertar sozinho."
+[[ -n $WHY ]] && BODY="$WHY
+
+Clique aqui para o IFOS verificar e consertar sozinho."
 
 # libnotify 0.8 can carry a clickable action and blocks until it is chosen or
 # the notification is dismissed. Where that is not available the notification
@@ -48,5 +56,7 @@ else
         --icon=video-display \
         --expire-time=0 \
         "$TITLE" \
-        "Os jogos e o Steam podem não abrir. Abra o menu do IFOS e escolha «Vídeo e jogos»."
+        "${WHY:-Os jogos e o Steam podem não abrir.}
+
+Abra o menu do IFOS e escolha «Vídeo e jogos»."
 fi

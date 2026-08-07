@@ -193,6 +193,14 @@ a ceiling.
 **HP printers.** The most common brand in a Brazilian school by a wide margin,
 and `gutenprint` covers neither HP's own drivers nor their scanners.
 
+**Bluetooth headphones that do not sound muddy.** PipeWire speaks AAC, aptX and
+LDAC, but only if `fdk-aac`, `libfreeaptx` and `libldac` are installed — they
+are optional dependencies, so nothing pulls them in and every pair of
+headphones silently fell back to SBC. SBC at its default bitpool is most of why
+Bluetooth audio has the reputation it has, and it is what every IFOS machine
+had been using. Three small libraries, and the difference is audible on
+headphones a student already owns.
+
 **GameMode, on every game, without anyone asking for it.** For as long as a
 game is open it puts the processor on the performance governor, raises the
 game's scheduling and I/O priority above everything else, and stops the screen
@@ -339,6 +347,12 @@ knows the specific ways this actually fails:
 | `nvidia_drm` without modeset | the cause of flicker and black screens after suspend |
 | `RmInitAdapter failed` / card off the bus | hardware, said as hardware, so nobody reinstalls drivers all afternoon |
 | Rendering on the CPU | the verdict, with the renderer it found |
+
+The notification at login used to say "a placa de vídeo não está funcionando
+direito" for every machine and every fault alike, which tells somebody that
+something is wrong and nothing at all about what — so the second time it
+appears it reads as noise. It now carries the sentence naming the actual fault,
+which was already being computed and thrown away.
 
 **There is no one NVIDIA driver — there are four, and the wrong one fails
 silently.** The open modules cover Turing and newer; on a GTX 1050 they
