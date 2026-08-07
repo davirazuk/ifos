@@ -585,6 +585,13 @@ class Catalog:
             # a blue screen before any operating system runs.
             ("Secure Boot", "Fazer esta máquina iniciar com o Secure Boot ligado",
              "security-high", "ifos-term 'Secure Boot' sudo ifos-secureboot --prepare", True),
+            # When the repair above does not repair it. --check says what the
+            # tool believes; --report says what is actually there, including
+            # the parts it does not know how to read - which is exactly where a
+            # wrong diagnosis hides. Six rounds of plausible fixes written by
+            # someone who had never seen the machine is what this is for.
+            ("Relatório de vídeo", "Juntar tudo sobre a placa num arquivo, para mandar para alguém",
+             "text-x-generic", "ifos-term 'Relatório de vídeo' ifos-gpu --report", True),
             # "O controle não funciona" is three different problems that look
             # identical from the sofa: no driver, no access to /dev/hidraw so
             # there is no rumble and the buttons are named wrong, or a

@@ -1117,6 +1117,99 @@ case ${1:-} in
     # Run at every boot, before the login screen. See ifos-gpu-fallback.service.
     --fallback) nvidia_fallback; exit $? ;;
 
+    # Everything about the graphics on this machine, in one file, to send to
+    # somebody who can read it.
+    #
+    # This exists because of how the NVIDIA problem actually went: round after
+    # round of fixes written by someone who had never seen the machine, each one
+    # plausible and none of them the thing that was wrong. --check says what
+    # this tool believes; --report says what is *there*, including the parts
+    # this tool does not know how to interpret, which is exactly where a wrong
+    # diagnosis hides.
+    #
+    # No interpretation, no filtering. The one line that settles most of it is
+    # "Kernel driver in use:" from lspci -k, which nothing else prints.
+    --report)
+        out=${2:-${TMPDIR:-/tmp}/ifos-video-$(date +%Y%m%d-%H%M%S).txt}
+        {
+            printf '===== IFOS relatório de vídeo — %s =====\n\n' "$(date -Is)"
+
+            printf -- '--- kernel ---\n%s\n\n' "$(uname -a)"
+            printf -- '--- linha de comando do kernel ---\n%s\n\n' "$(cat /proc/cmdline 2>/dev/null)"
+
+            # The single most useful line in the whole file: which driver the
+            # kernel actually bound to the card, as opposed to which one is
+            # installed.
+            printf -- '--- placas de vídeo (com o driver em uso) ---\n'
+            lspci -nnk 2>/dev/null | grep -A3 -Ei 'vga compatible|3d controller|display controller'
+            printf '\n'
+
+            printf -- '--- módulos carregados ---\n'
+            grep -E '^(nvidia|nouveau|i915|xe|amdgpu|radeon)' /proc/modules 2>/dev/null || echo '(nenhum)'
+            printf '\n'
+
+            printf -- '--- a NVIDIA assumiu alguma placa? ---\n'
+            if [[ -d /proc/driver/nvidia/gpus ]]; then
+                ls -1 /proc/driver/nvidia/gpus/ 2>/dev/null | sed 's/^/  /' || true
+                [[ -n $(ls -A /proc/driver/nvidia/gpus/ 2>/dev/null) ]] || echo '  NENHUMA — o módulo carregou e não pegou placa'
+            else
+                echo '  (o módulo nvidia não está carregado)'
+            fi
+            printf '\n%s\n\n' "$(cat /proc/driver/nvidia/version 2>/dev/null || echo '(sem /proc/driver/nvidia/version)')"
+
+            printf -- '--- dispositivos ---\n'
+            ls -l /dev/nvidia* /dev/dri/ 2>/dev/null || echo '(nenhum)'
+            printf '\n'
+
+            printf -- '--- pacotes ---\n'
+            if have_pacman; then
+                pacman -Q 2>/dev/null | grep -E 'nvidia|mesa|vulkan|libva|dkms|linux[0-9-]*(-lts)?( |-headers)|steam|electron' || true
+                printf '\nmultilib: '; multilib_on && echo ligado || echo DESLIGADO
+            fi
+            printf '\n'
+
+            printf -- '--- dkms ---\n%s\n\n' "$(dkms status 2>/dev/null || echo '(sem dkms)')"
+
+            printf -- '--- o que está desenhando ---\n'
+            timeout 15 glxinfo -B 2>&1 | head -20 || echo '(sem glxinfo, ou sem tela)'
+            printf '\n'
+
+            printf -- '--- vulkan ---\n'
+            timeout 15 vulkaninfo --summary 2>&1 | grep -Ei 'driverName|deviceName|apiVersion|ERROR' | head -20 \
+                || echo '(sem vulkaninfo)'
+            printf '\n'
+
+            printf -- '--- decodificação de vídeo ---\n'
+            timeout 15 vainfo 2>&1 | head -12 || echo '(sem vainfo)'
+            printf '\n'
+
+            printf -- '--- o que o driver disse (NVRM) ---\n'
+            nvidia_nvrm | head -40
+            printf '\n'
+
+            printf -- '--- erros do Xorg ---\n'
+            grep -hE '\(EE\)|\(WW\).*(NVIDIA|nouveau|GLX|glamor)' \
+                 /var/log/Xorg.0.log "$HOME/.local/share/xorg/Xorg.0.log" 2>/dev/null | tail -30 \
+                || echo '(sem log do Xorg)'
+            printf '\n'
+
+            printf -- '--- configuração escrita pelo IFOS ---\n'
+            for f in /etc/modprobe.d/*.conf /etc/mkinitcpio.conf.d/*.conf /etc/pacman.d/hooks/*.hook; do
+                [[ -f $f ]] || continue
+                printf '\n>>> %s\n' "$f"; cat "$f"
+            done
+            printf '\n'
+
+            printf -- '--- o diagnóstico do ifos-gpu ---\n'
+            COLUMNS=100 bash "$0" --check 2>&1 | sed 's/\x1b\[[0-9;]*m//g'
+        } > "$out" 2>&1
+
+        printf '\n  Relatório salvo em:\n\n    %s%s%s\n\n' "$c_b" "$out" "$c_reset"
+        printf '  Mande esse arquivo inteiro. Ele tem a resposta que faltava:\n'
+        printf '  qual driver o kernel de fato pôs na placa, e o que o driver\n'
+        printf '  respondeu — que é o que nenhum palpite daqui consegue adivinhar.\n\n'
+        exit 0 ;;
+
     # The single most important sentence, on one line, for the notification at
     # login. That notification used to say "a placa de vídeo não está
     # funcionando direito" on every machine and every fault alike, which tells
