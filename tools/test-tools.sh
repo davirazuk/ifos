@@ -1018,6 +1018,20 @@ OUT=$(grep '^EARLYOOM_ARGS=' "$PROFILE/airootfs/etc/default/earlyoom" || true)
 check "earlyoom tem argumentos"        says "EARLYOOM_ARGS="
 check "e nenhuma aspa neles"           not_says "'"
 
+# ── The installer's first step used to stop on a working network ─────────────
+#  ICMP is blocked on a great many school and campus networks. A single ping
+#  as the connectivity test meant the installer refused to start on a machine
+#  whose network was fine, with a message telling the student to connect to a
+#  network they were already on, and nothing on screen suggesting a way past it.
+case_name "O instalador testa a rede como o pacstrap vai testar"
+INST="$PROFILE/airootfs/usr/local/bin/install-ifos"
+OUT=$(cat "$INST")
+check "tenta HTTPS de verdade"        says "curl -fsS --max-time 8"
+check "com o ping só como reserva"    says "have_network"
+check "e explica o portal de login"   says "login numa página"
+check "o ping não é mais a única prova" \
+      [ "$(grep -c 'ping -c1 -W3' "$INST")" = 1 ]
+
 # ── The repair has to happen without being asked for ─────────────────────────
 #  A fix that needs a second command is a fix most people never run. The whole
 #  point of the graphics doctor is lost if somebody has to know it exists.
