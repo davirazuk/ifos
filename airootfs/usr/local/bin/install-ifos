@@ -610,6 +610,14 @@ PACKAGES=(
     pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber
     pavucontrol pamixer playerctl brightnessctl power-profiles-daemon
     zram-generator
+    # The good Bluetooth codecs. PipeWire can speak AAC, aptX and LDAC, but only
+    # if these are installed - they are optional dependencies, so nothing pulls
+    # them in and a pair of headphones falls back to SBC without saying so.
+    # SBC at the default bitpool is the reason Bluetooth audio has a reputation
+    # for sounding muddy, and it is the codec every IFOS machine has been using.
+    # Three small libraries, and the difference is audible on the headphones a
+    # student already owns.
+    libfreeaptx libldac fdk-aac
     # For as long as a game is open: the processor on the performance governor,
     # the game's scheduling and I/O priority above everything else, and the
     # screen not blanking. It ends when the game does, so it costs a machine

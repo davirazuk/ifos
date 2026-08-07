@@ -415,6 +415,47 @@ check "sai 1"                        rc_is 1
 check "diz que não assumiu a placa"  says "não assumiu nenhuma placa"
 check "não afirma que carregou tudo bem" not_says "com a placa nas mãos"
 
+# ── 15c. One sentence, for the notification at login ─────────────────────────
+#  That notification said "a placa de vídeo não está funcionando direito" on
+#  every machine and every fault alike. Everything needed to say *which* fault
+#  was already being computed and thrown away.
+case_name "O aviso de login diz qual é o problema"
+why_run() {
+    OUT=$(IFOS_GPU_SYSROOT="$M" IFOS_GPU_KLOG="$M/data/klog" \
+          PATH="$M/bin:/usr/bin:/bin" DISPLAY=:0 COLUMNS=200 \
+          bash "$GPU" --why 2>&1)
+    RC=$?
+}
+
+new_machine why-broken 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils nvidia-settings \
+         linux-headers vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia
+buildable nvidia
+multilib
+kernel_is 6.12.1-arch1-1 linux
+renderer "llvmpipe (LLVM 18.1.8, 256 bits)"
+why_run
+check "sai 1 quando há problema"    rc_is 1
+check "e nomeia o problema"         says "não funciona nesta placa"
+check "numa linha só"               [ "$(grep -c . <<<"$OUT")" = 1 ]
+
+new_machine why-ok 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 23 [Radeon RX 6600]"
+packages mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon \
+         vulkan-icd-loader lib32-vulkan-icd-loader
+loaded amdgpu
+multilib
+kernel_is 6.12.1-arch1-1 linux
+renderer "AMD Radeon RX 6600 (radeonsi, navi23, LLVM 18.1.8)"
+why_run
+check "sai 0 numa máquina boa"      rc_is 0
+check "e não diz nada"              [ -z "$OUT" ]
+
+OUT=$(cat "$PROFILE/airootfs/etc/skel/.config/i3/scripts/gpu-watch.sh")
+check "o aviso de login usa o --why" says -- "--why"
+
 # ── 16. Kepler: no driver in the repositories at all ─────────────────────────
 #  Offering an NVIDIA driver here is how the last version sent people in
 #  circles - there is none to install. nouveau is the answer that works today,
@@ -1003,6 +1044,19 @@ check "pergunta ao ifos-gpu qual driver"   says -- "--nvidia-pkg"
 check "e não manda mais escolher nouveau numa GTX 10xx" \
       not_says "GTX 900 ou 1000 — escolha o nouveau"
 check "tem entrada de recuperação no menu de boot" says "recuperação de vídeo"
+
+# The NVIDIA drop-in restates HOOKS in full, minus kms. That is a copy of the
+# installer's line, and a copy silently goes stale: add a hook to install-ifos
+# and an NVIDIA machine quietly stops getting it. The two have to differ by
+# exactly one word, and that word has to be kms.
+HOOKS_INST=$(grep -o 'HOOKS=([^)]*)' "$INST" | head -1 | sed 's/HOOKS=(//; s/)//')
+HOOKS_NV=$(grep -o 'HOOKS=([^)]*)' "$GPUBIN" | head -1 | sed 's/HOOKS=(//; s/)//')
+OUT="instalador: $HOOKS_INST
+nvidia:     $HOOKS_NV"
+check "as duas listas de hooks foram encontradas" [ -n "$HOOKS_INST" ] 
+check "e a da NVIDIA também"                      [ -n "$HOOKS_NV" ]
+check "e diferem só pelo kms" \
+      [ "$(printf '%s\n' $HOOKS_INST | grep -vx kms | tr '\n' ' ')" = "$(printf '%s\n' $HOOKS_NV | tr '\n' ' ')" ]
 
 # mkinitcpio sources /etc/mkinitcpio.conf.d/*.conf in sorted order and the last
 # HOOKS assignment wins. The installer writes ifos.conf with the kms hook in

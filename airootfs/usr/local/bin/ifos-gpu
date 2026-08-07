@@ -727,9 +727,22 @@ enable_multilib() {
 # restore the card's memory - without it the first game after closing the lid
 # hangs, on a machine that looks awake.
 write_nvidia_modprobe() {
+    # fbdev arrived in driver 545. modprobe rejects a whole options line when
+    # one parameter on it is unknown, and rejecting this one means nvidia_drm
+    # does not load at all - a black screen, caused by the option that exists
+    # to prevent a black flash. So it is left out when the module is here to be
+    # asked and says it has never heard of it. Inside the installer's chroot
+    # there is no module to ask and the driver being installed is the current
+    # one, so there it goes in.
+    local drm_opts="modeset=1"
+    if ! modinfo nvidia_drm >/dev/null 2>&1 ||
+         modinfo nvidia_drm 2>/dev/null | grep -q '^parm:[[:space:]]*fbdev'; then
+        drm_opts="$drm_opts fbdev=1"
+    fi
+
     printf '%s\n' \
         '# Escrito pelo IFOS (ifos-gpu). Não edite à mão: o ifos-gpu --fix reescreve.' \
-        'options nvidia_drm modeset=1 fbdev=1' \
+        "options nvidia_drm $drm_opts" \
         'options nvidia NVreg_PreserveVideoMemoryAllocations=1' \
         'options nvidia NVreg_TemporaryFilePath=/var/tmp' |
         $SUDO tee /etc/modprobe.d/ifos-nvidia.conf >/dev/null
@@ -1017,6 +1030,22 @@ case ${1:-} in
 
     # Run at every boot, before the login screen. See ifos-gpu-fallback.service.
     --fallback) nvidia_fallback; exit $? ;;
+
+    # The single most important sentence, on one line, for the notification at
+    # login. That notification used to say "a placa de vídeo não está
+    # funcionando direito" on every machine and every fault alike, which tells
+    # somebody that something is wrong and nothing about what - so it reads as
+    # noise the second time it appears. Everything needed to say which fault it
+    # is was already computed and thrown away.
+    --why)
+        diagnose
+        healthy && exit 0
+        if (( ${#PROBLEMS[@]} )); then
+            printf '%s\n' "${PROBLEMS[0]}"
+        elif (( ${#MISSING[@]} )); then
+            printf 'Faltam pacotes de vídeo: %s\n' "${MISSING[*]}"
+        fi
+        exit 1 ;;
 
     run)
         shift
