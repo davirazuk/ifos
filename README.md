@@ -202,6 +202,31 @@ playing. The launcher already knows which tiles are games, so it wraps them,
 the same way it already sends them to the discrete card on a hybrid laptop.
 Nobody has to learn the words `gamemoderun %command%`.
 
+That paragraph was not true until recently, which is worth writing down.
+GameMode ships with `renice=0` and `ioprio=0` — both of which mean "change
+nothing" — so wrapping a game in `gamemoderun` moved the CPU governor and
+nothing else. On a four-core laptop with a browser open that is most of the
+difference: the game competes on equal terms with thirty Firefox processes for
+the processor and the disk, and losing that competition is felt as a stutter
+rather than as a lower frame rate. `/etc/gamemode.ini` sets both, plus
+`disable_splitlock`, which several Windows games under Proton trigger
+constantly and which stalls every core on the machine for whole seconds at a
+time. Renicing needs the account to be in the `gamemode` group, so the
+installer puts it there and `ifos-update` catches up the accounts that predate
+the file.
+
+**Qt programs came up white.** The shipped `qt5ct.conf` said
+`custom_palette=false`, which means "use the style's own palette", and Fusion's
+is light — so VLC, qBittorrent and OBS drew a bright grey window in the middle
+of a dark green desktop, next to the dark icon theme the same file was setting.
+There is now an IFOS colour scheme for Qt, built from the same palette as
+everything else and repainted by `ifos-theme` along with it. And
+`QT_QPA_PLATFORMTHEME=qt5ct` names a plugin that exists for Qt5 only, so every
+Qt6 application ignored it and the `qt6ct` configuration sitting next to it was
+never read by anything; the variable is now chosen at login from what is
+actually installed, preferring the GTK platform theme, which serves both Qt
+majors and follows the GTK theme this desktop already sets.
+
 **cups started at every boot, on every machine.** `cups` is socket-activated:
 with `cups.socket` the daemon starts the first time something actually prints
 or opens a printer dialog, and a machine that never sees a printer never starts

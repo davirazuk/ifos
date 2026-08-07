@@ -815,6 +815,15 @@ fi
 mkinitcpio -P
 
 useradd -m -G wheel,audio,video,input,storage,network,lp -s /usr/bin/fish "${IFOS_USERNAME}"
+
+# GameMode can only lower a game's nice value for users in its own group, and
+# raising the game above the browser is most of what GameMode is for on these
+# machines. Added afterwards rather than in the line above on purpose: useradd
+# fails outright on a group that does not exist, and it would take the whole
+# installation with it if the gamemode package ever changed name.
+if getent group gamemode >/dev/null 2>&1; then
+    usermod -aG gamemode "${IFOS_USERNAME}" || true
+fi
 echo "${IFOS_USERNAME}:${IFOS_USERPASS}" | chpasswd
 if [ -n "${IFOS_ROOTPASS}" ]; then
     echo "root:${IFOS_ROOTPASS}" | chpasswd

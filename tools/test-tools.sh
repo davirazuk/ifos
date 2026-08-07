@@ -1022,6 +1022,69 @@ OUT=$(cat "$PROFILE"/airootfs/usr/share/ifos/apps.d/*.list)
 check "o catálogo não oferece mais o driver pré-compilado" not_says "|nvidia-open nvidia-utils"
 check "e oferece o fechado para as placas antigas"         says "nvidia-dkms dkms nvidia-utils"
 
+# ── GameMode was installed and doing almost nothing ──────────────────────────
+#  The launcher wraps every game in gamemoderun. GameMode's own defaults are
+#  renice=0 and ioprio=0, both of which mean "change nothing", so the only
+#  thing that ever happened was the CPU governor. A config file with zeroes in
+#  it would be the same bug written down.
+case_name "GameMode realmente prioriza o jogo"
+GM="$PROFILE/airootfs/etc/gamemode.ini"
+OUT=$(cat "$GM" 2>/dev/null)
+check "existe o /etc/gamemode.ini"       [ -f "$GM" ]
+check "governador de desempenho"         says "desiredgov=performance"
+check "prioridade de processador"        [ "$(sed -n 's/^renice=//p' "$GM")" != 0 ]
+check "e prioridade de disco"            [ "$(sed -n 's/^ioprio=//p' "$GM")" != 0 ]
+check "sem SCHED_ISO, que não existe no kernel do IFOS" says "softrealtime=off"
+
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/install-ifos")
+check "o instalador põe o usuário no grupo gamemode" says "usermod -aG gamemode"
+check "mas não no useradd, que falharia inteiro"     not_says "wheel,audio,video,input,storage,network,lp,gamemode"
+OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
+check "o branding-sync copia o gamemode.ini"         says "/etc/gamemode.ini"
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/ifos-update")
+check "e o ifos-update alcança quem já instalou"     says "configure_gamemode"
+
+# ── Qt programs were coming up light in a dark desktop ───────────────────────
+#  qt5ct.conf shipped with custom_palette=false, which means "use the style's
+#  own palette", and Fusion's is light. And QT_QPA_PLATFORMTHEME=qt5ct names a
+#  plugin that only exists for Qt5, so every Qt6 program - VLC, qBittorrent,
+#  OBS - ignored the qt6ct configuration sitting right next to it.
+case_name "Programas Qt seguem a paleta do IFOS"
+for v in 5 6; do
+    SCHEME="$PROFILE/airootfs/usr/share/qt${v}ct/colors/ifos.conf"
+    CONF="$PROFILE/airootfs/etc/skel/.config/qt${v}ct/qt${v}ct.conf"
+    OUT=$(cat "$SCHEME" 2>/dev/null)
+    check "qt${v}ct tem a paleta do IFOS"  [ -f "$SCHEME" ]
+    check "com os três estados"            [ "$(grep -c '^[a-z]*_colors=' "$SCHEME")" = 3 ]
+    # 21 QPalette roles per state. A short row is silently accepted by qt5ct and
+    # leaves the missing roles at the style's own - light - defaults.
+    BAD=$(awk -F'=' '/_colors=/ { n = split($2, a, ","); if (n != 21) print $1" tem "n }' "$SCHEME")
+    OUT=$BAD
+    check "e 21 cores em cada"             [ -z "$BAD" ]
+    # Every colour has to come from the IFOS palette, or ifos-theme will leave
+    # it behind when the palette changes and it will sit there in the wrong hue.
+    BAD=$(grep -oE '#ff[0-9a-f]{6}' "$SCHEME" | sort -u |
+          grep -vE '#ff(10241d|1b3a2e|24503f|04150f|e8f5e9|b9d4c6|7fa392|00a86b|7ed957|00c47d)')
+    OUT=$BAD
+    check "só cores da paleta"             [ -z "$BAD" ]
+    OUT=$(cat "$CONF" 2>/dev/null)
+    check "qt${v}ct usa a paleta"          says "custom_palette=true"
+    check "e aponta para o arquivo"        says "/usr/share/qt${v}ct/colors/ifos.conf"
+done
+
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/ifos-theme")
+check "o ifos-theme repinta as duas"       [ "$(grep -c 'qt[56]ct/colors/ifos.conf' "$PROFILE/airootfs/usr/local/bin/ifos-theme")" = 2 ]
+OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
+check "e o branding-sync copia as duas"    [ "$(grep -c 'qt[56]ct/colors/ifos.conf' "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")" = 2 ]
+
+# All three places that export the variable have to agree, and each has to fall
+# back to what it did before rather than naming a plugin that might not be there.
+for f in .xprofile .bashrc .config/fish/conf.d/ifos.fish; do
+    OUT=$(cat "$PROFILE/airootfs/etc/skel/$f")
+    check "$f procura o plugin antes de nomeá-lo" says "libqgtk3.so"
+    check "$f tem o caminho de volta"             says "qt5ct"
+done
+
 # ── 20. The catalog is well formed ───────────────────────────────────────────
 #  Four fields, and a source ifos-software knows what to do with. A fifth pipe
 #  or a typo in the source silently drops the line, or sends it to pacman when

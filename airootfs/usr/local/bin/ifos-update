@@ -308,6 +308,29 @@ configure_cups() {
         ok "cups agora inicia quando alguém for imprimir"
 }
 
+# ── GameMode's group, without which most of GameMode does nothing ────────────
+#  GameMode will only lower a game's nice value for a user in its own group.
+#  Outside it, gamemoded logs that it could not renice and carries on - so the
+#  launcher wraps every game in gamemoderun and the game goes on competing with
+#  the browser on equal terms, which is what a stutter on a four-core laptop
+#  actually is.
+configure_gamemode() {
+    command -v getent >/dev/null || return 0
+    getent group gamemode >/dev/null 2>&1 || return 0
+
+    local who=${SUDO_USER:-${USER:-}}
+    [[ -n $who && $who != root ]] || return 0
+    id -nG "$who" 2>/dev/null | tr ' ' '\n' | grep -qx gamemode && return 0
+
+    if (( CHECK_ONLY )); then
+        info "O $who entraria no grupo gamemode, que é o que deixa os jogos terem prioridade."
+        return 0
+    fi
+    info "Colocando o $who no grupo gamemode…"
+    $SUDO usermod -aG gamemode "$who" >/dev/null 2>&1 &&
+        ok "Pronto — vale a partir do próximo login"
+}
+
 # ── The NVIDIA configuration nobody's machine got ────────────────────────────
 #
 #  Three files decide whether an NVIDIA machine works, and until now the
@@ -505,6 +528,7 @@ configure_grub
 configure_power_profiles
 configure_cups
 configure_nvidia
+configure_gamemode
 enable_missing_services
 
 # ── The user's own configuration ─────────────────────────────────────────────

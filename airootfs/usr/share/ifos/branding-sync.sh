@@ -72,10 +72,21 @@ copy /etc/udev/rules.d/70-ifos-game-controllers.rules
 copy /etc/udev/rules.d/60-ifos-io-scheduler.rules
 copy /etc/default/earlyoom
 
+# GameMode's own defaults are renice=0 and ioprio=0, which mean "change
+# nothing" - so the launcher has been wrapping every game in a gamemoderun that
+# only ever touched the CPU governor. This is the file that makes the rest of
+# it true.
+copy /etc/gamemode.ini
+
 copy /etc/systemd/journald.conf.d/ifos-limits.conf
 copy /etc/systemd/system/paccache.service.d/ifos-keep-one.conf
 
 # Look and feel
+# The IFOS palette for Qt programs. Without it they draw in Fusion's default
+# light colours - VLC, qBittorrent and OBS are all Qt - and the shipped qt5ct
+# configuration had custom_palette=false, so it changed nothing at all.
+copy /usr/share/qt5ct/colors/ifos.conf
+copy /usr/share/qt6ct/colors/ifos.conf
 copy /usr/share/backgrounds/ifos.png
 copy /usr/share/backgrounds/ifos-ifms.png
 copy /usr/share/backgrounds/ifos-mocha.png

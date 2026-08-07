@@ -153,10 +153,12 @@ if (( SYSTEM )); then
     for f in /usr/share/sddm/themes/ifos/Main.qml \
              /usr/share/ifos/i3-bigpicture.config \
              /usr/local/bin/ifos-launcher \
-             /usr/local/bin/ifos-lock; do
+             /usr/local/bin/ifos-lock \
+             /usr/share/qt5ct/colors/ifos.conf \
+             /usr/share/qt6ct/colors/ifos.conf; do
         recolour_system "$f"
     done
-    echo "Tela de login, lançador e sessão Big Picture atualizados."
+    echo "Tela de login, lançador, sessão Big Picture e programas Qt atualizados."
 fi
 
 echo "Theme set to $THEME."
