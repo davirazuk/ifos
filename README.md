@@ -370,6 +370,7 @@ knows the specific ways this actually fails:
 | Driver updated, machine not rebooted | says so, instead of looking like a broken install |
 | `nvidia_drm` without modeset | the cause of flicker and black screens after suspend |
 | `RmInitAdapter failed` / card off the bus | hardware, said as hardware, so nobody reinstalls drivers all afternoon |
+| 64-bit and 32-bit driver halves at different versions | the Steam `0x3008` failure, which names nothing |
 | Rendering on the CPU | the verdict, with the renderer it found |
 
 The notification at login used to say "a placa de vídeo não está funcionando

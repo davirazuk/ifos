@@ -61,7 +61,7 @@ link /usr/lib/systemd/system/systemd-timesyncd.service      etc/systemd/system/s
 link /usr/lib/systemd/system/systemd-time-wait-sync.service etc/systemd/system/sysinit.target.wants/systemd-time-wait-sync.service
 
 # Executable bits do not survive a zip either.
-chmod 755 "$A"/usr/local/bin/{install-ifos,ifos-software,ifos-welcome,ifos-post-install,ifos-theme,ifos-launcher,ifos-bigpicture,ifos-update,ifos-update-terminal,ifos-term,ifos-lock,ifos-gpu,ifos-controller,ifos-mouse,ifos-scale,install-yay,choose-mirror,Installation_guide,livecd-sound} 2>/dev/null || true
+chmod 755 "$A"/usr/local/bin/{install-ifos,ifos-software,ifos-welcome,ifos-post-install,ifos-theme,ifos-launcher,ifos-bigpicture,ifos-update,ifos-update-terminal,ifos-term,ifos-lock,ifos-gpu,ifos-controller,ifos-mouse,ifos-scale,ifos-secureboot,install-yay,choose-mirror,Installation_guide,livecd-sound} 2>/dev/null || true
 chmod 755 "$A"/usr/share/ifos/{post-install.sh,branding-sync.sh} 2>/dev/null || true
 chmod 755 "$A"/etc/skel/.config/i3/scripts/*.sh "$A"/etc/skel/.config/picom/launch.sh "$A"/etc/skel/.config/polybar/launch.sh "$A"/etc/skel/.config/polybar/scripts/*.sh \
           "$A"/etc/skel/.config/rofi/*.sh "$A"/etc/skel/.xinitrc 2>/dev/null || true

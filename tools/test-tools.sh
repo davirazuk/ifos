@@ -456,6 +456,61 @@ check "e não diz nada"              [ -z "$OUT" ]
 OUT=$(cat "$PROFILE/airootfs/etc/skel/.config/i3/scripts/gpu-watch.sh")
 check "o aviso de login usa o --why" says -- "--why"
 
+# ── 15d. The two halves of the driver at different versions ──────────────────
+#  This is the machine that showed "Unexpected Transport Error (0x3008)" and
+#  nothing else. Steam and its steamwebhelper are 32-bit, so they load
+#  lib32-nvidia-utils while the desktop loads nvidia-utils; at different
+#  versions the 32-bit half talks to a driver it does not match and the web
+#  helper dies during startup. The desktop, on the 64-bit half, looks perfect.
+#  Nothing in Steam's message names graphics, or the driver, or "32".
+case_name "As duas metades do driver em versões diferentes"
+new_machine nv-skew 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation AD107 [GeForce RTX 4060]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils nvidia-settings \
+         linux-headers vulkan-icd-loader lib32-vulkan-icd-loader linux steam
+loaded nvidia nvidia_drm
+buildable nvidia
+bound
+multilib
+kernel_is 6.12.1-arch1-1 linux
+version nvidia-utils       570.86.16-1
+version lib32-nvidia-utils 565.77-1
+nvidia_running 570.86.16
+drm_modeset Y
+renderer "NVIDIA GeForce RTX 4060/PCIe/SSE2"
+run_check
+check "sai 1"                          rc_is 1
+check "nomeia as duas versões"         says "565.77"
+check "e cita o erro que o Steam mostra" says "0x3008"
+check "sem culpar a placa"             not_says "não assumiu nenhuma placa"
+
+# The same machine with the halves in step is not a problem at all.
+new_machine nv-nosk 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation AD107 [GeForce RTX 4060]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils nvidia-settings \
+         linux-headers vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia nvidia_drm
+buildable nvidia
+bound
+multilib
+kernel_is 6.12.1-arch1-1 linux
+version nvidia-utils       570.86.16-1
+version lib32-nvidia-utils 570.86.16-1
+nvidia_running 570.86.16
+drm_modeset Y
+renderer "NVIDIA GeForce RTX 4060/PCIe/SSE2"
+run_check
+check "iguais: nada a dizer"           rc_is 0
+check "e não fala em 0x3008"           not_says "0x3008"
+
+# The swap that this tool performs must not create the skew itself. It replaced
+# nvidia-utils without naming lib32-nvidia-utils beside it, so pacman had no
+# reason to touch the 32-bit half - and the machine came out of the repair with
+# exactly the failure above.
+OUT=$(cat "$GPU")
+check "a troca de driver leva a metade de 32 bits junto" \
+      [ "$(grep -c 'nvidia-utils lib32-nvidia-utils' "$GPU")" -ge 3 ]
+
 # ── 16. Kepler: no driver in the repositories at all ─────────────────────────
 #  Offering an NVIDIA driver here is how the last version sent people in
 #  circles - there is none to install. nouveau is the answer that works today,
@@ -1099,6 +1154,53 @@ check "instalar ao lado é recusado antes" \
 OUT=$(cat "$INST")
 check "e as recusas dizem que nada foi alterado" \
       [ "$(grep -c 'Nada foi alterado no disco' "$INST")" -ge 2 ]
+
+# ── Bootar com o Secure Boot ligado, sem a senha da BIOS ─────────────────────
+#  Os computadores da escola têm o Secure Boot ligado e ninguém tem a senha da
+#  BIOS. O firmware então se recusa a iniciar o IFOS, sem nada na tela dizendo
+#  por quê. O shim resolve isso sem passar pela BIOS - e a decisão de o que
+#  dizer em cada estado é uma função pura das quatro respostas, de propósito:
+#  é o que permite percorrer as combinações aqui, sem firmware nenhum por perto.
+case_name "O Secure Boot, em cada estado possível"
+SB="$PROFILE/airootfs/usr/local/bin/ifos-secureboot"
+check "a ferramenta existe"  [ -f "$SB" ]
+eval "$(awk '/^verdict\(\)/,/^}/' "$SB")"
+
+v() { OUT=$(verdict "$@"); OUT=${OUT%%|*}; }
+v 0 0 0 1; check "BIOS: não há Secure Boot"                    [ "$OUT" = legacy ]
+v 1 1 1 1; check "UEFI, ligado, cadeia, matriculada: pronto"   [ "$OUT" = pronto ]
+v 1 1 1 0; check "cadeia sem matrícula: manda matricular"      [ "$OUT" = matricular ]
+v 1 0 1 0; check "cadeia com Secure Boot desligado: pode ligar" [ "$OUT" = pronto-sb-desligado ]
+v 1 1 0 1; check "ligado e sem cadeia: manda preparar"         [ "$OUT" = preparar ]
+v 1 0 0 1; check "desligado e sem cadeia: manda preparar"      [ "$OUT" = preparar ]
+
+OUT=$(verdict 1 1 1 0)
+check "e a matrícula explica a tela azul"  says "MokManager"
+
+OUT=$(cat "$SB")
+# A chave privada é gerada na máquina e nunca sai dela. Uma chave do IFOS
+# distribuída no repositório valeria para todas as máquinas de uma vez, o que é
+# o oposto do que uma chave serve para fazer.
+check "a chave é gerada localmente"        says "openssl req -newkey"
+check "e a parte privada fica em 600"      says 'chmod 600'
+# Assinatura conferida antes de mexer na ordem de boot: a diferença entre uma
+# máquina que inicia e uma que não é coisa para conferir, não para presumir.
+check "confere a assinatura com sbverify"  says "sbverify --cert"
+check "e desiste com a cadeia pela metade" says "pela metade"
+# Um kernel novo chega sem assinatura e uma atualização do GRUB reescreve o
+# grubx64.efi por cima do assinado. Sem o hook a máquina para de iniciar no boot
+# seguinte, sem nada na tela.
+check "re-assina a cada kernel novo"       says "Target=linux"
+check "e a cada GRUB novo"                 says "Target=grub"
+# O shim não pode ser produzido nem baixado por esta ferramenta: vem do pacote.
+# Conferido em disco, para a mensagem ser verdadeira mesmo que o pacote mude.
+check "confere o shim em disco"            says "/usr/share/shim-signed/shimx64.efi"
+check "e nomeia o pacote quando falta"     says "shim-signed"
+
+OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
+check "o branding-sync copia a ferramenta"  says "ifos-secureboot"
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/install-ifos")
+check "e o instalador traz o sbsigntools"   says "sbsigntools mokutil"
 
 # ── The installer's first step used to stop on a working network ─────────────
 #  ICMP is blocked on a great many school and campus networks. A single ping

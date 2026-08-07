@@ -725,6 +725,12 @@ PACKAGES=(
     linux-lts linux-lts-headers
     amd-ucode intel-ucode
     grub efibootmgr os-prober dosfstools
+    # Assinar o próprio carregador de boot, para a máquina poder iniciar com o
+    # Secure Boot ligado sem ninguém precisar da senha da BIOS. É o caso dos
+    # computadores da escola, onde o Secure Boot não se desliga. `ifos-secureboot`
+    # usa estes dois; sem eles a ferramenta existe e não faz nada, o que é a
+    # pior das duas situações. São pequenos e ninguém precisa saber que existem.
+    sbsigntools mokutil
     e2fsprogs btrfs-progs exfatprogs ntfs-3g
     sudo man-db man-pages bash-completion pacman-contrib reflector
     git vim nano openssh rsync wget curl unzip zip 7zip unrar
