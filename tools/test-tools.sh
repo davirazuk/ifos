@@ -511,6 +511,35 @@ OUT=$(cat "$GPU")
 check "a troca de driver leva a metade de 32 bits junto" \
       [ "$(grep -c 'nvidia-utils lib32-nvidia-utils' "$GPU")" -ge 3 ]
 
+# ── 15e. The report, because six rounds of guessing was six too many ─────────
+#  --check says what this tool believes. --report says what is actually on the
+#  machine, including the parts the tool cannot interpret - which is exactly
+#  where a wrong diagnosis hides. It has to survive a machine with no NVIDIA,
+#  no glxinfo and no X, because that is where it will be run.
+case_name "O relatório de vídeo"
+new_machine rep 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB]"
+packages nvidia-open-dkms nvidia-utils
+loaded nvidia
+kernel_is 6.12.1-arch1-1 linux
+REPFILE="$M/report.txt"
+IFOS_GPU_SYSROOT="$M" IFOS_GPU_KLOG="$M/data/klog" PATH="$M/bin:/usr/bin:/bin" \
+    timeout 90 bash "$GPU" --report "$REPFILE" >/dev/null 2>&1
+RC=$?
+OUT=$(cat "$REPFILE" 2>/dev/null)
+check "sai 0"                                rc_is 0
+check "escreve o arquivo"                    [ -s "$REPFILE" ]
+# The one line that settles most of it, and that nothing else in the project
+# prints: which driver the kernel actually bound, not which one is installed.
+check "pergunta qual driver está em uso"     says "driver em uso"
+check "diz se a NVIDIA assumiu alguma placa" says "assumiu alguma placa"
+check "traz o que o driver disse"            says "NVRM"
+check "os pacotes"                           says "pacotes"
+check "a linha de comando do kernel"         says "linha de comando do kernel"
+check "e o diagnóstico junto"                says "diagnóstico do ifos-gpu"
+# Sent to somebody else, so the colour escapes have to be gone.
+check "sem códigos de cor no arquivo"        not_says $'\033['
+
 # ── 16. Kepler: no driver in the repositories at all ─────────────────────────
 #  Offering an NVIDIA driver here is how the last version sent people in
 #  circles - there is none to install. nouveau is the answer that works today,

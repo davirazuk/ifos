@@ -241,6 +241,22 @@ de comportamento.
 
 ---
 
+## 5b. Quando um conserto não conserta
+
+Se o usuário disser que continua quebrado depois de um conserto, **pare de
+propor consertos**. Foram seis rodadas de correções plausíveis escritas por
+quem nunca tinha visto a máquina, e nenhuma era a coisa errada. Peça o
+relatório:
+
+```
+ifos-gpu --report
+```
+
+Ele traz o que nenhum palpite daqui alcança: qual driver o kernel de fato pôs
+na placa (`lspci -nnk`, linha "Kernel driver in use"), se a NVIDIA assumiu
+alguma placa, o que o driver respondeu (NVRM), os pacotes com versão, e os
+erros do Xorg. Ler isso custa um décimo do que custou adivinhar.
+
 ## 6. Onde as coisas estavam paradas
 
 Última coisa feita: NVIDIA (PRs #39 e #40) e o conserto automático no
