@@ -252,14 +252,77 @@ find_esp() {
         awk -v g="$ESP_TYPE_GUID" 'tolower($2)==g {print $1; exit}'
 }
 
+# The little partition GRUB embeds itself into when booting a GPT disk without
+# UEFI. Without one, `grub-install --target=i386-pc` refuses at the very end -
+# after forty minutes of downloading - with a message about embedding.
+BIOS_BOOT_GUID=21686148-6449-6e6f-744e-656564454649
+find_bios_boot() {
+    lsblk -rpno NAME,PARTTYPE "$1" |
+        awk -v g="$BIOS_BOOT_GUID" 'tolower($2)==g {print $1; exit}'
+}
+
+# Why "alongside" cannot be offered on this disk, or nothing at all when it can.
+#
+# The menu entry for it says "manter todo o resto", and the installer says
+# "nenhuma outra partição foi modificada" after it runs. Both were promises the
+# code could not always keep:
+#
+#  - sgdisk is a GPT tool. Handed a disk with an MBR partition table - which is
+#    every machine that came with Windows 7, and plenty that came with 10 - it
+#    converts the table to GPT in place. The other operating system on that disk
+#    stops booting. Nothing warned, and the mode that promises not to touch
+#    anything was the one doing it.
+#
+#  - On a GPT disk booted without UEFI, GRUB needs a BIOS boot partition to
+#    embed itself into. When there is none the install fails at grub-install,
+#    which is the last step, long after the disk has been written to.
+#
+# A pure function of six values so it can be tested without a disk: everything
+# it needs is passed in.
+alongside_block_reason() {  # <pttype> <firmware> <esp> <bios-boot> <free-mib> <min-mib>
+    local pt=$1 fw=$2 esp=$3 bios=$4 free=$5 min=$6
+
+    if (( free < min )); then
+        printf 'não há espaço livre não alocado suficiente neste disco (%s GiB livres, e o IFOS precisa de %s GiB). Use o GParted para diminuir uma partição existente e abrir espaço.' \
+               "$(( free / 1024 ))" "$(( min / 1024 ))"
+        return 0
+    fi
+    if [[ $pt != gpt ]]; then
+        printf 'este disco usa uma tabela de partições antiga (%s), e criar uma partição nela converteria a tabela para GPT — o que faria o outro sistema operacional do disco parar de iniciar. Para instalar ao lado dele seria preciso converter o disco antes, com o Windows fechado e com backup.' \
+               "${pt:-desconhecida}"
+        return 0
+    fi
+    if [[ $fw == UEFI && -z $esp ]]; then
+        printf 'não há partição EFI neste disco para compartilhar. Crie uma com o GParted, ou use "wipe".'
+        return 0
+    fi
+    if [[ $fw != UEFI && -z $bios ]]; then
+        printf 'este computador inicia pelo modo antigo (BIOS) e o disco é GPT sem a partição de boot que o GRUB precisa. Sem ela a instalação falharia no final. Use "wipe", ou crie uma partição "BIOS boot" de 2 MiB com o GParted.'
+        return 0
+    fi
+    return 1
+}
+
 FREE_START=0; FREE_END=0; FREE_SIZE=0
 read -r FREE_START FREE_END FREE_SIZE < <(find_free_space "$DISK") || true
 FREE_SIZE=${FREE_SIZE:-0}
 EXISTING_ESP=$(find_esp "$DISK")
+EXISTING_BIOS_BOOT=$(find_bios_boot "$DISK")
+PTTYPE=$(lsblk -dno PTTYPE "$DISK" 2>/dev/null | head -1)
 
 mode_menu=()
-(( FREE_SIZE >= MIN_ROOT_MIB )) && \
+ALONGSIDE_WHY_NOT=$(alongside_block_reason "$PTTYPE" "$FIRMWARE" "$EXISTING_ESP" \
+                                           "$EXISTING_BIOS_BOOT" "$FREE_SIZE" "$MIN_ROOT_MIB")
+if [[ -z $ALONGSIDE_WHY_NOT ]]; then
     mode_menu+=(alongside "Usar os $((FREE_SIZE/1024)) GiB livres e manter todo o resto")
+else
+    # Said out loud rather than quietly left out of the menu. Somebody who came
+    # here to install next to Windows and does not see the option needs to know
+    # why, or the conclusion they reach is that IFOS cannot do it at all.
+    msg "Não dá para instalar ao lado do que já está no $DISK, porque $ALONGSIDE_WHY_NOT
+
+As outras opções continuam disponíveis."
+fi
 mode_menu+=(partition "Formatar uma partição que eu escolher")
 mode_menu+=(wipe      "Apagar o disco INTEIRO e começar do zero")
 
@@ -268,8 +331,9 @@ MODE=$(ask_menu "Como o IFOS deve usar o $DISK?" "${mode_menu[@]}") || exit 1
 TARGET_PART=""
 case $MODE in
   alongside)
-    [[ $FIRMWARE == UEFI && -z $EXISTING_ESP ]] && \
-        die "Nenhuma partição EFI no $DISK para compartilhar. Use 'wipe', ou crie uma ESP com o GParted."
+    # Belt and braces: the menu should not have offered it, and this runs one
+    # step before the disk is written to.
+    [[ -z $ALONGSIDE_WHY_NOT ]] || die "Não dá para instalar ao lado: $ALONGSIDE_WHY_NOT"
     ;;
   partition)
     mapfile -t parts < <(lsblk -rpno NAME,SIZE,FSTYPE,MOUNTPOINTS "$DISK" | awk 'NR>1')

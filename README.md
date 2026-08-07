@@ -190,6 +190,19 @@ opposite priority. Applied to rotational disks and eMMC, deliberately not to
 NVMe — where the kernel already chooses `none`, and BFQ's single queue would be
 a ceiling.
 
+**Installing alongside another system now refuses when it cannot keep its
+promise.** The mode says "manter todo o resto" in its own menu text, and
+printed "nenhuma outra partição foi modificada" after it ran. `sgdisk` is a GPT
+tool: handed a disk with an MBR partition table — every machine that came with
+Windows 7, and plenty that came with 10 — it converts the table in place, and
+the Windows it was meant to preserve stops booting. Nothing warned. The same
+mode on a GPT disk booted without UEFI would fail at `grub-install`, which is
+the last step, long after the disk had been written to. Both are now checked
+before the menu is drawn, and when the mode is unavailable the installer says
+*why* rather than quietly leaving the option out — a student who came to
+install next to Windows and does not see the option concludes IFOS cannot do
+it.
+
 **HP printers.** The most common brand in a Brazilian school by a wide margin,
 and `gutenprint` covers neither HP's own drivers nor their scanners.
 
