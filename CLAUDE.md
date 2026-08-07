@@ -118,6 +118,12 @@ accent #00a86b accent-2 #7ed957  bright #00c47d
 - **`notify-send` trava sem dbus.** `|| true` não resolve; use `timeout 3`.
 - **Glifos se perdem no caminho.** Escreva por codepoint em Python e confira
   lendo do disco. `tools/check-icons.py` existe para isso.
+- **`sgdisk` é ferramenta de GPT.** Num disco com tabela MBR ele converte a
+  tabela no lugar, e o outro sistema operacional do disco para de iniciar. Por
+  isso `alongside_block_reason` no `install-ifos` recusa o modo "ao lado" fora
+  de GPT.
+- **`grub-install --target=i386-pc` num disco GPT precisa de partição `ef02`**,
+  senão falha no último passo da instalação.
 - **`picom` tem `unredir-if-possible` desligado por padrão**, o que deixa jogo
   em tela cheia composto — foi a causa do "megabonk travando".
 

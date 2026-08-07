@@ -1018,6 +1018,53 @@ OUT=$(grep '^EARLYOOM_ARGS=' "$PROFILE/airootfs/etc/default/earlyoom" || true)
 check "earlyoom tem argumentos"        says "EARLYOOM_ARGS="
 check "e nenhuma aspa neles"           not_says "'"
 
+# ── "Instalar ao lado" could destroy the thing it promised to keep ───────────
+#  The menu entry says "manter todo o resto" and the installer says "nenhuma
+#  outra partição foi modificada" afterwards. sgdisk is a GPT tool: handed a
+#  disk with an MBR table - every machine that came with Windows 7, and plenty
+#  that came with 10 - it converts the table in place and the other operating
+#  system stops booting. Nothing warned.
+#
+#  The decision is a pure function of six values precisely so it can be run
+#  here, without a disk anywhere near it.
+case_name "Instalar ao lado só onde dá para cumprir a promessa"
+eval "$(awk '/^alongside_block_reason\(\)/,/^}/' "$PROFILE/airootfs/usr/local/bin/install-ifos")"
+
+reason() { OUT=$(alongside_block_reason "$@"); }
+
+reason gpt UEFI /dev/sda1 "" 60000 20480
+check "GPT com EFI e espaço: pode"       [ -z "$OUT" ]
+
+reason dos UEFI /dev/sda1 "" 60000 20480
+check "MBR: recusa"                      [ -n "$OUT" ]
+check "e diz que converteria a tabela"   says "converteria"
+check "e que o outro sistema pararia"    says "parar de iniciar"
+
+reason "" UEFI /dev/sda1 "" 60000 20480
+check "sem tabela nenhuma: recusa"       [ -n "$OUT" ]
+
+reason gpt UEFI "" "" 60000 20480
+check "GPT sem partição EFI: recusa"     [ -n "$OUT" ]
+check "e nomeia a partição EFI"          says "EFI"
+
+# GRUB embeds itself into a BIOS boot partition on a GPT disk. Without one,
+# grub-install refuses - at the very last step, after everything is downloaded
+# and written. Refusing here costs nothing; refusing there costs the install.
+reason gpt BIOS "" "" 60000 20480
+check "GPT em BIOS sem ef02: recusa"     [ -n "$OUT" ]
+check "e diz que falharia no final"      says "falharia no final"
+
+reason gpt BIOS "" /dev/sda1 60000 20480
+check "GPT em BIOS com ef02: pode"       [ -z "$OUT" ]
+
+reason gpt UEFI /dev/sda1 "" 10000 20480
+check "espaço insuficiente: recusa"      [ -n "$OUT" ]
+check "e diz quanto falta"               says "20 GiB"
+
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/install-ifos")
+check "o instalador consulta a tabela"   says "lsblk -dno PTTYPE"
+check "e diz por que não deu, em vez de sumir com a opção" says "As outras opções continuam"
+
 # ── The installer's first step used to stop on a working network ─────────────
 #  ICMP is blocked on a great many school and campus networks. A single ping
 #  as the connectivity test meant the installer refused to start on a machine
