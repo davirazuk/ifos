@@ -1018,6 +1018,30 @@ OUT=$(grep '^EARLYOOM_ARGS=' "$PROFILE/airootfs/etc/default/earlyoom" || true)
 check "earlyoom tem argumentos"        says "EARLYOOM_ARGS="
 check "e nenhuma aspa neles"           not_says "'"
 
+# ── The repair has to happen without being asked for ─────────────────────────
+#  A fix that needs a second command is a fix most people never run. The whole
+#  point of the graphics doctor is lost if somebody has to know it exists.
+case_name "O ifos-update conserta o vídeo sozinho"
+UPD="$PROFILE/airootfs/usr/local/bin/ifos-update"
+GPUBIN="$PROFILE/airootfs/usr/local/bin/ifos-gpu"
+OUT=$(cat "$UPD")
+check "o ifos-update chama o conserto"     says "repair_graphics"
+check "sem perguntar nada"                 says -- "--fix --yes"
+check "e só quando há algo quebrado"       says -- "ifos-gpu --why >/dev/null"
+check "não mexe no pendrive"               says "/run/archiso"
+# The order matters: repairing before the packages and services have been
+# brought up to date would repair things that were about to fix themselves.
+check "conserta depois de configurar" \
+      [ "$(grep -n '^configure_nvidia$\|^repair_graphics$' "$UPD" | tail -1 | cut -d: -f2)" = "repair_graphics" ]
+
+OUT=$(cat "$GPUBIN")
+check "o --fix aceita --yes"               says -- "-y|--yes|--auto"
+check "que passa --noconfirm ao pacman"    says "noconfirm"
+# pacman's answer to "remove the conflicting package?" defaults to *no*, so
+# --noconfirm declines it and the unattended repair fails on the one machine it
+# exists for. The open modules have to be removed by name first.
+check "e tira os módulos abertos pelo nome" says "pacman -Rdd --noconfirm"
+
 # ── The NVIDIA plumbing nobody can see until a machine boots ─────────────────
 #  None of this can be tested by running anything: it is files that only mean
 #  something to systemd, mkinitcpio and pacman at boot. What can be checked is

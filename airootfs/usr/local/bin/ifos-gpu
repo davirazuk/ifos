@@ -697,10 +697,24 @@ need_root() {
 
 has_action() { local a; for a in "${ACTIONS[@]:-}"; do [[ $a == "$1" ]] && return 0; done; return 1; }
 
+# Unattended repair. `ifos-update` runs the whole thing with no one watching,
+# which is the point: a fix that needs a second command is a fix most people
+# never run. Every question answers itself, and pacman is told not to ask.
+AUTO=0
+
 confirm() {
+    if (( AUTO )); then
+        printf '  %s [sim, automático]\n' "$1"
+        return 0
+    fi
     local answer
     read -rp "  $1 [S/n] " answer
     [[ ${answer,,} != n* ]]
+}
+
+pacman_args() {
+    (( AUTO )) && printf '%s\n' --noconfirm
+    printf '%s\n' --needed
 }
 
 enable_multilib() {
@@ -880,15 +894,13 @@ fix() {
         action reboot
     fi
 
-    # The open modules on a card they do not cover. pacman is told to install
-    # the closed driver; the two conflict, so it offers to remove the open one
-    # in the same transaction and the machine is never left with neither.
+    # The open modules on a card they do not cover.
     if has_action swap-proprietary; then
         printf '    Trocando os módulos abertos pelo driver fechado da NVIDIA,\n'
-        printf '    que é o que funciona numa placa %s.\n' "$(arch_label "${NV_ARCH:-desconhecida}")"
-        printf '    O pacman vai perguntar se pode remover o nvidia-open-dkms: pode.\n\n'
+        printf '    que é o que funciona numa placa %s.\n\n' "$(arch_label "${NV_ARCH:-desconhecida}")"
         MISSING+=(nvidia-dkms dkms nvidia-utils)
         local base; base=$(kernel_pkgbase); [[ -n $base ]] && MISSING+=("${base}-headers")
+        action drop-open
         action early-kms
         action reboot
     fi
@@ -911,16 +923,48 @@ fix() {
 
     (( ${#SUGGEST[@]} )) && MISSING+=("${SUGGEST[@]}")
 
+    # The open and closed drivers conflict, so one has to go before the other
+    # arrives. pacman does offer to do it inside the transaction - but the
+    # default answer to that question is *no*, which means --noconfirm declines
+    # it and the whole unattended repair fails on the one machine it exists for.
+    # Removing it here, by name, is the version that works with nobody watching.
+    #
+    # There is a gap between the two commands where the machine has no NVIDIA
+    # driver at all. That is survivable now and was not before: if the install
+    # fails and the machine reboots, ifos-gpu-fallback.service loads nouveau and
+    # there is still a desktop to try again from.
+    if has_action drop-open; then
+        local -a going=()
+        pkg nvidia-open-dkms && going+=(nvidia-open-dkms)
+        pkg nvidia-open      && going+=(nvidia-open)
+        if (( ${#going[@]} )); then
+            printf '  %s==>%s Removendo os módulos abertos (%s)…\n' \
+                   "$c_blu" "$c_reset" "${going[*]}"
+            $SUDO pacman -Rdd --noconfirm "${going[@]}" >/dev/null 2>&1 ||
+                printf '    %s!%s Não saíram; o pacman vai perguntar de novo abaixo.\n' \
+                       "$c_yel" "$c_reset"
+        fi
+    fi
+
     if (( ${#MISSING[@]} )); then
         # Deduplicated: the vendor checks and the NVIDIA offer both ask for
         # things like dkms, and pacman would otherwise be handed it twice.
         mapfile -t MISSING < <(printf '%s\n' "${MISSING[@]}" | awk '!seen[$0]++')
+        local -a pac_args; mapfile -t pac_args < <(pacman_args)
         printf '  %s==>%s Instalando: %s\n\n' "$c_blu" "$c_reset" "${MISSING[*]}"
-        if $SUDO pacman -S --needed "${MISSING[@]}"; then
+        if $SUDO pacman -S "${pac_args[@]}" "${MISSING[@]}"; then
             has_action dkms || action initramfs
         else
             printf '\n    %s✗%s O pacman não terminou. Verifique a conexão e tente de novo.\n' \
                    "$c_red" "$c_reset"
+            # The open modules were just removed to make room for a driver that
+            # did not arrive. Putting them back is worse than leaving them out -
+            # they do not work on this card either - but saying so out loud is
+            # not optional, because until this succeeds the machine boots on
+            # nouveau.
+            has_action drop-open &&
+                printf '    %s!%s A máquina vai iniciar no nouveau até isto funcionar. Rode de novo com internet.\n' \
+                       "$c_yel" "$c_reset"
             rc=1
         fi
         action reboot
@@ -1065,7 +1109,12 @@ case ${1:-} in
         printf '  Para consertar:  %sifos-gpu --fix%s\n\n' "$c_b" "$c_reset"
         exit 1 ;;
 
+    # --fix --yes is the same repair with nobody watching: every question
+    # answers itself and pacman is told not to ask. ifos-update runs it, so a
+    # broken graphics driver is repaired by the update that was going to happen
+    # anyway rather than by a second command nobody knows to run.
     --fix)
+        case ${2:-} in -y|--yes|--auto) AUTO=1 ;; esac
         diagnose
         printf '\n  %sIFOS — vídeo%s\n' "$c_b" "$c_reset"
         print_cards
