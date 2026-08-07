@@ -132,7 +132,7 @@ copy /usr/share/ifos/archinstall-preset.json
 # Tools
 for t in ifos-software ifos-welcome ifos-post-install ifos-theme ifos-launcher \
          ifos-bigpicture ifos-update ifos-update-terminal ifos-term ifos-lock ifos-gpu ifos-controller ifos-mouse \
-         ifos-scale install-yay; do
+         ifos-scale ifos-secureboot install-yay; do
     copy "/usr/local/bin/$t" 0755
 done
 

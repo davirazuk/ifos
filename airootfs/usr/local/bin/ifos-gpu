@@ -376,6 +376,33 @@ diagnose_video_decode() {
     fi
 }
 
+# The 64-bit and 32-bit halves of a graphics driver have to be the same version.
+#
+# This is the failure that made Steam say "Unexpected Transport Error ...
+# (0x3008)" and nothing else. Steam's client and its steamwebhelper are 32-bit,
+# so they load lib32-nvidia-utils; the desktop loads nvidia-utils. When the two
+# are at different versions the 32-bit half talks to a driver it does not match
+# and the web helper dies during startup - while the desktop, running on the
+# 64-bit half, looks perfect. Nothing in the message names graphics, or the
+# driver, or the word "32".
+#
+# Two ways to get there, and neither involves doing anything wrong: a partial
+# upgrade, where multilib lagged behind extra for a day; or replacing the driver
+# package without replacing the 32-bit half beside it - which this tool's own
+# swap-to-proprietary did until today, because lib32-nvidia-utils was not in the
+# list it handed pacman.
+lib32_matches() {   # lib32_matches <package>
+    have_pacman || return 0
+    local a b
+    a=$(pkg_ver "$1")         || return 0
+    b=$(pkg_ver "lib32-$1")   || return 0
+    [[ -n $a && -n $b ]]      || return 0
+    [[ $a == "$b" ]] && return 0
+
+    problem "O $1 está na versão $a e o lib32-$1 na $b. Programas de 32 bits — o Steam e o steamwebhelper são — carregam a metade de 32 bits, e com as duas em versões diferentes o Steam morre ao abrir com «Unexpected Transport Error (0x3008)», sem falar em vídeo nem em driver."
+    action sync-lib32
+}
+
 diagnose_intel() {
     want mesa lib32-mesa vulkan-intel lib32-vulkan-intel
     module_loaded i915 || module_loaded xe ||
@@ -432,6 +459,8 @@ diagnose_nvidia() {
 
     # From here an NVIDIA driver is installed and expected to work.
     want nvidia-utils lib32-nvidia-utils
+    lib32_matches nvidia-utils
+    lib32_matches mesa
 
     # Asked first, on purpose. Everything below this line is inference from
     # package names and module lists; this is the driver saying what happened.
@@ -888,7 +917,7 @@ fix() {
     if has_action swap-dkms; then
         printf '    Trocando o driver NVIDIA pré-compilado pela versão DKMS,\n'
         printf '    que se reconstrói sozinha a cada kernel novo.\n\n'
-        MISSING+=("$driver_pkg" dkms)
+        MISSING+=("$driver_pkg" dkms nvidia-utils lib32-nvidia-utils)
         local base; base=$(kernel_pkgbase); [[ -n $base ]] && MISSING+=("${base}-headers")
         action early-kms
         action reboot
@@ -898,7 +927,11 @@ fix() {
     if has_action swap-proprietary; then
         printf '    Trocando os módulos abertos pelo driver fechado da NVIDIA,\n'
         printf '    que é o que funciona numa placa %s.\n\n' "$(arch_label "${NV_ARCH:-desconhecida}")"
-        MISSING+=(nvidia-dkms dkms nvidia-utils)
+        # lib32-nvidia-utils belongs in this list and was missing from it:
+        # replacing nvidia-utils without replacing its 32-bit half leaves the
+        # two at different versions, which is the Steam 0x3008 failure. pacman
+        # skips it when it is already current, so naming it costs nothing.
+        MISSING+=(nvidia-dkms dkms nvidia-utils lib32-nvidia-utils)
         local base; base=$(kernel_pkgbase); [[ -n $base ]] && MISSING+=("${base}-headers")
         action drop-open
         action early-kms
@@ -933,6 +966,15 @@ fix() {
     # driver at all. That is survivable now and was not before: if the install
     # fails and the machine reboots, ifos-gpu-fallback.service loads nouveau and
     # there is still a desktop to try again from.
+    # Both halves named together, so pacman resolves them in one transaction and
+    # they land at the same version. --needed skips whichever is already current.
+    if has_action sync-lib32; then
+        printf '    As duas metades do driver estão em versões diferentes.\n'
+        printf '    Instalando as duas juntas para ficarem iguais.\n\n'
+        pkg nvidia-utils && MISSING+=(nvidia-utils lib32-nvidia-utils)
+        pkg mesa         && MISSING+=(mesa lib32-mesa)
+    fi
+
     if has_action drop-open; then
         local -a going=()
         pkg nvidia-open-dkms && going+=(nvidia-open-dkms)

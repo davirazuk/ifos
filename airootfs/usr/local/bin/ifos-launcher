@@ -578,6 +578,13 @@ class Catalog:
             # and glxinfo. Now it takes clicking this.
             ("Vídeo e jogos", "Verificar e consertar os drivers da placa de vídeo",
              "video-display", "ifos-term 'Vídeo e jogos' ifos-gpu --fix", True),
+            # The school machines have Secure Boot on and nobody has the BIOS
+            # password. The firmware then refuses to start IFOS at all, with
+            # nothing on screen saying why. This sets up a signed boot chain
+            # through shim, which needs no BIOS access - the key is enrolled at
+            # a blue screen before any operating system runs.
+            ("Secure Boot", "Fazer esta máquina iniciar com o Secure Boot ligado",
+             "security-high", "ifos-term 'Secure Boot' sudo ifos-secureboot --prepare", True),
             # "O controle não funciona" is three different problems that look
             # identical from the sofa: no driver, no access to /dev/hidraw so
             # there is no rumble and the buttons are named wrong, or a

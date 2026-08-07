@@ -131,6 +131,11 @@ accent #00a86b accent-2 #7ed957  bright #00c47d
 - **`check` no `test-tools.sh` sempre retorna 0.** Escrever
   `check "..." [ a ] && [ b ]` faz o `[ b ]` rodar solto e o resultado ser
   jogado fora — o teste passa sempre. Use uma condição só por `check`.
+- **As duas metades de um driver têm que estar na mesma versão.** O Steam e o
+  steamwebhelper são de 32 bits e carregam `lib32-nvidia-utils`; o desktop
+  carrega `nvidia-utils`. Em versões diferentes o Steam morre com «Unexpected
+  Transport Error (0x3008)» e não fala em vídeo. Toda troca de driver tem que
+  nomear a metade de 32 bits junto.
 - **`picom` tem `unredir-if-possible` desligado por padrão**, o que deixa jogo
   em tela cheia composto — foi a causa do "megabonk travando".
 
