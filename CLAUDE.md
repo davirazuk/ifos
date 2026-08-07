@@ -230,6 +230,9 @@ de comportamento.
 causa era driver errado para a geração da placa — nada disso foi visto num boot
 real ainda.
 
+Antes disso, o `install-ifos` parava no primeiro passo em rede de escola: o
+teste de conexão era um `ping`, e ICMP é bloqueado em boa parte dessas redes.
+
 O que falta saber, e só o usuário pode responder:
 
 - O `ifos-gpu --check` na máquina dele, depois de `sudo ifos-update` e reiniciar.

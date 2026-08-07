@@ -136,8 +136,38 @@ esac
 FIRMWARE=BIOS
 [[ -d /sys/firmware/efi/efivars ]] && FIRMWARE=UEFI
 
-ping -c1 -W3 archlinux.org &>/dev/null || \
-    die "Sem conexão com a internet. Conecte-se primeiro (clique no ícone de Wi-Fi na barra, ou execute nmtui) e tente de novo."
+# Whether there is a network, asked the way pacstrap is going to ask it.
+#
+# This was one `ping archlinux.org`, and ICMP is blocked on a great many school
+# and campus networks - including exactly the kind this distribution exists
+# for. On those the installer refused to start, at the first step, on a machine
+# whose network was working perfectly, with a message telling the student to
+# connect to a network they were already connected to. There is no way past
+# that and nothing on screen suggesting there should be.
+#
+# An HTTPS request is the honest question, because downloading packages is an
+# HTTPS request. ping stays as a fallback for the reverse case: a network that
+# answers ICMP while something sits in front of HTTPS.
+have_network() {
+    local url
+    for url in https://archlinux.org/ https://geo.mirror.pkgbuild.com/; do
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsS --max-time 8 -o /dev/null "$url" 2>/dev/null && return 0
+        fi
+        if command -v wget >/dev/null 2>&1; then
+            wget -q --timeout=8 -O /dev/null "$url" 2>/dev/null && return 0
+        fi
+    done
+    ping -c1 -W3 archlinux.org &>/dev/null
+}
+
+have_network || die "Sem conexão com a internet.
+
+Conecte-se primeiro — clique no ícone de Wi-Fi na barra, ou execute nmtui.
+
+Se você já está conectado e mesmo assim aparece isto, provavelmente a rede pede
+login numa página (é o caso de muitas redes de escola): abra o navegador, faça
+o login, e rode o instalador de novo."
 
 for tool in sgdisk parted mkfs.ext4 mkfs.vfat pacstrap genfstab arch-chroot lsblk reflector; do
     command -v "$tool" >/dev/null || die "Ferramenta necessária não encontrada: $tool"
