@@ -370,6 +370,47 @@ configure_nvidia() {
     ok "NVIDIA configurada — reinicie para valer"
 }
 
+# ── And then actually repairing it ───────────────────────────────────────────
+#
+#  Everything above writes configuration. This is the part that fixes what is
+#  broken: the wrong driver for the card, the missing 32-bit libraries, the
+#  multilib repository switched off, a DKMS module that never got built for the
+#  running kernel, nouveau holding a card the NVIDIA driver wanted.
+#
+#  It runs here rather than waiting to be asked, because a repair that needs a
+#  second command is a repair most people never run. The notification at login
+#  and the launcher tile both still exist; this is so that neither has to be
+#  noticed. `ifos-update` already reboots at the end, which is what the repair
+#  needed anyway.
+#
+#  ifos-gpu decides whether there is anything to do. On a machine with working
+#  graphics - which is nearly all of them - it prints one line and exits.
+repair_graphics() {
+    command -v ifos-gpu >/dev/null || return 0
+    # The live medium cannot be repaired in any way that survives a reboot.
+    [[ -d /run/archiso ]] && return 0
+
+    if (( CHECK_ONLY )); then
+        local why
+        why=$(ifos-gpu --why 2>/dev/null) && return 0
+        info "O vídeo seria consertado: ${why:-problema não identificado}"
+        return 0
+    fi
+
+    ifos-gpu --why >/dev/null 2>&1 && return 0
+
+    info "Consertando o vídeo…"
+    # --yes answers every question and passes --noconfirm to pacman. Failure is
+    # reported and does not stop the update: the rest of it is still worth
+    # applying, and ifos-gpu-fallback.service guarantees a desktop to try again
+    # from either way.
+    if $SUDO ifos-gpu --fix --yes; then
+        ok "Vídeo consertado — reinicie para valer"
+    else
+        warn "Não deu para consertar o vídeo sozinho. Rode 'ifos-gpu --check' para ver o que falta."
+    fi
+}
+
 # ── Services this system should have running but might not ───────────────────
 # The mirror of install_missing_packages, for the other half of the same gap: a
 # service added to install-ifos after a machine was set up is enabled on new
@@ -530,6 +571,10 @@ configure_cups
 configure_nvidia
 configure_gamemode
 enable_missing_services
+# Last, so it runs after the driver configuration is written, after any missing
+# packages have arrived and after the services are on - it should be repairing
+# what is still wrong, not what the three steps above were about to fix.
+repair_graphics
 
 # ── The user's own configuration ─────────────────────────────────────────────
 if (( DO_DOTFILES )) && [[ $EUID -eq 0 ]]; then
