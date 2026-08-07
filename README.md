@@ -203,6 +203,17 @@ before the menu is drawn, and when the mode is unavailable the installer says
 install next to Windows and does not see the option concludes IFOS cannot do
 it.
 
+The same audit found the mode next door doing worse. `partition` mode reuses an
+existing EFI partition rather than creating one, and the check that there *was*
+one lived after `mkfs`: on a UEFI machine whose disk had no ESP, the installer
+formatted the partition the student chose — destroying whatever was on it — and
+only then gave up, saying it had nowhere to put the bootloader. Nothing was
+gained by the formatting and there was no way back. The list it offered also
+included the ESP itself, one click away from taking the other operating
+system's bootloader with it. Both are refused before anything is written, and
+the invariant is now a test: every refusal in the installer has to appear
+before the first command that writes to a disk.
+
 **HP printers.** The most common brand in a Brazilian school by a wide margin,
 and `gutenprint` covers neither HP's own drivers nor their scanners.
 

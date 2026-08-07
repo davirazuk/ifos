@@ -347,6 +347,39 @@ case $MODE in
 Tudo que estiver nela será perdido. As outras partições não são tocadas." "${part_menu[@]}") || exit 1
     [[ -b $TARGET_PART ]] || die "Não é uma partição: $TARGET_PART"
     findmnt -rno TARGET "$TARGET_PART" &>/dev/null && die "$TARGET_PART está montada no momento."
+
+    # The EFI partition is checked here, not later, and that ordering is the
+    # whole point. This mode reuses an existing ESP rather than creating one -
+    # and the check that there *is* one lived after mkfs. On a UEFI machine
+    # whose disk had no ESP, the installer formatted the partition the student
+    # chose, destroying whatever was on it, and only then gave up saying it had
+    # nowhere to put the bootloader. Nothing was gained by the formatting and
+    # there was no way to undo it.
+    if [[ $FIRMWARE == UEFI && -z $EXISTING_ESP ]]; then
+        die "Este computador inicia por UEFI e o $DISK não tem partição de sistema EFI.
+
+O IFOS precisa de uma para instalar o carregador de boot, e neste modo ele
+reaproveita a que já existe em vez de criar uma.
+
+Escolha 'wipe' (que cria uma), ou crie uma partição EFI de 1 GiB com o GParted
+— tipo FAT32, sinalizadores 'boot' e 'esp' — e rode o instalador de novo.
+
+Nada foi alterado no disco."
+    fi
+
+    # And the ESP must not be the partition being formatted, which is a click
+    # away in the menu above: the list is every partition on the disk, the ESP
+    # included, and formatting it as ext4 takes the other operating system's
+    # bootloader with it.
+    if [[ -n $EXISTING_ESP && $TARGET_PART == "$EXISTING_ESP" ]]; then
+        die "$TARGET_PART é a partição de sistema EFI do disco.
+
+Formatá-la apagaria o carregador de boot de todos os sistemas instalados aqui,
+inclusive os outros. Escolha outra partição.
+
+Nada foi alterado no disco."
+    fi
+
     psize=$(( $(blockdev --getsize64 "$TARGET_PART") / 1024 / 1024 ))
     (( psize >= MIN_ROOT_MIB )) || \
         die "$TARGET_PART tem só $((psize/1024)) GiB; o IFOS precisa de pelo menos $((MIN_ROOT_MIB/1024)) GiB."
