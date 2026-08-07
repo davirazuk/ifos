@@ -96,6 +96,12 @@ copy /usr/share/plymouth/themes/ifos
 copy /usr/share/grub/themes/ifos
 copy /etc/plymouth/plymouthd.conf
 copy /etc/systemd/system/ifos-fontcache.service
+# The one thing standing between a broken NVIDIA driver and a machine that
+# cannot be logged into at all. Runs before the greeter and loads nouveau when
+# the NVIDIA driver has taken no card, so there is at least a desktop to repair
+# from. install-ifos enables it; ifos-update enables it on machines installed
+# before it existed.
+copy /etc/systemd/system/ifos-gpu-fallback.service
 copy /etc/ifos/update.conf
 
 # Distribution identity

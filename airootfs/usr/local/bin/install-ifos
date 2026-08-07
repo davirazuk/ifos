@@ -395,22 +395,55 @@ MESA_SET+=" libva-utils"
 [[ $GPUS == *intel* ]] && MESA_SET+=" intel-media-driver libva-intel-driver"
 
 if [[ $GPUS == *nvidia* ]]; then
-    nv_label="Driver NVIDIA + bibliotecas de 32 bits (recomendado)"
-    [[ $GPUS == *intel* || $GPUS == *amd* ]] &&
-        nv_label="NVIDIA + vídeo integrado, com prime-run (recomendado)"
+    # Which NVIDIA driver, decided here rather than asked.
+    #
+    # There is no one NVIDIA driver: there are four, each covering a different
+    # range of cards, and the wrong one does not fail loudly - it installs, the
+    # module loads, it binds no card, and the machine runs on the processor
+    # looking perfectly configured. The old version of this screen asked the
+    # student "is your card older than a GTX 16xx?", which is a question a
+    # student cannot answer about a laptop they were given, and then offered
+    # nouveau as the answer for older cards - which on a GTX 1050 means giving
+    # up most of the card's speed for no reason, because nouveau cannot raise
+    # the clocks on Pascal at all.
+    #
+    # The machine already knows. lspci prints the chip codename and ifos-gpu
+    # turns it into the driver name, so this asks nothing and says what it found.
+    NV_DRIVER=$(ifos-gpu --nvidia-driver 2>/dev/null || echo proprietary)
+    NV_PKG=$(ifos-gpu --nvidia-pkg 2>/dev/null || echo nvidia-dkms)
+    NV_ARCH_LABEL=$(ifos-gpu --nvidia-label 2>/dev/null || echo "geração não reconhecida")
 
-    GPU_CHOICE=$(ask_menu "Placas de vídeo detectadas:
+    case $NV_DRIVER in
+        legacy470|legacy390)
+            # Old enough that nothing in the official repositories drives it.
+            # Installing an NVIDIA driver here would blacklist nouveau and
+            # leave the machine with no graphics driver whatsoever.
+            ask_yesno "Placas de vídeo detectadas:
 
 $GPU_SEEN
 
-Qual driver deve ser instalado?
+Esta placa NVIDIA é antiga demais para os drivers da NVIDIA que ainda existem
+nos repositórios. O driver livre (nouveau) é o que funciona nela, e é o que
+vai ser instalado.
 
-O driver NVIDIA aqui é o de módulos abertos, que funciona nas GTX série 16, RTX
-e mais novas. Numa placa mais antiga que isso — GTX 900 ou 1000 — escolha o
-nouveau; ele é mais lento, mas de fato inicia." \
-        nvidia  "$nv_label" \
-        nouveau "Driver livre, para placas NVIDIA anteriores à GTX 16xx" \
-        skip    "Instalar um driver depois, pelo ifos-software") || exit 1
+Continuar?" || exit 1
+            GPU_CHOICE=nouveau ;;
+        *)
+            nv_label="Driver NVIDIA ($NV_PKG) + bibliotecas de 32 bits"
+            [[ $GPUS == *intel* || $GPUS == *amd* ]] &&
+                nv_label="NVIDIA ($NV_PKG) + vídeo integrado, com prime-run"
+
+            GPU_CHOICE=$(ask_menu "Placas de vídeo detectadas:
+
+$GPU_SEEN
+
+O IFOS reconheceu esta placa como $NV_ARCH_LABEL, e o driver certo para ela é
+o $NV_PKG. É o que a primeira opção instala — não precisa saber de nada disso
+para escolher." \
+                nvidia  "$nv_label (recomendado)" \
+                nouveau "Driver livre, mais lento, sem compilar nada" \
+                skip    "Instalar um driver depois, pelo ifos-software") || exit 1 ;;
+    esac
 else
     GPU_CHOICE=$( [[ -n $GPUS ]] && echo mesa || echo skip )
     if [[ $GPU_CHOICE == mesa ]]; then
@@ -424,17 +457,18 @@ fi
 
 case $GPU_CHOICE in
     nvidia)
-        # nvidia-open-dkms, not nvidia-open. This image installs two kernels -
-        # linux and linux-lts - and nvidia-open is a module prebuilt against
-        # linux alone. Booting the LTS kernel, which exists precisely for when
-        # the main one breaks, would have found no NVIDIA module at all; and
-        # even on the main kernel the prebuilt module and the kernel have to
-        # move in lockstep, so an update that lands one without the other
-        # leaves the machine on software rendering with nothing to explain it.
-        # DKMS rebuilds for every installed kernel. Both kernels' headers are
-        # already in PACKAGES, so nothing else is needed.
+        # A -dkms package, whichever one this card needs, and never the
+        # prebuilt one. This image installs two kernels - linux and linux-lts -
+        # and the prebuilt modules are built against linux alone. Booting the
+        # LTS kernel, which exists precisely for when the main one breaks,
+        # would have found no NVIDIA module at all; and even on the main kernel
+        # the prebuilt module and the kernel have to move in lockstep, so an
+        # update that lands one without the other leaves the machine on
+        # software rendering with nothing to explain it. DKMS rebuilds for
+        # every installed kernel. Both kernels' headers are already in
+        # PACKAGES, so nothing else is needed.
         # shellcheck disable=SC2206
-        GPU_PKGS=(nvidia-open-dkms dkms nvidia-utils nvidia-settings lib32-nvidia-utils $MESA_SET)
+        GPU_PKGS=("$NV_PKG" dkms nvidia-utils nvidia-settings lib32-nvidia-utils $MESA_SET)
         # A hybrid laptop needs prime-run to send a game to the discrete chip;
         # without it every game runs on the integrated one and nobody can tell
         # why the machine is slow.
@@ -705,6 +739,7 @@ XKB_MODEL=pc105
     printf 'IFOS_ROOTPASS=%q\n'   "$ROOTPASS"
     printf 'IFOS_DISK=%q\n'       "$DISK"
     printf 'IFOS_MULTILIB=%q\n'   "$ENABLE_MULTILIB"
+    printf 'IFOS_NVIDIA=%q\n'     "$( [[ $GPU_CHOICE == nvidia ]] && echo 1 || echo 0 )"
 } > "$MNT/root/.ifos-answers"
 chmod 600 "$MNT/root/.ifos-answers"
 
@@ -756,6 +791,27 @@ mkdir -p /etc/mkinitcpio.conf.d
 cat > /etc/mkinitcpio.conf.d/ifos.conf <<'MKI'
 HOOKS=(base udev plymouth autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)
 MKI
+
+# Everything an NVIDIA machine needs and that nothing else writes: the driver's
+# module options, its modules in the boot image instead of the kms hook, and a
+# pacman hook to keep the boot image in step with driver updates.
+#
+# The kms hook above is the reason this matters. It puts every DRM driver the
+# machine has into the boot image, nouveau included - and on a machine with the
+# NVIDIA driver installed that is a race the NVIDIA driver loses: nouveau takes
+# the card before the root filesystem is even mounted, and nvidia then has
+# nothing left to bind to. ifos-gpu writes the file that overrides it, under a
+# name that sorts after this one so it actually wins.
+if [ "${IFOS_NVIDIA:-0}" = 1 ] && [ -x /usr/local/bin/ifos-gpu ]; then
+    /usr/local/bin/ifos-gpu --write-nvidia-config || true
+    # Suspend on a machine with an NVIDIA card has to save the card's memory
+    # somewhere and put it back on the way up. Without these the machine wakes
+    # with the card in a state nothing can use, and the first game after
+    # closing the lid hangs on a computer that otherwise looks fine.
+    systemctl enable nvidia-suspend.service nvidia-hibernate.service \
+                     nvidia-resume.service 2>/dev/null || true
+fi
+
 mkinitcpio -P
 
 useradd -m -G wheel,audio,video,input,storage,network,lp -s /usr/bin/fish "${IFOS_USERNAME}"
@@ -787,6 +843,11 @@ systemctl enable paccache.timer
 # blank, since powerprofilesctl reaches the daemon over D-Bus.
 systemctl enable power-profiles-daemon.service
 systemctl enable earlyoom.service
+# Checks, before the login screen, that some graphics driver actually took the
+# card - and loads nouveau if none did. It is what stops a failed NVIDIA driver
+# from turning into a machine with no desktop to repair it from. Costs
+# milliseconds on every machine where nothing is wrong.
+systemctl enable ifos-gpu-fallback.service
 ufw default deny incoming  || true
 ufw default allow outgoing || true
 ufw --force enable         || true
@@ -813,6 +874,50 @@ if [ -f /usr/share/grub/themes/ifos/theme.txt ]; then
         echo 'GRUB_TERMINAL_OUTPUT="gfxterm"'
     } >> /etc/default/grub
 fi
+
+# Two ways back into a machine whose graphics driver stopped working.
+#
+# This is the hole that made a bad NVIDIA driver unrecoverable rather than
+# merely annoying: with no driver the greeter never appears, and everything
+# that could diagnose or repair it lives behind that greeter. A student with a
+# black screen has no next step at all.
+#
+# The first entry blacklists the NVIDIA modules and lets nouveau take the card.
+# It is slower and it draws a desktop, from which `ifos-gpu --fix` can be run
+# and will say exactly what went wrong. The second gives up on graphics
+# entirely and boots to a text console, which works when nothing else does.
+#
+# Both use the fallback boot image on purpose. The normal one is built with
+# autodetect and only contains the modules this machine needed at the time it
+# was built; the fallback contains everything, which is the difference when
+# what changed is a driver.
+ROOT_UUID=$(findmnt -no UUID / 2>/dev/null || true)
+if [ -n "${ROOT_UUID}" ] && [ -f /boot/vmlinuz-linux ]; then
+    [ -f /boot/initramfs-linux-fallback.img ] \
+        && RECOVERY_INITRD=/boot/initramfs-linux-fallback.img \
+        || RECOVERY_INITRD=/boot/initramfs-linux.img
+    NV_BLACKLIST=nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm
+    cat >> /etc/grub.d/40_custom <<CUSTOM
+
+menuentry 'IFOS — recuperação de vídeo (driver livre)' --class ifos --class gnu-linux --class os {
+    load_video
+    insmod gzio
+    search --no-floppy --fs-uuid --set=root ${ROOT_UUID}
+    linux /boot/vmlinuz-linux root=UUID=${ROOT_UUID} rw loglevel=3 modprobe.blacklist=${NV_BLACKLIST}
+    initrd ${RECOVERY_INITRD}
+}
+
+menuentry 'IFOS — modo texto (sem vídeo nenhum)' --class ifos --class gnu-linux --class os {
+    load_video
+    insmod gzio
+    search --no-floppy --fs-uuid --set=root ${ROOT_UUID}
+    linux /boot/vmlinuz-linux root=UUID=${ROOT_UUID} rw nomodeset systemd.unit=multi-user.target
+    initrd ${RECOVERY_INITRD}
+}
+CUSTOM
+    chmod +x /etc/grub.d/40_custom
+fi
+
 grub-mkconfig -o /boot/grub/grub.cfg
 
 cp -rn /etc/skel/. "/home/${IFOS_USERNAME}/" 2>/dev/null || true

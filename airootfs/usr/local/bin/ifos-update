@@ -308,6 +308,45 @@ configure_cups() {
         ok "cups agora inicia quando alguém for imprimir"
 }
 
+# ── The NVIDIA configuration nobody's machine got ────────────────────────────
+#
+#  Three files decide whether an NVIDIA machine works, and until now the
+#  installer wrote none of them, so every IFOS machine with an NVIDIA card has
+#  been running without them:
+#
+#    - the driver's modules are not in the boot image, so the kms hook loads
+#      nouveau first and the NVIDIA driver finds the card already taken;
+#    - nvidia_drm has no modeset and no fbdev, which is the flicker on resume
+#      and the black gap between the splash and the login screen;
+#    - nothing rebuilds the boot image when the driver updates, so the running
+#      kernel keeps the old module and everything nvidia touches fails.
+#
+#  New installs get all three. This is how the machines that already exist get
+#  them, which is the only version of this fix that reaches anybody today.
+configure_nvidia() {
+    command -v pacman >/dev/null || return 0
+    pacman -Qq nvidia-open-dkms &>/dev/null || pacman -Qq nvidia-dkms &>/dev/null ||
+        pacman -Qq nvidia-open &>/dev/null || pacman -Qq nvidia &>/dev/null || return 0
+    command -v ifos-gpu >/dev/null || return 0
+
+    # Already done. The initramfs file is the one that cannot be there by
+    # accident, so it is what gets asked about.
+    [[ -f /etc/mkinitcpio.conf.d/nvidia.conf ]] && return 0
+
+    if (( CHECK_ONLY )); then
+        info "O driver da NVIDIA passaria a carregar antes do nouveau, e a imagem de boot seria refeita."
+        return 0
+    fi
+
+    info "Ajustando a configuração da NVIDIA (isso refaz a imagem de boot)…"
+    $SUDO ifos-gpu --write-nvidia-config || { warn "Não deu para escrever a configuração da NVIDIA."; return 0; }
+    if command -v mkinitcpio >/dev/null; then
+        $SUDO mkinitcpio -P >/dev/null 2>&1 ||
+            warn "O mkinitcpio reclamou; rode 'sudo mkinitcpio -P' e veja o que ele diz."
+    fi
+    ok "NVIDIA configurada — reinicie para valer"
+}
+
 # ── Services this system should have running but might not ───────────────────
 # The mirror of install_missing_packages, for the other half of the same gap: a
 # service added to install-ifos after a machine was set up is enabled on new
@@ -465,6 +504,7 @@ configure_sddm
 configure_grub
 configure_power_profiles
 configure_cups
+configure_nvidia
 enable_missing_services
 
 # ── The user's own configuration ─────────────────────────────────────────────

@@ -305,20 +305,47 @@ knows the specific ways this actually fails:
 | `lib32-*` missing | the exact packages Steam needs |
 | No NVIDIA module for the running kernel | names the kernel; rebuilds through DKMS |
 | Prebuilt driver on a machine with two kernels | swaps it for the DKMS one, which follows both |
+| Open modules on a card older than Turing | names the generation and swaps to the closed driver |
+| Module loaded, no card bound | the failure that used to read as healthy |
+| Card too old for any driver in the repos | says so, names the AUR package, stops offering a driver that cannot work |
 | nouveau holding the card | blacklists it and regenerates the initramfs |
+| NVIDIA modules missing from the boot image | why nouveau kept winning that race |
 | Driver updated, machine not rebooted | says so, instead of looking like a broken install |
 | `nvidia_drm` without modeset | the cause of flicker and black screens after suspend |
+| `RmInitAdapter failed` / card off the bus | hardware, said as hardware, so nobody reinstalls drivers all afternoon |
 | Rendering on the CPU | the verdict, with the renderer it found |
 
-An old NVIDIA card running nouveau is reported as correct rather than as a
-fault: nouveau is the right driver for a GTX 750, and nobody gets pushed onto
-one that does not support their hardware.
+**There is no one NVIDIA driver — there are four, and the wrong one fails
+silently.** The open modules cover Turing and newer; on a GTX 1050 they
+install, the module loads, it binds no card at all, and the desktop is drawn by
+the processor on a machine where every check reads as correctly configured.
+Kepler and Fermi have nothing left in the official repositories. So the
+installer stops asking the student "is your card older than a GTX 16xx?" — a
+question nobody can answer about a laptop they were handed — and reads the chip
+codename out of `lspci` instead: Turing and newer get `nvidia-open-dkms`,
+Maxwell through Volta get `nvidia-dkms`, and anything older is told plainly
+that nouveau is what works for it. A card nothing recognises gets the closed
+driver, because it covers strictly more hardware and guessing towards the open
+one is the silent failure.
 
-`tools/test-tools.sh` runs the doctor against fourteen machines that do not
+**And a machine whose graphics driver fails can still be logged into.** That
+was the hole that made a bad NVIDIA driver unrecoverable rather than annoying:
+`nvidia-utils` blacklists nouveau, correctly, right up until the NVIDIA driver
+does not work — and then the machine has no graphics driver at all, no greeter,
+and nothing on screen to say why. `ifos-gpu-fallback.service` runs before the
+login screen, asks whether anything actually took the card, and loads nouveau
+by name if nothing did. Slower, and it draws a desktop, which is the whole
+point: from a desktop `ifos-gpu --fix` can be run and it will say exactly what
+happened. The boot menu also carries two ways back in — one that blacklists the
+NVIDIA modules and lets nouveau drive, one that gives up on graphics entirely
+and boots to a text console.
+
+`tools/test-tools.sh` runs the doctor against twenty machines that do not
 exist — a hybrid laptop booted on the LTS kernel with a driver built for the
-other one, an AMD desktop with no multilib, a card that predates the open
-modules — because none of those can be reproduced on the machine IFOS is built
-on, and each one is a student in front of a computer that will not open Steam.
+other one, an AMD desktop with no multilib, a GTX 1060 whose driver loaded and
+took nothing, a card whose own kernel messages name the legacy branch it needs
+— because none of those can be reproduced on the machine IFOS is built on, and
+each one is a student in front of a computer that will not open Steam.
 
 **Jogos lists the games you have, not just the ones you could install.** The
 section used to be a shop — Steam, Lutris, Heroic, Wine — with no way to reach
