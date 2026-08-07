@@ -67,26 +67,101 @@ has_vendor() {  # has_vendor nvidia|amd|intel
     esac
 }
 
-# Which NVIDIA generation, because it decides which driver even exists for it.
-# The open-module driver covers Turing and newer; on anything older it will
-# install, fail to bind, and leave the machine on software rendering - which is
-# indistinguishable from every other way this breaks, so it is worth knowing
-# before recommending anything.
+# Which NVIDIA generation. This is the single most important thing to know
+# about an NVIDIA machine, because there is no one NVIDIA driver: there are
+# four, each covering a different range of cards, and installing the wrong one
+# does not fail loudly. The module loads, binds nothing, and the machine sits
+# on software rendering with a driver that looks perfectly installed.
 #
-# Read from the chip codename, which lspci prints for every card: GB Blackwell,
-# AD Ada, GA Ampere, TU Turing / GP Pascal, GM Maxwell, GK Kepler. The marketing
-# name is checked too, for the cards lspci only knows by number.
-nvidia_family() {
+# Read from the chip codename, which lspci prints for almost every card:
+#   GB Blackwell, AD Ada, GA Ampere, TU Turing, GV Volta,
+#   GP Pascal, GM Maxwell, GK Kepler, GF Fermi.
+#
+# The codename is the reliable half. The marketing name is a rebadging free-for
+# -all - a GT 730 is Fermi or Kepler depending on the batch, and a GTX 750 is
+# Maxwell while every other GTX 7xx is Kepler - so it is only consulted when
+# lspci knows the card by number alone.
+nvidia_arch() {
     local line; line=$(gpu_lines | grep -i nvidia | head -1)
-    if grep -Eq '\b(GB|AD|GA|TU)1?[0-9]{2}' <<<"$line" ||
-       grep -Eqi 'RTX|GTX 16[0-9]{2}' <<<"$line"; then
-        echo moderna
-    elif grep -Eq '\b(GP|GM|GK|GF)1?[0-9]{2}' <<<"$line" ||
-         grep -Eqi 'GTX (9[0-9]{2}|10[0-9]{2}|[3-7][0-9]{2})\b|GT [0-9]{3}\b' <<<"$line"; then
-        echo antiga
-    else
-        echo desconhecida
+
+    case $line in
+        *GB1[0-9][0-9]*|*GB2[0-9][0-9]*) echo blackwell; return ;;
+        *AD1[0-9][0-9]*)                 echo ada;       return ;;
+        *GA1[0-9][0-9]*)                 echo ampere;    return ;;
+        *TU1[0-9][0-9]*)                 echo turing;    return ;;
+        *GV1[0-9][0-9]*)                 echo volta;     return ;;
+        *GP1[0-9][0-9]*)                 echo pascal;    return ;;
+        *GM1[0-9][0-9]*|*GM2[0-9][0-9]*) echo maxwell;   return ;;
+        *GK1[0-9][0-9]*|*GK2[0-9][0-9]*) echo kepler;    return ;;
+        *GF1[0-9][0-9]*)                 echo fermi;     return ;;
+    esac
+
+    # No codename. Fall back to the number on the box.
+    if   grep -Eqi 'RTX [A-Z]?5[0-9]{3}' <<<"$line"; then echo blackwell
+    elif grep -Eqi 'RTX [A-Z]?4[0-9]{3}' <<<"$line"; then echo ada
+    elif grep -Eqi 'RTX [A-Z]?3[0-9]{3}|RTX A[0-9]' <<<"$line"; then echo ampere
+    elif grep -Eqi 'RTX [A-Z]?2[0-9]{3}|GTX 16[0-9]{2}' <<<"$line"; then echo turing
+    elif grep -Eqi 'TITAN V' <<<"$line"; then echo volta
+    elif grep -Eqi 'GTX 10[0-9]{2}|MX(1[5-9]0|2[0-9]0|3[0-9]0)|TITAN Xp' <<<"$line"; then echo pascal
+    elif grep -Eqi 'GTX 9[0-9]{2}|GTX 750|MX1[0-4]0' <<<"$line"; then echo maxwell
+    elif grep -Eqi 'GTX [67][0-9]{2}|GT 7[0-9]{2}' <<<"$line"; then echo kepler
+    elif grep -Eqi 'GTX [45][0-9]{2}|GT [45][0-9]{2}' <<<"$line"; then echo fermi
+    else echo desconhecida
     fi
+}
+
+# Which driver that generation needs. One word, so install-ifos can ask for it
+# without duplicating any of the knowledge above.
+#
+#   open        nvidia-open-dkms  — Turing and newer. NVIDIA's own recommended
+#                                   driver for these, and the one that will go
+#                                   on receiving them.
+#   proprietary nvidia-dkms       — Maxwell, Pascal, Volta. The open modules do
+#                                   not bind on these at all. This is also the
+#                                   safe answer for a card nothing recognises,
+#                                   because it covers strictly more hardware
+#                                   than the open one does.
+#   legacy470   nvidia-470xx-dkms — Kepler. Not in the official repositories.
+#   legacy390   nvidia-390xx-dkms — Fermi. Not in the official repositories
+#                                   either, and old enough that nouveau is a
+#                                   defensible answer on its own.
+#
+# The two legacy names are named, never installed automatically: they live in
+# the AUR, and a name that has been dropped there fails halfway through a build
+# rather than at the start. What --fix does with them is offer them.
+nvidia_driver_for() {   # nvidia_driver_for [arch]
+    case ${1:-$(nvidia_arch)} in
+        blackwell|ada|ampere|turing)  echo open ;;
+        volta|pascal|maxwell)         echo proprietary ;;
+        kepler)                       echo legacy470 ;;
+        fermi)                        echo legacy390 ;;
+        *)                            echo proprietary ;;
+    esac
+}
+
+nvidia_driver_pkg() {   # nvidia_driver_pkg <choice>
+    case $1 in
+        open)        echo nvidia-open-dkms ;;
+        proprietary) echo nvidia-dkms ;;
+        legacy470)   echo nvidia-470xx-dkms ;;
+        legacy390)   echo nvidia-390xx-dkms ;;
+    esac
+}
+
+# Human names, for anything that has to say which card this is out loud.
+arch_label() {
+    case $1 in
+        blackwell) echo "GeForce RTX 50xx (Blackwell)" ;;
+        ada)       echo "GeForce RTX 40xx (Ada)" ;;
+        ampere)    echo "GeForce RTX 30xx (Ampere)" ;;
+        turing)    echo "GeForce RTX 20xx / GTX 16xx (Turing)" ;;
+        volta)     echo "Volta" ;;
+        pascal)    echo "GeForce GTX 10xx (Pascal)" ;;
+        maxwell)   echo "GeForce GTX 9xx / 750 (Maxwell)" ;;
+        kepler)    echo "GeForce GTX 6xx/7xx (Kepler)" ;;
+        fermi)     echo "GeForce GTX 4xx/5xx (Fermi)" ;;
+        *)         echo "geração não reconhecida" ;;
+    esac
 }
 
 # ── What is installed ────────────────────────────────────────────────────────
@@ -124,6 +199,44 @@ installed_kernels() {
 module_loaded() { grep -Eq "^${1}[[:space:]]" "$SYSROOT/proc/modules" 2>/dev/null; }
 module_exists() { modinfo -k "$KREL" "$1" >/dev/null 2>&1; }
 
+# Whether the NVIDIA driver actually took the card, which is a different
+# question from whether the module loaded - and the difference is the whole
+# reason this machine looked fine while nothing worked.
+#
+# The open modules load happily on a GTX 1050. They bind zero GPUs, print one
+# line into the kernel log, and stop. Everything after that is normal: the
+# module is listed in /proc/modules, pacman reports the driver installed, and
+# the desktop draws on the processor. Every check that only asked "is the
+# module loaded" said yes.
+#
+# The driver creates one directory per card it took, so counting them is the
+# ground truth nothing else gives.
+nvidia_bound() {
+    local d=$SYSROOT/proc/driver/nvidia/gpus
+    [[ -d $d ]] || return 1
+    local e; for e in "$d"/*; do [[ -e $e ]] && return 0; done
+    return 1
+}
+
+# What the driver itself said when it failed. Worth more than anything guessed
+# from the model number: when a card is too old for the installed branch, the
+# NVRM lines name the branch that would work, by number. Nothing else on the
+# machine knows that.
+#
+# The kernel log is readable through the journal for wheel, and through dmesg
+# for root; --fix runs as root, --check usually does not, and a machine where
+# neither works simply skips this.
+nvidia_nvrm() {
+    if [[ -n ${IFOS_GPU_KLOG:-} ]]; then
+        cat "$IFOS_GPU_KLOG" 2>/dev/null
+        return
+    fi
+    local out
+    out=$(journalctl -k -b --no-pager 2>/dev/null | grep -a 'NVRM:')
+    [[ -n $out ]] || out=$(dmesg 2>/dev/null | grep -a 'NVRM:')
+    printf '%s' "$out"
+}
+
 # What is actually drawing. This is the ground truth the rest of the checks are
 # trying to predict: everything can look installed and still be running on the
 # CPU. Needs a display, so it is skipped over ssh and on a TTY.
@@ -150,6 +263,9 @@ MISSING=()    # package names, without which something is broken
 SUGGEST=()    # package names worth having, whose absence is not a fault
 NOTES=()      # true, worth saying, and not a fault either
 ACTIONS=()    # tokens: multilib dkms initramfs reboot modeset nouveau-blacklist
+              #         swap-proprietary force-nouveau early-kms nvidia-unbound
+NV_ARCH=""    # which NVIDIA generation this is, once diagnose_nvidia has run
+NV_WANT=""    # which driver that generation needs: open/proprietary/legacy*
 
 # Without pacman there is no way to tell what is installed, and reporting every
 # package as missing would be worse than saying nothing. That happens inside the
@@ -282,22 +398,29 @@ diagnose_amd() {
 }
 
 diagnose_nvidia() {
-    local family; family=$(nvidia_family)
-    local proprietary=0
-    any_pkg nvidia-open-dkms nvidia-dkms nvidia-open nvidia && proprietary=1
+    NV_ARCH=$(nvidia_arch)
+    NV_WANT=$(nvidia_driver_for "$NV_ARCH")
+    local installed=0
+    any_pkg nvidia-open-dkms nvidia-dkms nvidia-open nvidia \
+            nvidia-470xx-dkms nvidia-390xx-dkms && installed=1
 
-    # Nobody is dragged onto the proprietary driver. On a card too old for the
-    # open modules nouveau is the right answer and the installer offers it; the
-    # only thing worth saying is when nouveau is not working either.
-    if (( ! proprietary )); then
-        if [[ $family == antiga ]]; then
-            if module_loaded nouveau; then
-                good "Placa NVIDIA antiga no driver livre nouveau, que é o certo para ela"
-            else
-                problem "Placa NVIDIA antiga e nenhum driver de vídeo carregado (nem nouveau, nem o da NVIDIA)."
-            fi
-            return
-        fi
+    # No NVIDIA driver at all. What to say depends entirely on whether one
+    # exists for this card: offering a driver to somebody whose Kepler card
+    # cannot use it is how the last version of this sent people in circles.
+    if (( ! installed )); then
+        case $NV_WANT in
+            legacy470|legacy390)
+                # Old enough that the official repositories have nothing. On
+                # these, nouveau really is the answer that works today.
+                if module_loaded nouveau; then
+                    good "Placa NVIDIA $(arch_label "$NV_ARCH") no driver livre nouveau, que é o que existe para ela"
+                else
+                    problem "Placa NVIDIA $(arch_label "$NV_ARCH") e nenhum driver de vídeo carregado."
+                    action force-nouveau
+                fi
+                note "O driver da NVIDIA para esta placa saiu dos repositórios oficiais; a versão antiga dele está no AUR como $(nvidia_driver_pkg "$NV_WANT"), e o ifos-software instala."
+                return ;;
+        esac
         if software_rendering || ! module_loaded nouveau; then
             problem "Placa NVIDIA sem o driver da NVIDIA instalado."
             action offer-nvidia
@@ -307,8 +430,16 @@ diagnose_nvidia() {
         return
     fi
 
-    # From here the proprietary driver is installed and expected to work.
+    # From here an NVIDIA driver is installed and expected to work.
     want nvidia-utils lib32-nvidia-utils
+
+    # Asked first, on purpose. Everything below this line is inference from
+    # package names and module lists; this is the driver saying what happened.
+    # When it has spoken there is nothing to guess, and guessing anyway would
+    # bury the real answer under a plausible wrong one - which is how somebody
+    # ends up reinstalling drivers for an afternoon over a card that is not
+    # seated properly.
+    diagnose_nvrm
 
     # The prebuilt module is built against one kernel and one kernel only. This
     # image installs two - linux and linux-lts, the second existing precisely
@@ -323,15 +454,44 @@ diagnose_nvidia() {
         action swap-dkms
     fi
 
-    if pkg nvidia-open-dkms || pkg nvidia-dkms; then
+    if any_pkg nvidia-open-dkms nvidia-dkms nvidia-470xx-dkms nvidia-390xx-dkms; then
         want dkms
         local base; base=$(kernel_pkgbase)
         [[ -n $base ]] && want "${base}-headers"
     fi
 
+    # The open modules on a card older than Turing. This is the failure this
+    # whole tool exists for and the one nothing caught: the package installs,
+    # the module loads, it binds no card, and every other check passes. The
+    # machine draws on the processor and looks perfectly configured doing it.
+    if pkg nvidia-open-dkms || pkg nvidia-open; then
+        case $NV_WANT in
+            proprietary)
+                problem "O driver instalado é o de módulos abertos, e ele não funciona nesta placa ($(arch_label "$NV_ARCH")). Ele carrega, não pega a placa, e o desenho continua no processador. O driver certo aqui é o fechado."
+                action swap-proprietary ;;
+            legacy470|legacy390)
+                problem "O driver instalado não funciona nesta placa ($(arch_label "$NV_ARCH")): ela é antiga demais para qualquer driver NVIDIA que ainda esteja nos repositórios."
+                action force-nouveau ;;
+        esac
+    fi
+
     # The actual state of the driver, in the order the failures happen.
     if module_loaded nvidia; then
-        good "Módulo nvidia carregado"
+        # Loaded is not the same as working. The directory below has one entry
+        # per card the driver actually took; empty means it took none, which is
+        # what an unsupported card looks like from the outside.
+        if nvidia_bound; then
+            good "Módulo nvidia carregado e com a placa nas mãos"
+        elif has_action swap-proprietary || has_action force-nouveau ||
+             has_action hw-fault; then
+            # Why it took no card is already established above, either from the
+            # card's generation or from the driver's own words. Saying it again
+            # in vaguer language helps nobody.
+            :
+        else
+            problem "O módulo nvidia carregou mas não assumiu nenhuma placa, então quem está desenhando é o processador. Quase sempre é driver errado para a geração desta placa."
+            action nvidia-unbound
+        fi
 
         # The driver was updated and the running kernel still has the old
         # module: everything nvidia touches now fails, including Steam, until
@@ -383,8 +543,64 @@ diagnose_nvidia() {
         fi
     fi
 
-    [[ $family == antiga ]] && (( proprietary )) &&
-        problem "Esta placa NVIDIA é anterior à série GTX 16, e o driver de módulos abertos não funciona nela. O nouveau é mais lento mas de fato inicia."
+    # The kms hook puts every DRM driver the machine has into the boot image,
+    # nouveau included. With the NVIDIA driver installed that is a race the
+    # NVIDIA driver loses: nouveau is in the initramfs, it takes the card
+    # before the real root filesystem is even mounted, and nvidia then has
+    # nothing to bind to. The fix is to put the nvidia modules in the boot
+    # image instead of letting the hook guess - which is also what removes the
+    # black gap between the boot splash and the login screen.
+    if any_pkg nvidia-open-dkms nvidia-dkms nvidia-open nvidia &&
+       [[ -d $SYSROOT/etc/mkinitcpio.conf.d || -f $SYSROOT/etc/mkinitcpio.conf ]] &&
+       ! grep -rqs 'nvidia_drm' "$SYSROOT/etc/mkinitcpio.conf" "$SYSROOT/etc/mkinitcpio.conf.d" 2>/dev/null; then
+        note "Os módulos da NVIDIA não estão na imagem de boot, então o nouveau ainda pode pegar a placa antes deles e a tela fica preta entre o splash e o login."
+        action early-kms
+    fi
+
+    # And what the driver itself said, which beats everything guessed above.
+    diagnose_nvrm
+}
+
+# The driver's own words. When an NVIDIA card is too old for the installed
+# branch the kernel log says so in one line, and - this is the part worth
+# reading - it names the branch that *would* work, by number. No amount of
+# guessing from a model name gets that.
+diagnose_nvrm() {
+    local log; log=$(nvidia_nvrm)
+    [[ -n $log ]] || return 0
+
+    if grep -q 'not supported by the NVIDIA open kernel modules' <<<"$log"; then
+        has_action swap-proprietary ||
+            { problem "O próprio driver disse que esta placa não é suportada pelos módulos abertos. O driver fechado (nvidia-dkms) funciona nela."
+              action swap-proprietary; }
+    fi
+
+    # "supported through the NVIDIA 470.xx Legacy drivers" - and the xx is
+    # literally the letters x, not a number, which is what made the obvious
+    # version pattern match nothing at all.
+    local branch
+    branch=$(sed -n 's/.*supported through the NVIDIA \([0-9][0-9]*\)[0-9.xX]* Legacy.*/\1/p' <<<"$log" | head -1)
+    if [[ -n $branch ]]; then
+        problem "O próprio driver disse que esta placa só funciona com o driver NVIDIA da série $branch, que não está mais nos repositórios oficiais. O nouveau é o que funciona aqui sem AUR."
+        note "No AUR o pacote se chama nvidia-${branch}xx-dkms; o ifos-software instala, mas compila demorado e pode quebrar num kernel novo."
+        action force-nouveau
+    fi
+
+    if grep -q 'RmInitAdapter failed' <<<"$log"; then
+        problem "A placa não inicializou (RmInitAdapter failed). Isso é hardware, não configuração: costuma ser a placa desligada na BIOS, alimentação faltando ou memória de vídeo com defeito. Reinstalar driver não resolve."
+        action hw-fault
+    fi
+
+    if grep -q 'has fallen off the bus' <<<"$log"; then
+        problem "A placa sumiu do barramento PCI durante o uso. Isso é hardware: contato, alimentação ou superaquecimento."
+        action hw-fault
+    fi
+
+    if grep -q 'probe routine was not called for' <<<"$log"; then
+        problem "O driver da NVIDIA nem chegou a ser chamado para a placa: outra coisa pegou o dispositivo antes (normalmente o nouveau, vindo da imagem de boot)."
+        action nouveau-blacklist
+        action early-kms
+    fi
 }
 
 # ── Printing ─────────────────────────────────────────────────────────────────
@@ -497,6 +713,123 @@ enable_multilib() {
     multilib_on
 }
 
+# ── The three files an NVIDIA machine needs and nothing writes on its own ────
+#
+#  Kept here, in one place, because both the installer and --fix need exactly
+#  the same content and a machine where the two disagree is worse than one
+#  where neither ran.
+
+# modeset=1 is what lets X hand frames to the driver instead of copying them
+# through the processor; without it a hybrid laptop tears and comes back from
+# suspend on a black screen. fbdev=1 gives the driver the console framebuffer
+# too, which is what removes the black gap between the boot splash and the
+# login screen. PreserveVideoMemoryAllocations is what makes suspend actually
+# restore the card's memory - without it the first game after closing the lid
+# hangs, on a machine that looks awake.
+write_nvidia_modprobe() {
+    printf '%s\n' \
+        '# Escrito pelo IFOS (ifos-gpu). Não edite à mão: o ifos-gpu --fix reescreve.' \
+        'options nvidia_drm modeset=1 fbdev=1' \
+        'options nvidia NVreg_PreserveVideoMemoryAllocations=1' \
+        'options nvidia NVreg_TemporaryFilePath=/var/tmp' |
+        $SUDO tee /etc/modprobe.d/ifos-nvidia.conf >/dev/null
+}
+
+# The kms hook loads every DRM driver it finds, and nouveau is one of them. On
+# a machine with the NVIDIA driver installed that is a race nvidia loses, and
+# the symptom is a card that nothing ever binds. Naming the nvidia modules
+# explicitly and dropping the hook settles it.
+# Named nvidia.conf, not ifos-nvidia.conf, and the name is load-bearing:
+# mkinitcpio sources /etc/mkinitcpio.conf.d/*.conf in sorted order and the last
+# assignment wins. "ifos-nvidia" sorts *before* "ifos" - the dash beats the dot
+# - so the installer's HOOKS line, kms and all, would have overwritten this one.
+write_nvidia_initramfs() {
+    $SUDO install -d /etc/mkinitcpio.conf.d
+    printf '%s\n' \
+        '# Escrito pelo IFOS (ifos-gpu).' \
+        '#' \
+        '# Os módulos da NVIDIA vão na imagem de boot, e o hook kms sai. O kms' \
+        '# carrega todo driver de vídeo que encontra, nouveau incluído, antes de' \
+        '# montar o sistema de arquivos - e aí o nouveau já pegou a placa e o' \
+        '# driver da NVIDIA não tem o que assumir.' \
+        'MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)' \
+        'HOOKS=(base udev plymouth autodetect microcode modconf keyboard keymap consolefont block filesystems fsck)' |
+        $SUDO tee /etc/mkinitcpio.conf.d/nvidia.conf >/dev/null
+}
+
+# With the modules inside the boot image, updating nvidia-utils without
+# rebuilding that image leaves the running kernel with the old module and the
+# system with the new libraries. Everything nvidia touches then fails until
+# somebody happens to reinstall a kernel. This hook is what keeps the two in
+# step; pacman runs it on every driver or kernel update.
+write_nvidia_hook() {
+    $SUDO install -d /etc/pacman.d/hooks
+    printf '%s\n' \
+        '# Escrito pelo IFOS (ifos-gpu).' \
+        '[Trigger]' \
+        'Operation=Install' \
+        'Operation=Upgrade' \
+        'Operation=Remove' \
+        'Type=Package' \
+        'Target=nvidia' \
+        'Target=nvidia-open' \
+        'Target=nvidia-dkms' \
+        'Target=nvidia-open-dkms' \
+        'Target=nvidia-utils' \
+        'Target=linux' \
+        'Target=linux-lts' \
+        '' \
+        '[Action]' \
+        'Description=Atualizando a imagem de boot com o driver da NVIDIA…' \
+        'Depends=mkinitcpio' \
+        'When=PostTransaction' \
+        'NeedsTargets' \
+        "Exec=/bin/sh -c 'while read -r t; do case \$t in linux|linux-lts) exit 0 ;; esac; done; /usr/bin/mkinitcpio -P'" |
+        $SUDO tee /etc/pacman.d/hooks/ifos-nvidia.hook >/dev/null
+}
+
+# ── The safety net ───────────────────────────────────────────────────────────
+#
+#  Everything above this line runs after somebody has logged in. That is fine
+#  for a machine that is merely slow, and useless for the one failure that
+#  matters most: the NVIDIA driver did not take the card, nouveau is blacklisted
+#  by the NVIDIA driver's own packaging, and the machine therefore has *no*
+#  graphics driver at all. The student sees a black screen and there is nothing
+#  to log in to.
+#
+#  It is not a hypothetical. It is what happens when the open modules land on a
+#  pre-Turing card, when DKMS fails to build against a new kernel, and when a
+#  driver update lands without a matching module - three things that happen on
+#  their own, without anybody doing anything wrong.
+#
+#  So: run before the login screen, and if the card is unbound, put nouveau
+#  back. It is slower. It draws a desktop, which is the entire point - from a
+#  desktop, `ifos-gpu --fix` can be run and it will say exactly what happened.
+nvidia_fallback() {
+    has_vendor nvidia || return 0
+    any_pkg nvidia-open-dkms nvidia-dkms nvidia-open nvidia || return 0
+    nvidia_bound && return 0
+    module_loaded nouveau && return 0
+
+    # A hybrid laptop still has a screen: the integrated chip is driving it,
+    # and an unbound discrete card costs speed, not the session. Loading a
+    # second driver under a machine that is working is not worth the risk;
+    # gpu-watch.sh will say something about it after login instead.
+    if module_loaded i915 || module_loaded xe || module_loaded amdgpu ||
+       module_loaded radeon; then
+        return 0
+    fi
+
+    logger -t ifos-gpu -p daemon.warning \
+        "driver NVIDIA instalado nao assumiu nenhuma placa; carregando nouveau para a maquina ter tela" \
+        2>/dev/null || true
+
+    # By name, deliberately. A blacklist stops the kernel autoloading a module
+    # by alias; it does not stop this.
+    modprobe nouveau 2>/dev/null || return 1
+    return 0
+}
+
 fix() {
     local rc=0
 
@@ -507,13 +840,19 @@ fix() {
     # Offering the NVIDIA driver, when the machine has an NVIDIA card and no
     # driver for it. Asked rather than assumed: the free driver is a legitimate
     # choice, and replacing it is not something to do to somebody quietly.
+    local driver_pkg
+    driver_pkg=$(nvidia_driver_pkg "${NV_WANT:-open}")
+
     if has_action offer-nvidia; then
-        printf '    Esta máquina tem uma placa NVIDIA sem o driver da NVIDIA.\n'
-        printf '    Com ele os jogos ficam muito mais rápidos e o Steam abre.\n\n'
+        printf '    Esta máquina tem uma placa %s sem o driver da NVIDIA.\n' \
+               "$(arch_label "${NV_ARCH:-desconhecida}")"
+        printf '    Com ele os jogos ficam muito mais rápidos e o Steam abre.\n'
+        printf '    O driver certo para esta placa é o %s.\n\n' "$driver_pkg"
         if confirm "Instalar o driver da NVIDIA?"; then
-            MISSING+=(nvidia-open-dkms dkms nvidia-utils nvidia-settings lib32-nvidia-utils)
+            MISSING+=("$driver_pkg" dkms nvidia-utils nvidia-settings lib32-nvidia-utils)
             local base; base=$(kernel_pkgbase); [[ -n $base ]] && MISSING+=("${base}-headers")
             has_dgpu && MISSING+=(nvidia-prime)
+            action early-kms
             action reboot
         fi
         printf '\n'
@@ -522,9 +861,32 @@ fix() {
     if has_action swap-dkms; then
         printf '    Trocando o driver NVIDIA pré-compilado pela versão DKMS,\n'
         printf '    que se reconstrói sozinha a cada kernel novo.\n\n'
-        MISSING+=(nvidia-open-dkms dkms)
+        MISSING+=("$driver_pkg" dkms)
         local base; base=$(kernel_pkgbase); [[ -n $base ]] && MISSING+=("${base}-headers")
+        action early-kms
         action reboot
+    fi
+
+    # The open modules on a card they do not cover. pacman is told to install
+    # the closed driver; the two conflict, so it offers to remove the open one
+    # in the same transaction and the machine is never left with neither.
+    if has_action swap-proprietary; then
+        printf '    Trocando os módulos abertos pelo driver fechado da NVIDIA,\n'
+        printf '    que é o que funciona numa placa %s.\n' "$(arch_label "${NV_ARCH:-desconhecida}")"
+        printf '    O pacman vai perguntar se pode remover o nvidia-open-dkms: pode.\n\n'
+        MISSING+=(nvidia-dkms dkms nvidia-utils)
+        local base; base=$(kernel_pkgbase); [[ -n $base ]] && MISSING+=("${base}-headers")
+        action early-kms
+        action reboot
+    fi
+
+    # And the other direction. A card too old for anything in the repositories
+    # has exactly one driver that works today, and it is the free one - which
+    # cannot load while nvidia-utils is telling modprobe to blacklist it.
+    if has_action force-nouveau; then
+        printf '    Esta placa não tem driver da NVIDIA nos repositórios.\n'
+        printf '    O nouveau funciona nela e está no kernel; o que falta é\n'
+        printf '    tirar o bloqueio que o driver da NVIDIA deixou no caminho.\n\n'
     fi
 
     need_root || return 1
@@ -559,8 +921,41 @@ fix() {
 
     if has_action modeset; then
         printf '  %s==>%s Ligando o modeset do nvidia_drm…\n' "$c_blu" "$c_reset"
-        printf 'options nvidia_drm modeset=1\n' |
-            $SUDO tee /etc/modprobe.d/ifos-nvidia.conf >/dev/null
+        write_nvidia_modprobe
+        action initramfs
+    fi
+
+    # Undoing the NVIDIA driver's own blacklist, on a card the NVIDIA driver
+    # cannot drive. Without this the machine has no graphics driver at all:
+    # nouveau is blocked by a file nvidia-utils dropped in /usr/lib/modprobe.d,
+    # and nothing is going to replace it.
+    if has_action force-nouveau; then
+        printf '  %s==>%s Liberando o nouveau…\n' "$c_blu" "$c_reset"
+        $SUDO rm -f /etc/modprobe.d/ifos-nouveau.conf
+        printf '%s\n' \
+            '# Esta placa é antiga demais para o driver da NVIDIA que existe hoje.' \
+            '# O nvidia-utils bloqueia o nouveau para todo mundo; aqui ele é' \
+            '# liberado de volta, senão a máquina fica sem driver de vídeo nenhum.' \
+            'blacklist nvidia' \
+            'blacklist nvidia_drm' \
+            'blacklist nvidia_modeset' \
+            'blacklist nvidia_uvm' |
+            $SUDO tee /etc/modprobe.d/ifos-nouveau-fallback.conf >/dev/null
+        $SUDO rm -f /etc/mkinitcpio.conf.d/nvidia.conf
+        action initramfs
+        action reboot
+    fi
+
+    # Putting the NVIDIA modules in the boot image, and taking the kms hook out
+    # from under them. The hook loads every DRM driver it can find, nouveau
+    # included, before the root filesystem is mounted - so on a machine with
+    # both, nouveau wins and nvidia never gets the card.
+    if has_action early-kms && ! has_action force-nouveau; then
+        printf '  %s==>%s Colocando os módulos da NVIDIA na imagem de boot…\n' "$c_blu" "$c_reset"
+        write_nvidia_modprobe
+        write_nvidia_initramfs
+        write_nvidia_hook
+        action initramfs
     fi
 
     if has_action nvidia-suspend; then
@@ -599,6 +994,30 @@ fix() {
 case ${1:-} in
     --has-dgpu) has_dgpu && exit 0 || exit 1 ;;
     -h|--help)  sed -n '3,9p' "$0" | sed 's/^# \?//'; exit 0 ;;
+
+    # Machine-readable, for the installer. Prints the generation and the driver
+    # it needs, so install-ifos does not carry a second copy of the table.
+    --nvidia-arch)   nvidia_arch; exit 0 ;;
+    --nvidia-label)  arch_label "$(nvidia_arch)"; exit 0 ;;
+    --nvidia-driver) has_vendor nvidia || { echo none; exit 1; }
+                     nvidia_driver_for "$(nvidia_arch)"; exit 0 ;;
+    --nvidia-pkg)    has_vendor nvidia || exit 1
+                     nvidia_driver_pkg "$(nvidia_driver_for "$(nvidia_arch)")"; exit 0 ;;
+
+    # The three configuration files, written without diagnosing anything. The
+    # installer calls this inside the chroot of a machine that has not booted
+    # yet, where there is nothing to diagnose.
+    --write-nvidia-config)
+        [[ $EUID -eq 0 ]] || { echo "ifos-gpu: --write-nvidia-config precisa de root" >&2; exit 1; }
+        SUDO=""
+        write_nvidia_modprobe
+        write_nvidia_initramfs
+        write_nvidia_hook
+        exit 0 ;;
+
+    # Run at every boot, before the login screen. See ifos-gpu-fallback.service.
+    --fallback) nvidia_fallback; exit $? ;;
+
     run)
         shift
         (( $# )) || { echo "ifos-gpu: run needs a command" >&2; exit 1; }

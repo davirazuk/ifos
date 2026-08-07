@@ -1,6 +1,6 @@
 # IFOS software catalog — Drivers e suporte a hardware / Drivers and hardware support
-NVIDIA (recomendado)|Driver da NVIDIA que se reconstrói a cada kernel novo — funciona nos dois kernels que o IFOS instala. Placas GTX 16xx, RTX e mais novas|nvidia-open-dkms dkms nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
-NVIDIA (pré-compilado)|Mesma coisa sem compilar, mas serve só ao kernel principal: no kernel LTS a placa fica sem driver|nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
+NVIDIA para placas RTX / GTX 16xx|Driver de módulos abertos, para Turing e mais novas: GTX 16xx, RTX 20xx, 30xx, 40xx, 50xx. Reconstrói-se a cada kernel novo, então funciona nos dois kernels que o IFOS instala|nvidia-open-dkms dkms nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
+NVIDIA para placas GTX 9xx / 10xx|Driver fechado, para Maxwell, Pascal e Volta: GTX 750, 9xx, 10xx e as TITAN da época. Os módulos abertos NÃO funcionam nessas placas — carregam e não pegam a placa|nvidia-dkms dkms nvidia-utils nvidia-settings lib32-nvidia-utils|multilib
 NVIDIA híbrida (prime-run)|Manda um jogo para a placa dedicada num notebook com dois vídeos|nvidia-prime|repo
 Vídeo AMD / Intel (Vulkan)|Drivers Vulkan e bibliotecas de 32 bits para jogos|vulkan-radeon vulkan-intel lib32-vulkan-radeon lib32-vulkan-intel mesa lib32-mesa vulkan-icd-loader lib32-vulkan-icd-loader|multilib
 Monitor de placa de vídeo|nvtop: uso da GPU em tempo real, funciona com NVIDIA, AMD e Intel|nvtop|repo

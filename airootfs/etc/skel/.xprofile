@@ -8,7 +8,23 @@
 # them fine. Real hardware keeps hardware acceleration.
 [ -e /dev/dri/renderD128 ] || export LIBGL_ALWAYS_SOFTWARE=1
 
-export QT_QPA_PLATFORMTHEME=qt5ct
+# Qt reads one variable, and a machine has two Qt majors on it with separate
+# plugin directories. "qt5ct" names a plugin that exists for Qt5 only, so every
+# Qt6 application - VLC, qBittorrent, OBS, Kdenlive - came up in the default
+# light palette in the middle of a dark desktop, ignoring the qt6ct
+# configuration sitting right next to the qt5ct one.
+#
+# The GTK platform theme is the one value that serves both, and it takes its
+# colours from the GTK theme this desktop already sets - which means ifos-theme
+# repaints Qt applications for free, something neither qt5ct nor qt6ct would
+# have done. It is chosen only when the plugin is really on disk for both Qt
+# versions, so a machine without it keeps exactly the behaviour it had.
+if [ -e /usr/lib/qt6/plugins/platformthemes/libqgtk3.so ] &&
+   [ -e /usr/lib/qt/plugins/platformthemes/libqgtk3.so ]; then
+    export QT_QPA_PLATFORMTHEME=gtk3
+else
+    export QT_QPA_PLATFORMTHEME=qt5ct
+fi
 # Qt's own automatic scaling is left off: it disagrees with GTK about how much
 # to scale, so on the same screen half the desktop came out one size and half
 # another. ifos-scale gives both toolkits the same number a few lines down.

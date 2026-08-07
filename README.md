@@ -202,6 +202,31 @@ playing. The launcher already knows which tiles are games, so it wraps them,
 the same way it already sends them to the discrete card on a hybrid laptop.
 Nobody has to learn the words `gamemoderun %command%`.
 
+That paragraph was not true until recently, which is worth writing down.
+GameMode ships with `renice=0` and `ioprio=0` — both of which mean "change
+nothing" — so wrapping a game in `gamemoderun` moved the CPU governor and
+nothing else. On a four-core laptop with a browser open that is most of the
+difference: the game competes on equal terms with thirty Firefox processes for
+the processor and the disk, and losing that competition is felt as a stutter
+rather than as a lower frame rate. `/etc/gamemode.ini` sets both, plus
+`disable_splitlock`, which several Windows games under Proton trigger
+constantly and which stalls every core on the machine for whole seconds at a
+time. Renicing needs the account to be in the `gamemode` group, so the
+installer puts it there and `ifos-update` catches up the accounts that predate
+the file.
+
+**Qt programs came up white.** The shipped `qt5ct.conf` said
+`custom_palette=false`, which means "use the style's own palette", and Fusion's
+is light — so VLC, qBittorrent and OBS drew a bright grey window in the middle
+of a dark green desktop, next to the dark icon theme the same file was setting.
+There is now an IFOS colour scheme for Qt, built from the same palette as
+everything else and repainted by `ifos-theme` along with it. And
+`QT_QPA_PLATFORMTHEME=qt5ct` names a plugin that exists for Qt5 only, so every
+Qt6 application ignored it and the `qt6ct` configuration sitting next to it was
+never read by anything; the variable is now chosen at login from what is
+actually installed, preferring the GTK platform theme, which serves both Qt
+majors and follows the GTK theme this desktop already sets.
+
 **cups started at every boot, on every machine.** `cups` is socket-activated:
 with `cups.socket` the daemon starts the first time something actually prints
 or opens a printer dialog, and a machine that never sees a printer never starts
@@ -305,20 +330,47 @@ knows the specific ways this actually fails:
 | `lib32-*` missing | the exact packages Steam needs |
 | No NVIDIA module for the running kernel | names the kernel; rebuilds through DKMS |
 | Prebuilt driver on a machine with two kernels | swaps it for the DKMS one, which follows both |
+| Open modules on a card older than Turing | names the generation and swaps to the closed driver |
+| Module loaded, no card bound | the failure that used to read as healthy |
+| Card too old for any driver in the repos | says so, names the AUR package, stops offering a driver that cannot work |
 | nouveau holding the card | blacklists it and regenerates the initramfs |
+| NVIDIA modules missing from the boot image | why nouveau kept winning that race |
 | Driver updated, machine not rebooted | says so, instead of looking like a broken install |
 | `nvidia_drm` without modeset | the cause of flicker and black screens after suspend |
+| `RmInitAdapter failed` / card off the bus | hardware, said as hardware, so nobody reinstalls drivers all afternoon |
 | Rendering on the CPU | the verdict, with the renderer it found |
 
-An old NVIDIA card running nouveau is reported as correct rather than as a
-fault: nouveau is the right driver for a GTX 750, and nobody gets pushed onto
-one that does not support their hardware.
+**There is no one NVIDIA driver — there are four, and the wrong one fails
+silently.** The open modules cover Turing and newer; on a GTX 1050 they
+install, the module loads, it binds no card at all, and the desktop is drawn by
+the processor on a machine where every check reads as correctly configured.
+Kepler and Fermi have nothing left in the official repositories. So the
+installer stops asking the student "is your card older than a GTX 16xx?" — a
+question nobody can answer about a laptop they were handed — and reads the chip
+codename out of `lspci` instead: Turing and newer get `nvidia-open-dkms`,
+Maxwell through Volta get `nvidia-dkms`, and anything older is told plainly
+that nouveau is what works for it. A card nothing recognises gets the closed
+driver, because it covers strictly more hardware and guessing towards the open
+one is the silent failure.
 
-`tools/test-tools.sh` runs the doctor against fourteen machines that do not
+**And a machine whose graphics driver fails can still be logged into.** That
+was the hole that made a bad NVIDIA driver unrecoverable rather than annoying:
+`nvidia-utils` blacklists nouveau, correctly, right up until the NVIDIA driver
+does not work — and then the machine has no graphics driver at all, no greeter,
+and nothing on screen to say why. `ifos-gpu-fallback.service` runs before the
+login screen, asks whether anything actually took the card, and loads nouveau
+by name if nothing did. Slower, and it draws a desktop, which is the whole
+point: from a desktop `ifos-gpu --fix` can be run and it will say exactly what
+happened. The boot menu also carries two ways back in — one that blacklists the
+NVIDIA modules and lets nouveau drive, one that gives up on graphics entirely
+and boots to a text console.
+
+`tools/test-tools.sh` runs the doctor against twenty machines that do not
 exist — a hybrid laptop booted on the LTS kernel with a driver built for the
-other one, an AMD desktop with no multilib, a card that predates the open
-modules — because none of those can be reproduced on the machine IFOS is built
-on, and each one is a student in front of a computer that will not open Steam.
+other one, an AMD desktop with no multilib, a GTX 1060 whose driver loaded and
+took nothing, a card whose own kernel messages name the legacy branch it needs
+— because none of those can be reproduced on the machine IFOS is built on, and
+each one is a student in front of a computer that will not open Steam.
 
 **Jogos lists the games you have, not just the ones you could install.** The
 section used to be a shop — Steam, Lutris, Heroic, Wine — with no way to reach

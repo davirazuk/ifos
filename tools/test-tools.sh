@@ -44,6 +44,7 @@ new_machine() {   # new_machine <name> <kernel-release>
     echo "$KREL" > "$M/data/krel"
     echo "BOOT_IMAGE=/vmlinuz-linux root=/dev/sda2 rw" > "$M/proc/cmdline"
     printf 'core\nextra\n' > "$M/data/repos"
+    : > "$M/data/klog"
 
     # A machine with a working driver has a render node; cases that need it
     # gone delete it again.
@@ -99,11 +100,24 @@ nvidia_running() { mkdir -p "$M/proc/driver/nvidia"
                       > "$M/proc/driver/nvidia/version"; }
 drm_modeset() { printf '%s\n' "$1" > "$M/sys/module/nvidia_drm/parameters/modeset"; }
 
+# The driver creates one of these per card it actually took. A machine with the
+# module loaded and none of these is the failure that looked healthy for months:
+# installed, loaded, drawing on the processor.
+bound()      { mkdir -p "$M/proc/driver/nvidia/gpus/0000:01:00.0"
+               : > "$M/proc/driver/nvidia/gpus/0000:01:00.0/information"; }
+# What the driver itself said. Worth more than anything guessed from a model
+# number, because it names the driver branch that would work, by number.
+nvrm()       { printf '%s\n' "$@" > "$M/data/klog"; }
+# A machine that has an /etc/mkinitcpio.conf.d at all, with whatever is given.
+mkinitcpio_has() { mkdir -p "$M/etc/mkinitcpio.conf.d"
+                   printf '%s\n' "$@" > "$M/etc/mkinitcpio.conf.d/ifos.conf"; }
+
 # ── Running one ──────────────────────────────────────────────────────────────
 
 OUT=""; RC=0
 run_check() {
-    OUT=$(IFOS_GPU_SYSROOT="$M" PATH="$M/bin:/usr/bin:/bin" DISPLAY=:0 COLUMNS=200 \
+    OUT=$(IFOS_GPU_SYSROOT="$M" IFOS_GPU_KLOG="$M/data/klog" \
+          PATH="$M/bin:/usr/bin:/bin" DISPLAY=:0 COLUMNS=200 \
           bash "$GPU" --check 2>&1)
     RC=$?
 }
@@ -196,6 +210,7 @@ kernel_is 6.12.1-arch1-1 linux
 version nvidia-utils 570.86.16-1
 nvidia_running 565.77
 drm_modeset Y
+bound
 renderer "NVIDIA GeForce RTX 4070/PCIe/SSE2"
 run_check
 check "sai 1"                    rc_is 1
@@ -280,6 +295,7 @@ kernel_is 6.12.1-arch1-1 linux
 version nvidia-utils 570.86.16-1
 nvidia_running 570.86.16
 drm_modeset N
+bound
 renderer "NVIDIA GeForce RTX 4060/PCIe/SSE2"
 run_check
 check "sai 1"           rc_is 1
@@ -332,7 +348,237 @@ check "sai 0 — nada quebrado"      rc_is 0
 check "pede o mesa-utils mesmo assim" says "mesa-utils"
 check "não chama isso de problema"    not_says "✗"
 
-# ── 14. Every entry point still works ────────────────────────────────────────
+# ── 14. The one that made NVIDIA look unfixable ──────────────────────────────
+#  A GTX 1060 with the open modules on it. Everything about this machine reads
+#  as correctly configured: the package is installed, the module is loaded, and
+#  pacman is happy. The open modules do not support Pascal, so they bound no
+#  card at all, and the desktop is being drawn by the processor. Every check
+#  that only asked "is the module loaded" said yes, which is why this survived.
+case_name "GTX 1060 com os módulos abertos — instala, carrega, não pega a placa"
+new_machine nv-open-on-pascal 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils nvidia-settings \
+         linux-headers vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia nvidia_drm nvidia_modeset
+buildable nvidia
+multilib
+kernel_is 6.12.1-arch1-1 linux
+version nvidia-utils 570.86.16-1
+nvidia_running 570.86.16
+drm_modeset Y
+renderer "llvmpipe (LLVM 18.1.8, 256 bits)"
+run_check
+check "sai 1"                            rc_is 1
+check "diz que o driver é o errado"      says "não funciona nesta placa"
+check "nomeia a geração"                 says "Pascal"
+check "manda para o driver fechado"      says "fechado"
+check "não diz que está tudo certo"      not_says "tudo certo"
+
+# ── 15. The same machine, with the driver's own words in the kernel log ──────
+#  NVRM says it in one line. When it does, the diagnosis has to be the same
+#  diagnosis - not a second one stacked on top of the first.
+case_name "…e o próprio driver dizendo isso no log"
+new_machine nv-open-nvrm 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils nvidia-settings \
+         linux-headers vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia
+buildable nvidia
+multilib
+kernel_is 6.12.1-arch1-1 linux
+nvrm "NVRM: The NVIDIA GPU 0000:01:00.0 (PCI ID: 10de:1c03)" \
+     "NVRM: installed in this system is not supported by the NVIDIA open kernel modules." \
+     "NVRM: No NVIDIA devices probed."
+renderer "llvmpipe (LLVM 18.1.8, 256 bits)"
+run_check
+check "sai 1"                          rc_is 1
+check "aponta os módulos abertos"      says "abertos"
+check "não repete o mesmo problema"    [ "$(grep -c 'módulos abertos' <<<"$OUT")" -le 2 ]
+
+# ── 15b. The right driver, and it still took no card ─────────────────────────
+#  An RTX with the open modules is the supported combination, so nothing about
+#  the packages explains this - a failed GSP firmware load or a module built
+#  against the wrong kernel does. There is nothing specific to say, and saying
+#  the vague true thing is still better than the green tick this used to print.
+case_name "Driver certo, placa não assumida, e nada no log"
+new_machine nv-unbound 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GA106 [GeForce RTX 3060]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils nvidia-settings \
+         linux-headers vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia nvidia_drm
+buildable nvidia
+multilib
+kernel_is 6.12.1-arch1-1 linux
+renderer "llvmpipe (LLVM 18.1.8, 256 bits)"
+run_check
+check "sai 1"                        rc_is 1
+check "diz que não assumiu a placa"  says "não assumiu nenhuma placa"
+check "não afirma que carregou tudo bem" not_says "com a placa nas mãos"
+
+# ── 16. Kepler: no driver in the repositories at all ─────────────────────────
+#  Offering an NVIDIA driver here is how the last version sent people in
+#  circles - there is none to install. nouveau is the answer that works today,
+#  and the AUR name is worth saying without pretending it is easy.
+case_name "GTX 760 (Kepler) — nenhum driver da NVIDIA existe para ela"
+new_machine nv-kepler 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GK104 [GeForce GTX 760]"
+packages mesa lib32-mesa vulkan-icd-loader lib32-vulkan-icd-loader
+loaded nouveau
+multilib
+kernel_is 6.12.1-arch1-1 linux
+renderer "NVE4"
+run_check
+check "sai 0 — nouveau é o certo aqui"  rc_is 0
+check "reconhece a geração"             says "Kepler"
+check "nomeia o pacote do AUR"          says "nvidia-470xx-dkms"
+check "não oferece um driver que não existe" not_says "sem o driver da NVIDIA"
+
+# ── 17. The driver naming its own legacy branch ──────────────────────────────
+#  This is ground truth and nothing else on the machine has it: the number in
+#  the message is the driver series that would actually drive this card.
+case_name "O driver dizendo qual série serve nesta placa"
+new_machine nv-legacy-msg 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GF119 [GeForce GT 610]"
+packages nvidia-dkms dkms nvidia-utils lib32-nvidia-utils linux-headers \
+         vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia
+buildable nvidia
+multilib
+kernel_is 6.12.1-arch1-1 linux
+nvrm "NVRM: The NVIDIA GeForce GT 610 GPU installed in this system is" \
+     "NVRM: supported through the NVIDIA 390.xx Legacy drivers."
+renderer "llvmpipe (LLVM 18.1.8, 256 bits)"
+run_check
+check "sai 1"                    rc_is 1
+check "repete o número da série" says "série 390"
+check "aponta o nouveau"         says "nouveau"
+
+# ── 18. Hardware failure, said as hardware failure ───────────────────────────
+#  Nothing in the system configuration causes this and no amount of reinstalling
+#  drivers fixes it. Saying so is the whole value.
+case_name "RmInitAdapter — a placa não inicializa"
+new_machine nv-rminit 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation TU106 [GeForce RTX 2060]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils linux-headers \
+         vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia
+buildable nvidia
+multilib
+kernel_is 6.12.1-arch1-1 linux
+nvrm "NVRM: GPU 0000:01:00.0: RmInitAdapter failed! (0x26:0xffff:1477)"
+renderer "llvmpipe (LLVM 18.1.8, 256 bits)"
+run_check
+check "sai 1"                    rc_is 1
+check "chama de hardware"        says "hardware"
+check "não manda trocar driver"  not_says "fechado"
+
+# ── 19. The kms hook, which is why nouveau kept winning the race ─────────────
+case_name "Módulos da NVIDIA fora da imagem de boot"
+new_machine nv-nokms 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation AD107 [GeForce RTX 4060]"
+packages nvidia-open-dkms dkms nvidia-utils lib32-nvidia-utils nvidia-settings \
+         linux-headers vulkan-icd-loader lib32-vulkan-icd-loader linux
+loaded nvidia nvidia_drm
+buildable nvidia
+bound
+multilib
+kernel_is 6.12.1-arch1-1 linux
+version nvidia-utils 570.86.16-1
+nvidia_running 570.86.16
+drm_modeset Y
+mkinitcpio_has 'HOOKS=(base udev plymouth autodetect microcode modconf kms keyboard block filesystems fsck)'
+renderer "NVIDIA GeForce RTX 4060/PCIe/SSE2"
+run_check
+check "não chama isso de defeito"  rc_is 0
+check "mas avisa"                  says "imagem de boot"
+
+# ── 20. The table that decides which driver a card gets ──────────────────────
+#  Every wrong answer here is a machine that installs a driver, loads it, and
+#  draws on the processor. Checked by name, one card per generation.
+case_name "Cada placa recebe o driver certo"
+nv_expect() {   # nv_expect <lspci line> <expected package>
+    new_machine nv-pick 6.12.1-arch1-1 >/dev/null
+    cards "01:00.0 VGA compatible controller: NVIDIA Corporation $1"
+    kernel_is 6.12.1-arch1-1 linux
+    OUT=$(IFOS_GPU_SYSROOT="$M" IFOS_GPU_KLOG="$M/data/klog" \
+          PATH="$M/bin:/usr/bin:/bin" bash "$GPU" --nvidia-pkg 2>&1)
+    check "$1 → $2" [ "$OUT" = "$2" ]
+}
+nv_expect "GB203 [GeForce RTX 5080]"          nvidia-open-dkms
+nv_expect "AD102 [GeForce RTX 4090]"          nvidia-open-dkms
+nv_expect "GA106 [GeForce RTX 3060]"          nvidia-open-dkms
+nv_expect "TU117M [GeForce GTX 1650 Mobile]"  nvidia-open-dkms
+nv_expect "GP107 [GeForce GTX 1050 Ti]"       nvidia-dkms
+nv_expect "GM206 [GeForce GTX 960]"           nvidia-dkms
+nv_expect "GM107 [GeForce GTX 750 Ti]"        nvidia-dkms
+nv_expect "GK107 [GeForce GT 640]"            nvidia-470xx-dkms
+nv_expect "GF108 [GeForce GT 430]"            nvidia-390xx-dkms
+# No codename in the string, only the number on the box.
+nv_expect "Device 2882 [GeForce RTX 3050]"    nvidia-open-dkms
+nv_expect "Device 1c81 [GeForce GTX 1050]"    nvidia-dkms
+# And a card nothing recognises gets the driver that covers more hardware,
+# because guessing wrong towards the open modules is the silent failure.
+nv_expect "Device 9999 [GeForce Something]"   nvidia-dkms
+
+# ── 21. The safety net: a machine with no driver at all must still get a desktop
+case_name "O socorro antes da tela de login"
+fallback_run() {
+    IFOS_GPU_SYSROOT="$M" IFOS_GPU_KLOG="$M/data/klog" \
+        PATH="$M/bin:/usr/bin:/bin" bash "$GPU" --fallback >/dev/null 2>&1
+}
+fake_modprobe() {
+    cat > "$M/bin/modprobe" <<'EOF'
+#!/bin/sh
+echo "$@" >> "$IFOS_GPU_SYSROOT/data/modprobe"
+EOF
+    chmod +x "$M/bin/modprobe"
+    : > "$M/data/modprobe"
+}
+
+# Desktop, NVIDIA only, driver installed, card unbound: no graphics at all.
+new_machine fb-dead 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB]"
+packages nvidia-open-dkms nvidia-utils
+loaded nvidia
+kernel_is 6.12.1-arch1-1 linux
+fake_modprobe
+fallback_run
+check "carrega o nouveau quando não há vídeo nenhum" \
+      grep -q nouveau "$M/data/modprobe"
+
+# Same machine with the card bound: the driver works, leave it alone.
+new_machine fb-ok 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: NVIDIA Corporation AD107 [GeForce RTX 4060]"
+packages nvidia-open-dkms nvidia-utils
+loaded nvidia
+bound
+kernel_is 6.12.1-arch1-1 linux
+fake_modprobe
+fallback_run
+check "não mexe num driver que funciona" [ ! -s "$M/data/modprobe" ]
+
+# Hybrid laptop: the integrated chip is drawing, the session is not at risk,
+# and loading a second driver under a working machine is the worse trade.
+new_machine fb-hybrid 6.12.1-arch1-1
+cards "00:02.0 VGA compatible controller: Intel Corporation Alder Lake-P GT2 [Iris Xe Graphics]" \
+      "01:00.0 3D controller: NVIDIA Corporation GA107M [GeForce RTX 3050 Mobile]"
+packages nvidia-open-dkms nvidia-utils
+loaded nvidia i915
+kernel_is 6.12.1-arch1-1 linux
+fake_modprobe
+fallback_run
+check "não mexe num notebook híbrido que tem tela" [ ! -s "$M/data/modprobe" ]
+
+# An AMD machine has nothing to do with any of this.
+new_machine fb-amd 6.12.1-arch1-1
+cards "01:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 23 [Radeon RX 6600]"
+loaded amdgpu
+kernel_is 6.12.1-arch1-1 linux
+fake_modprobe
+fallback_run
+check "não faz nada numa máquina AMD" [ ! -s "$M/data/modprobe" ]
+
+# ── 22. Every entry point still works ────────────────────────────────────────
 case_name "As outras opções"
 new_machine flags 6.12.1-arch1-1
 cards "00:02.0 VGA compatible controller: Intel Corporation Alder Lake-P GT2 [Iris Xe Graphics]" \
@@ -358,7 +604,7 @@ OUT=$(IFOS_GPU_SYSROOT="$M" PATH="$M/bin:/usr/bin:/bin" \
       bash "$GPU" run sh -c 'echo "$__GLX_VENDOR_LIBRARY_NAME"' 2>&1); RC=$?
 check "run exporta as variáveis do offload" says "nvidia"
 
-# ── 15. ifos-term, which is how --fix reaches the screen ─────────────────────
+# ── 23. ifos-term, which is how --fix reaches the screen ─────────────────────
 #  The launcher's repair tile is `ifos-term 'Vídeo e jogos' ifos-gpu --fix`,
 #  handed to /bin/sh -c as one string. Three things have to survive that: the
 #  accented title, the split between title and command, and the arguments -
@@ -730,6 +976,114 @@ fi
 OUT=$(grep '^EARLYOOM_ARGS=' "$PROFILE/airootfs/etc/default/earlyoom" || true)
 check "earlyoom tem argumentos"        says "EARLYOOM_ARGS="
 check "e nenhuma aspa neles"           not_says "'"
+
+# ── The NVIDIA plumbing nobody can see until a machine boots ─────────────────
+#  None of this can be tested by running anything: it is files that only mean
+#  something to systemd, mkinitcpio and pacman at boot. What can be checked is
+#  that they say what they are supposed to say, which is the difference between
+#  a fix that shipped and a fix that was written.
+case_name "A configuração de NVIDIA está ligada em todo lugar"
+INST="$PROFILE/airootfs/usr/local/bin/install-ifos"
+GPUBIN="$PROFILE/airootfs/usr/local/bin/ifos-gpu"
+SVC="$PROFILE/airootfs/etc/systemd/system/ifos-gpu-fallback.service"
+
+OUT=$(cat "$SVC" 2>/dev/null)
+check "existe o serviço de socorro"        [ -f "$SVC" ]
+check "roda antes da tela de login"        says "Before=display-manager.service"
+check "e chama o ifos-gpu --fallback"      says -- "--fallback"
+
+OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
+check "o branding-sync copia o serviço"    says "ifos-gpu-fallback.service"
+
+OUT=$(cat "$INST")
+check "o instalador liga o serviço"        says "systemctl enable ifos-gpu-fallback.service"
+check "escreve a configuração da NVIDIA"   says -- "--write-nvidia-config"
+check "liga a suspensão da NVIDIA"         says "nvidia-suspend.service"
+check "pergunta ao ifos-gpu qual driver"   says -- "--nvidia-pkg"
+check "e não manda mais escolher nouveau numa GTX 10xx" \
+      not_says "GTX 900 ou 1000 — escolha o nouveau"
+check "tem entrada de recuperação no menu de boot" says "recuperação de vídeo"
+
+# mkinitcpio sources /etc/mkinitcpio.conf.d/*.conf in sorted order and the last
+# HOOKS assignment wins. The installer writes ifos.conf with the kms hook in
+# it; the NVIDIA drop-in has to sort *after* that or it is silently overridden
+# and the whole fix does nothing. "ifos-nvidia.conf" would have lost.
+OUT=$(printf 'ifos.conf\nnvidia.conf\n' | sort | tail -1)
+check "o arquivo da NVIDIA vence o do IFOS" [ "$OUT" = "nvidia.conf" ]
+OUT=$(cat "$GPUBIN")
+check "e é esse o nome escrito"             says "mkinitcpio.conf.d/nvidia.conf"
+check "com os módulos da NVIDIA dentro"     says "MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)"
+check "sem o hook kms junto"                [ "$(grep -c 'HOOKS=(.*modconf kms' "$GPUBIN")" = 0 ]
+check "e um hook do pacman para a imagem de boot" says "pacman.d/hooks"
+
+# The prebuilt driver serves one kernel, and IFOS installs two. Offering it in
+# the catalog was offering a machine that loses its graphics on the LTS kernel.
+OUT=$(cat "$PROFILE"/airootfs/usr/share/ifos/apps.d/*.list)
+check "o catálogo não oferece mais o driver pré-compilado" not_says "|nvidia-open nvidia-utils"
+check "e oferece o fechado para as placas antigas"         says "nvidia-dkms dkms nvidia-utils"
+
+# ── GameMode was installed and doing almost nothing ──────────────────────────
+#  The launcher wraps every game in gamemoderun. GameMode's own defaults are
+#  renice=0 and ioprio=0, both of which mean "change nothing", so the only
+#  thing that ever happened was the CPU governor. A config file with zeroes in
+#  it would be the same bug written down.
+case_name "GameMode realmente prioriza o jogo"
+GM="$PROFILE/airootfs/etc/gamemode.ini"
+OUT=$(cat "$GM" 2>/dev/null)
+check "existe o /etc/gamemode.ini"       [ -f "$GM" ]
+check "governador de desempenho"         says "desiredgov=performance"
+check "prioridade de processador"        [ "$(sed -n 's/^renice=//p' "$GM")" != 0 ]
+check "e prioridade de disco"            [ "$(sed -n 's/^ioprio=//p' "$GM")" != 0 ]
+check "sem SCHED_ISO, que não existe no kernel do IFOS" says "softrealtime=off"
+
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/install-ifos")
+check "o instalador põe o usuário no grupo gamemode" says "usermod -aG gamemode"
+check "mas não no useradd, que falharia inteiro"     not_says "wheel,audio,video,input,storage,network,lp,gamemode"
+OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
+check "o branding-sync copia o gamemode.ini"         says "/etc/gamemode.ini"
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/ifos-update")
+check "e o ifos-update alcança quem já instalou"     says "configure_gamemode"
+
+# ── Qt programs were coming up light in a dark desktop ───────────────────────
+#  qt5ct.conf shipped with custom_palette=false, which means "use the style's
+#  own palette", and Fusion's is light. And QT_QPA_PLATFORMTHEME=qt5ct names a
+#  plugin that only exists for Qt5, so every Qt6 program - VLC, qBittorrent,
+#  OBS - ignored the qt6ct configuration sitting right next to it.
+case_name "Programas Qt seguem a paleta do IFOS"
+for v in 5 6; do
+    SCHEME="$PROFILE/airootfs/usr/share/qt${v}ct/colors/ifos.conf"
+    CONF="$PROFILE/airootfs/etc/skel/.config/qt${v}ct/qt${v}ct.conf"
+    OUT=$(cat "$SCHEME" 2>/dev/null)
+    check "qt${v}ct tem a paleta do IFOS"  [ -f "$SCHEME" ]
+    check "com os três estados"            [ "$(grep -c '^[a-z]*_colors=' "$SCHEME")" = 3 ]
+    # 21 QPalette roles per state. A short row is silently accepted by qt5ct and
+    # leaves the missing roles at the style's own - light - defaults.
+    BAD=$(awk -F'=' '/_colors=/ { n = split($2, a, ","); if (n != 21) print $1" tem "n }' "$SCHEME")
+    OUT=$BAD
+    check "e 21 cores em cada"             [ -z "$BAD" ]
+    # Every colour has to come from the IFOS palette, or ifos-theme will leave
+    # it behind when the palette changes and it will sit there in the wrong hue.
+    BAD=$(grep -oE '#ff[0-9a-f]{6}' "$SCHEME" | sort -u |
+          grep -vE '#ff(10241d|1b3a2e|24503f|04150f|e8f5e9|b9d4c6|7fa392|00a86b|7ed957|00c47d)')
+    OUT=$BAD
+    check "só cores da paleta"             [ -z "$BAD" ]
+    OUT=$(cat "$CONF" 2>/dev/null)
+    check "qt${v}ct usa a paleta"          says "custom_palette=true"
+    check "e aponta para o arquivo"        says "/usr/share/qt${v}ct/colors/ifos.conf"
+done
+
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/ifos-theme")
+check "o ifos-theme repinta as duas"       [ "$(grep -c 'qt[56]ct/colors/ifos.conf' "$PROFILE/airootfs/usr/local/bin/ifos-theme")" = 2 ]
+OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
+check "e o branding-sync copia as duas"    [ "$(grep -c 'qt[56]ct/colors/ifos.conf' "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")" = 2 ]
+
+# All three places that export the variable have to agree, and each has to fall
+# back to what it did before rather than naming a plugin that might not be there.
+for f in .xprofile .bashrc .config/fish/conf.d/ifos.fish; do
+    OUT=$(cat "$PROFILE/airootfs/etc/skel/$f")
+    check "$f procura o plugin antes de nomeá-lo" says "libqgtk3.so"
+    check "$f tem o caminho de volta"             says "qt5ct"
+done
 
 # ── 20. The catalog is well formed ───────────────────────────────────────────
 #  Four fields, and a source ifos-software knows what to do with. A fifth pipe

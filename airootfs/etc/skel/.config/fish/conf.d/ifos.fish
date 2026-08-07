@@ -83,7 +83,15 @@ alias moodle='ifos-launcher --category escola-online'
 # ── Environment ──────────────────────────────────────────────────────────────
 set -gx EDITOR vim
 set -gx VISUAL vim
-set -gx QT_QPA_PLATFORMTHEME qt5ct
+# One variable, two Qt majors with separate plugin directories: qt5ct is a
+# Qt5-only plugin, so Qt6 programs ignored it and came up light in the middle
+# of a dark desktop. The GTK platform theme serves both, when it is installed.
+if test -e /usr/lib/qt6/plugins/platformthemes/libqgtk3.so \
+     -a -e /usr/lib/qt/plugins/platformthemes/libqgtk3.so
+    set -gx QT_QPA_PLATFORMTHEME gtk3
+else
+    set -gx QT_QPA_PLATFORMTHEME qt5ct
+end
 set -gx MANROFFOPT -c
 set -gx LESS '-R --use-color'
 
