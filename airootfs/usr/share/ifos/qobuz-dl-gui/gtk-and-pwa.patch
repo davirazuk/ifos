@@ -24,6 +24,161 @@ index 1ff1ca5..c5af429 100644
      <link rel="preconnect" href="https://fonts.googleapis.com" />
      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+diff --git a/qobuz_dl/gui/js/features/setup/browseButtons.js b/qobuz_dl/gui/js/features/setup/browseButtons.js
+index d36459e..7c4b804 100644
+--- a/qobuz_dl/gui/js/features/setup/browseButtons.js
++++ b/qobuz_dl/gui/js/features/setup/browseButtons.js
+@@ -7,23 +7,53 @@
+   QG.features = QG.features || {};
+   QG.features.setup = QG.features.setup || {};
+ 
++  // Native Android wrapper (AndroidBridge.browseFolder) can't return a value
++  // directly across the JS bridge, so it calls back into this global once the
++  // user picks (or cancels) a folder in Android's own picker UI.
++  let _androidResolve = null;
++  window.__androidFolderPicked = function (path) {
++    if (_androidResolve) {
++      const resolve = _androidResolve;
++      _androidResolve = null;
++      resolve(path);
++    }
++  };
++
++  function browseFolderAndroid() {
++    return new Promise((resolve) => {
++      _androidResolve = resolve;
++      window.AndroidBridge.browseFolder();
++    });
++  }
++
++  function fillTarget(btn, path) {
++    const targetId = btn.dataset.target;
++    const input = document.getElementById(targetId);
++    if (!input) return;
++    input.value = path;
++    // Programmatic value changes do not fire input/change; autosave
++    // (and other listeners) need an explicit event.
++    input.dispatchEvent(new Event("input", { bubbles: true }));
++    input.dispatchEvent(new Event("change", { bubbles: true }));
++  }
++
+   function init() {
+     const api = QG.api;
++    const hasAndroidBridge =
++      typeof window.AndroidBridge !== "undefined" &&
++      typeof window.AndroidBridge.browseFolder === "function";
+     document.querySelectorAll(".btn-browse").forEach((btn) => {
+       btn.addEventListener("click", async () => {
+         try {
++          if (hasAndroidBridge) {
++            const path = await browseFolderAndroid();
++            if (path) fillTarget(btn, path);
++            return;
++          }
+           const res = await api.utilityApi.browseFolder();
+           const data = await res.json();
+           if (data.ok && data.path) {
+-            const targetId = btn.dataset.target;
+-            const input = document.getElementById(targetId);
+-            if (input) {
+-              input.value = data.path;
+-              // Programmatic value changes do not fire input/change; autosave
+-              // (and other listeners) need an explicit event.
+-              input.dispatchEvent(new Event("input", { bubbles: true }));
+-              input.dispatchEvent(new Event("change", { bubbles: true }));
+-            }
++            fillTarget(btn, data.path);
+           }
+         } catch (e) {
+           console.error("Browse error:", e);
+diff --git a/qobuz_dl/gui/style.css b/qobuz_dl/gui/style.css
+index b606765..77dbbef 100644
+--- a/qobuz_dl/gui/style.css
++++ b/qobuz_dl/gui/style.css
+@@ -6567,3 +6567,83 @@ body:has(#dl-smart-discography:checked) .dynamic-filter[data-sd]::before {
+     background: #ffffff;
+ }
+ 
++/* ============================================================
++   NARROW VIEWPORT (phone-width WebView — the sidebar is a fixed
++   385px otherwise, which leaves negative/near-zero room for the
++   download/queue column on a ~360-430px phone screen)
++   ============================================================ */
++@media (max-width: 760px) {
++    /* One tall page you scroll through, instead of squeezing the sidebar
++       and main column into fixed panes — nothing here shrinks content,
++       it just stops laying it out side-by-side. */
++    .app {
++        flex-direction: column;
++        height: auto;
++        min-height: 100vh;
++        overflow-y: auto;
++        overflow-x: hidden;
++    }
++
++    .sidebar {
++        width: 100%;
++        min-width: 0;
++        height: auto;
++        max-height: none;
++        border-right: none;
++        border-bottom: 1px solid var(--border-light);
++        padding: 16px 16px 10px;
++        overflow: visible;
++    }
++
++    .sidebar-search {
++        flex: none;
++    }
++
++    .sidebar-results-scroll {
++        flex: none;
++        overflow: visible;
++        margin: 0;
++        padding: 0;
++    }
++
++    .main-content {
++        flex: none;
++        min-height: 0;
++        overflow: visible;
++        padding: 20px 16px 16px;
++    }
++
++    /* The download tab, the history panel inside it, and the history list
++       itself are all "fill remaining space and scroll internally" panes on
++       desktop (flex/grid with min-height:0). On mobile there's no fixed
++       window to fill, so each of those would clip to ~0 height instead.
++       Let them all take their natural content height and scroll as part of
++       the one page scroll on .app instead. The history list's own JS
++       virtualization keys off its scroll events / clientHeight; with
++       overflow visible those never fire and clientHeight covers the full
++       list, so it just renders everything instead of windowing — a no-op,
++       not a break. */
++    #tab-download.tab-panel.active {
++        display: block;
++        flex: none;
++        min-height: auto;
++    }
++
++    #dl-track-status-container {
++        flex: none;
++        min-height: auto;
++        overflow: visible;
++    }
++
++    .track-status-list {
++        flex: none;
++        min-height: auto;
++        max-height: none;
++        overflow-y: visible;
++    }
++
++    .options-grid {
++        grid-template-columns: 1fr;
++    }
++}
++
 diff --git a/qobuz_dl/gui_app.py b/qobuz_dl/gui_app.py
 index fd74896..2dd250a 100644
 --- a/qobuz_dl/gui_app.py
@@ -72,3 +227,24 @@ index fd74896..2dd250a 100644
      except Exception as e:
          logging.error("pywebview failed; opening system browser instead: %s", e)
          threading.Thread(target=open_browser_soon, daemon=True).start()
+diff --git a/qobuz_dl/routes/utility_routes.py b/qobuz_dl/routes/utility_routes.py
+index 59ce48c..1f4b7af 100644
+--- a/qobuz_dl/routes/utility_routes.py
++++ b/qobuz_dl/routes/utility_routes.py
+@@ -2,7 +2,6 @@ import logging
+ import os
+ from pathlib import Path
+ 
+-import webview
+ from flask import Response, jsonify, request
+ 
+ from qobuz_dl.gui_preferences import (
+@@ -41,6 +40,8 @@ def register_utility_routes(
+     @app.route("/api/browse_folder", methods=["POST"])
+     def api_browse_folder():
+         try:
++            import webview
++
+             result = webview.windows[0].create_file_dialog(webview.FileDialog.FOLDER)
+             if not result:
+                 return jsonify({"ok": False, "cancelled": True})

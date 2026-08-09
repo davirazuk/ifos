@@ -207,6 +207,11 @@ tools/
   test-launcher.py       o lançador
   check-packages.sh      confere nomes de pacote no contêiner de build
   check-icons.py         confere glifos
+
+mobile/
+  qobuz-dl-android/       app Android (WebView fina) + termux-setup.sh —
+                          não faz parte do airootfs, não vai pro ISO; é
+                          instalado no celular do aluno, não na máquina IFOS
 ```
 
 **Três lugares que sempre andam juntos.** Ao adicionar um arquivo ou serviço:
