@@ -136,6 +136,10 @@ accent #00a86b accent-2 #7ed957  bright #00c47d
   carrega `nvidia-utils`. Em versões diferentes o Steam morre com «Unexpected
   Transport Error (0x3008)» e não fala em vídeo. Toda troca de driver tem que
   nomear a metade de 32 bits junto.
+- **`gamemoderun` é `LD_PRELOAD`, e `LD_PRELOAD` é herdado por todo filho.**
+  Sandbox do Chromium falha num preload que não carrega — o steamwebhelper (CEF)
+  e o Hydra (Electron) morrem com «0x3008». Loja **não** leva `gamemoderun`;
+  quem leva é o jogo. `STOREFRONTS` no `ifos-launcher`.
 - **`picom` tem `unredir-if-possible` desligado por padrão**, o que deixa jogo
   em tela cheia composto — foi a causa do "megabonk travando".
 

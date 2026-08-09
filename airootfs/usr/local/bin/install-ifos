@@ -755,10 +755,15 @@ PACKAGES=(
     # the game's scheduling and I/O priority above everything else, and the
     # screen not blanking. It ends when the game does, so it costs a machine
     # nothing while nobody is playing - which is why the launcher can turn it
-    # on for every game without asking. lib32-gamemode, for the 32-bit half,
-    # is one line in ifos-software; without it a 32-bit game simply does not
-    # get the treatment.
-    gamemode
+    # on for every game without asking.
+    #
+    # lib32-gamemode is not optional and used to be. gamemoderun works by
+    # LD_PRELOAD, and a 32-bit program handed a 64-bit preload cannot load it -
+    # so a 32-bit game got no treatment at all, and anything running a Chromium
+    # sandbox inside itself got worse than nothing: Steam's steamwebhelper dies
+    # on a preload it cannot load, with "Unexpected Transport Error (0x3008)"
+    # and no mention of GameMode anywhere in it.
+    gamemode lib32-gamemode
     # Running out of memory on a 4 GiB machine does not produce an error, it
     # produces a machine that stops responding for minutes while the kernel
     # thrashes, and often never recovers - the kernel's own OOM killer waits
