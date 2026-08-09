@@ -254,20 +254,20 @@ Icon=com.discordapp.Discord
 
     check(
         "sem gamemoderun instalado, nada é acrescentado",
-        launcher._game_prefix(hollow, hollow["appinfo"]) == "",
+        launcher._game_prefix(hollow, hollow["appinfo"], "hollow_knight") == "",
     )
 
     # With gamemoderun on PATH.
     write_stub(bins, "gamemoderun")
     check(
         "um jogo ganha o gamemoderun",
-        launcher._game_prefix(hollow, hollow["appinfo"]) == "gamemoderun ",
-        repr(launcher._game_prefix(hollow, hollow["appinfo"])),
+        launcher._game_prefix(hollow, hollow["appinfo"], "hollow_knight") == "gamemoderun ",
+        repr(launcher._game_prefix(hollow, hollow["appinfo"], "hollow_knight")),
     )
     check(
         "e o que não é jogo não ganha nada",
-        launcher._game_prefix(firefox, None) == "",
-        repr(launcher._game_prefix(firefox, None)),
+        launcher._game_prefix(firefox, None, "firefox") == "",
+        repr(launcher._game_prefix(firefox, None, "firefox")),
     )
 
     # And on a hybrid laptop, both, in the order that works: the offload
@@ -275,8 +275,50 @@ Icon=com.discordapp.Discord
     launcher._offload_gpu = True
     check(
         "num notebook híbrido, os dois na ordem certa",
-        launcher._game_prefix(hollow, hollow["appinfo"]) == "ifos-gpu run gamemoderun ",
-        repr(launcher._game_prefix(hollow, hollow["appinfo"])),
+        launcher._game_prefix(hollow, hollow["appinfo"], "hollow_knight")
+        == "ifos-gpu run gamemoderun ",
+        repr(launcher._game_prefix(hollow, hollow["appinfo"], "hollow_knight")),
+    )
+
+    # ── A loja não é um jogo, e embrulhá-la quebrava as duas ─────────────────
+    #  gamemoderun funciona por LD_PRELOAD, e o LD_PRELOAD é herdado por todo
+    #  processo filho. O Steam e o Hydra rodam a interface deles dentro de um
+    #  sandbox do Chromium - o steamwebhelper é CEF, o Hydra é Electron - e um
+    #  sandbox do Chromium falha num preload que não consegue carregar. O
+    #  cliente do Steam é de 32 bits, então sem o lib32-gamemode não há nem o
+    #  que carregar, e o resultado é "Unexpected Transport Error (0x3008)" sem
+    #  nada ali dentro falando em GameMode, em LD_PRELOAD ou no lançador.
+    #
+    #  `ifos-gpu run steam` funcionava; `ifos-gpu run gamemoderun steam` não.
+    steam_entry = next(e for e in gaming if e["name"] == "Steam")
+    check(
+        "o Steam não ganha gamemoderun",
+        "gamemoderun" not in launcher._game_prefix(steam_entry, None, "/usr/bin/steam"),
+        repr(launcher._game_prefix(steam_entry, None, "/usr/bin/steam")),
+    )
+    check(
+        "mas continua indo para a placa dedicada",
+        launcher._game_prefix(steam_entry, None, "/usr/bin/steam") == "ifos-gpu run ",
+        repr(launcher._game_prefix(steam_entry, None, "/usr/bin/steam")),
+    )
+    for store in ("steam", "/usr/bin/steam-runtime", "lutris", "heroic",
+                  "hydralauncher", "bottles"):
+        check(
+            "reconhece %s como loja" % store,
+            module.Launcher._is_storefront(store),
+        )
+    for game in ("hollow_knight", "/usr/games/celeste", "supertuxkart"):
+        check(
+            "e %s continua sendo jogo" % game,
+            not module.Launcher._is_storefront(game),
+        )
+    check(
+        "argumentos não confundem a checagem",
+        module.Launcher._is_storefront("/usr/bin/steam -silent"),
+    )
+    check(
+        "comando vazio não quebra",
+        not module.Launcher._is_storefront("   "),
     )
     os.remove(os.path.join(bins, "gamemoderun"))
 

@@ -1495,9 +1495,9 @@ class Launcher(Gtk.Window):
             return
 
         self.launch_watched(entry["name"],
-                            self._game_prefix(entry, info) + command)
+                            self._game_prefix(entry, info, command) + command)
 
-    def _game_prefix(self, entry: dict, info) -> str:
+    def _game_prefix(self, entry: dict, info, command: str = "") -> str:
         """What a game gets wrapped in, and nothing else does.
 
         Two wrappers, both of which only make sense for a game and both of
@@ -1519,9 +1519,41 @@ class Launcher(Gtk.Window):
         prefix = ""
         if self._can_offload():
             prefix += "ifos-gpu run "
-        if shutil.which("gamemoderun"):
+        if shutil.which("gamemoderun") and not self._is_storefront(command):
             prefix += "gamemoderun "
         return prefix
+
+    # A store is not a game, and wrapping one in gamemoderun broke both of them.
+    #
+    # gamemoderun works by LD_PRELOAD=libgamemodeauto.so.0, and LD_PRELOAD is
+    # inherited by every child process. Steam and Hydra both run their interface
+    # in a Chromium sandbox - steamwebhelper is CEF, Hydra is Electron - and a
+    # Chromium sandbox fails on a preload it cannot load. Steam's client is
+    # 32-bit, so without lib32-gamemode there is nothing for it to load at all,
+    # and the result is "Unexpected Transport Error (0x3008)" with nothing in it
+    # naming GameMode, or LD_PRELOAD, or the launcher that added it.
+    #
+    # `ifos-gpu run steam` worked; `ifos-gpu run gamemoderun steam` did not.
+    # That difference is this line.
+    #
+    # Nothing is lost by leaving it off. These programs do not render anything
+    # that needs the performance governor - they start the thing that does, and
+    # Steam applies GameMode per game through its own launch options, which is
+    # where it belongs. Wrapping the store meant the governor was pinned for as
+    # long as the store was open, game or no game.
+    STOREFRONTS = frozenset((
+        "steam", "steam-runtime", "steam-native", "lutris", "heroic",
+        "hydralauncher", "hydra", "bottles", "itch", "minigalaxy",
+        "playonlinux", "gamehub", "legendary", "prismlauncher",
+    ))
+
+    @classmethod
+    def _is_storefront(cls, command: str) -> bool:
+        """Is this a program that launches games rather than being one?"""
+        first = command.strip().split()
+        if not first:
+            return False
+        return os.path.basename(first[0]).lower() in cls.STOREFRONTS
 
     # ── starting something, and noticing when it does not start ──────────────
     #  This used to fire and forget: Popen, then main_quit on the next line.

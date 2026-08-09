@@ -234,6 +234,18 @@ playing. The launcher already knows which tiles are games, so it wraps them,
 the same way it already sends them to the discrete card on a hybrid laptop.
 Nobody has to learn the words `gamemoderun %command%`.
 
+One thing it must *not* wrap, learned the hard way: a store. `gamemoderun`
+works by `LD_PRELOAD`, and `LD_PRELOAD` is inherited by every child process.
+Steam and Hydra both run their interface inside a Chromium sandbox —
+`steamwebhelper` is CEF, Hydra is Electron — and a Chromium sandbox fails on a
+preload it cannot load. Steam's client is 32-bit, so without `lib32-gamemode`
+there was nothing for it to load at all, and the result was *Unexpected
+Transport Error (0x3008)* with nothing in it naming GameMode, `LD_PRELOAD`, or
+the launcher that added them. `ifos-gpu run steam` worked; `ifos-gpu run
+gamemoderun steam` did not, and that difference was the whole bug. Stores are
+excluded now, `lib32-gamemode` is no longer optional, and Steam applies GameMode
+per game through its own launch options — which is where it belonged.
+
 That paragraph was not true until recently, which is worth writing down.
 GameMode ships with `renice=0` and `ioprio=0` — both of which mean "change
 nothing" — so wrapping a game in `gamemoderun` moved the CPU governor and
