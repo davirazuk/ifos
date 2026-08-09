@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Qobuz-DL
+GenericName=Qobuz music downloader
+Comment=Baixa músicas do Qobuz em FLAC/hi-res
+Exec=qobuz-dl-gui
+Icon=qobuz-dl-gui
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=qobuz;musica;download;flac;

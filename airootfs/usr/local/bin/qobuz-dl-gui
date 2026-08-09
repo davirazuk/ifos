@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+#  qobuz-dl-gui — Qobuz music downloader (github.com/peykc/qobuz-dl-gui)
+#
+#      qobuz-dl-gui           launch it (first run installs it, needs network)
+#      qobuz-dl-gui --lan     launch reachable from your phone/LAN, no window
+#
+#  Not on the official repos or the AUR, so ifos-software can't install it —
+#  this bootstraps a per-user copy into ~/.local/share on first launch instead.
+#  Pinned to a known-good commit rather than tracking upstream HEAD, because
+#  gui/js/gui_app.py in that pin are what gtk-and-pwa.patch's hunks target;
+#  a newer upstream commit can drift out from under the patch.
+#
+#  The pinned commit's own Qt5/pywebview backend segfaults on the first
+#  keystroke on IFOS — a PyInstaller/libxkbcommon issue, not this. The patch
+#  forces the GTK/WebKit2 backend on Linux instead, and adds a PWA manifest +
+#  service worker + icons so it installs as a standalone app from a phone
+#  browser (Settings > Install app / Add to Home Screen) once reachable.
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+REPO_URL=https://github.com/peykc/qobuz-dl-gui.git
+PIN_COMMIT=032c566ed61d2bb353a8d9bc7af24292f9dc0022
+IFOS_OVERLAY=/usr/share/ifos/qobuz-dl-gui
+INSTALL_DIR="$HOME/.local/share/qobuz-dl-gui"
+SRC="$INSTALL_DIR/src"
+VENV="$INSTALL_DIR/venv"
+
+notify() { command -v notify-send >/dev/null && timeout 3 notify-send "Qobuz-DL" "$1" 2>/dev/null; }
+
+bootstrap() {
+    echo "==> Instalando o Qobuz-DL pela primeira vez (precisa de internet)…"
+    notify "Instalando pela primeira vez, aguarde…"
+
+    rm -rf "$INSTALL_DIR.partial"
+    git clone --quiet "$REPO_URL" "$INSTALL_DIR.partial" || {
+        echo "qobuz-dl-gui: não foi possível clonar $REPO_URL (sem internet?)" >&2
+        notify "Instalação falhou: sem internet."
+        rm -rf "$INSTALL_DIR.partial"
+        return 1
+    }
+    git -C "$INSTALL_DIR.partial" checkout --quiet "$PIN_COMMIT" || {
+        echo "qobuz-dl-gui: commit $PIN_COMMIT não encontrado no clone" >&2
+        rm -rf "$INSTALL_DIR.partial"
+        return 1
+    }
+    git -C "$INSTALL_DIR.partial" apply "$IFOS_OVERLAY/gtk-and-pwa.patch" || {
+        echo "qobuz-dl-gui: o patch do IFOS não se aplicou (upstream mudou o pin?)" >&2
+        rm -rf "$INSTALL_DIR.partial"
+        return 1
+    }
+    mkdir -p "$INSTALL_DIR.partial/qobuz_dl/gui/icons"
+    cp "$IFOS_OVERLAY/manifest.json" "$IFOS_OVERLAY/sw.js" "$INSTALL_DIR.partial/qobuz_dl/gui/"
+    cp "$IFOS_OVERLAY"/icons/*.png "$INSTALL_DIR.partial/qobuz_dl/gui/icons/"
+
+    python3 -m venv --system-site-packages "$INSTALL_DIR.partial/venv" || return 1
+    "$INSTALL_DIR.partial/venv/bin/pip" install --quiet -r "$INSTALL_DIR.partial/requirements.txt" || {
+        echo "qobuz-dl-gui: falha instalando dependências Python" >&2
+        notify "Instalação falhou ao instalar dependências."
+        return 1
+    }
+
+    mkdir -p "$INSTALL_DIR"
+    mv "$INSTALL_DIR.partial/venv" "$VENV"
+    mv "$INSTALL_DIR.partial" "$SRC"
+    notify "Instalado! Abrindo…"
+    echo "==> Instalado em $INSTALL_DIR"
+}
+
+[[ -x "$VENV/bin/python" ]] || bootstrap || exit 1
+
+cd "$SRC" || exit 1
+
+if [[ ${1:-} == --lan ]]; then
+    echo "Endereço(s) para abrir no navegador do celular (mesma rede Wi-Fi):"
+    ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' |
+        while read -r ip; do echo "  http://$ip:8765/"; done
+    QOBUZ_DL_GUI_HOST=0.0.0.0 QOBUZ_DL_GUI_PORT=8765 QOBUZ_DL_GUI_BROWSER=1 \
+        exec "$VENV/bin/python" -m qobuz_dl.gui_app
+fi
+
+exec "$VENV/bin/python" -m qobuz_dl.gui_app

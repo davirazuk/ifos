@@ -121,6 +121,8 @@ copy /usr/share/ifos/apps.d
 copy /usr/share/ifos/keybindings.txt
 copy /usr/share/ifos/logo.txt
 copy /usr/share/icons/hicolor/scalable/apps/ifos-logo.svg
+copy /usr/share/icons/hicolor/scalable/apps/qobuz-dl-gui.svg
+copy /usr/share/ifos/qobuz-dl-gui
 copy /usr/share/ifos/escola.list
 copy /usr/share/ifos/i3-bigpicture.config
 copy /usr/share/xsessions/ifos-bigpicture.desktop
@@ -132,7 +134,7 @@ copy /usr/share/ifos/archinstall-preset.json
 # Tools
 for t in ifos-software ifos-welcome ifos-post-install ifos-theme ifos-launcher \
          ifos-bigpicture ifos-update ifos-update-terminal ifos-term ifos-lock ifos-gpu ifos-controller ifos-mouse \
-         ifos-scale ifos-secureboot install-yay; do
+         ifos-scale ifos-secureboot install-yay qobuz-dl-gui; do
     copy "/usr/local/bin/$t" 0755
 done
 
@@ -140,6 +142,7 @@ done
 copy /usr/share/applications/ifos-software.desktop
 copy /usr/share/applications/ifos-welcome.desktop
 copy /usr/share/applications/ifos-launcher.desktop
+copy /usr/share/applications/qobuz-dl-gui.desktop
 
 # ── Did any of that actually land? ───────────────────────────────────────────
 # copy() hides cp's errors, so a copy that fails leaves no trace: a missing
