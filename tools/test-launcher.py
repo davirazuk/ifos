@@ -23,6 +23,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LAUNCHER = os.path.join(HERE, "..", "airootfs", "usr", "local", "bin", "ifos-launcher")
@@ -377,6 +378,52 @@ Icon=com.discordapp.Discord
     print("\n  \033[2mProcura\033[0m")
     check("acento não atrapalha", module.fold("Vídeo") == module.fold("video"))
     check("maiúscula não atrapalha", module.fold("STEAM") == module.fold("steam"))
+
+    print("\n  \033[2mUm programa barulhento não trava o launcher\033[0m")
+    # stderr used to be a pipe nobody read from before the grace period. A
+    # kernel pipe holds about 64KB; a program that writes more than that
+    # before exiting blocks on its own write() and never gets to open a
+    # window. poll() then reads "still running" forever, so the launcher
+    # declared success and quit - leaving the program stuck, off-screen,
+    # forever. NVIDIA's driver logs enough on startup to hit this every time;
+    # a quieter driver mostly didn't, which is why this read as "an NVIDIA
+    # problem" rather than a launcher bug.
+    fake = module.Launcher.__new__(module.Launcher)
+    scheduled = []
+    quit_calls = []
+    orig_timeout_add, orig_main_quit = module.GLib.timeout_add, module.Gtk.main_quit
+    module.GLib.timeout_add = lambda _ms, fn, *args: scheduled.append((fn, args))
+    module.Gtk.main_quit = lambda: quit_calls.append(True)
+    fake.hide = fake.show = fake.present = lambda: None
+    fake.notified = None
+    fake.notify = lambda message: setattr(fake, "notified", message)
+    try:
+        noisy = "yes 'aviso do driver de vídeo' | head -c 200000 1>&2; exit 1"
+        start = time.monotonic()
+        fake.launch_watched("Programa de teste", noisy)
+        elapsed = time.monotonic() - start
+        check(
+            "escrever bastante em stderr não bloqueia o Popen",
+            elapsed < 1.0,
+            f"{elapsed:.2f}s",
+        )
+        # Stand in for the GLib timeout: give the child a moment to actually
+        # exit, then run the callback the way the main loop would.
+        time.sleep(0.5)
+        fn, args = scheduled[0]
+        fn(*args)
+        check(
+            "a saída de um programa que falhou chega inteira, não travada",
+            bool(fake.notified) and "aviso do driver de vídeo" in fake.notified,
+            repr(fake.notified),
+        )
+        check(
+            "e o launcher não se fecha achando que deu certo",
+            not quit_calls,
+        )
+    finally:
+        module.GLib.timeout_add = orig_timeout_add
+        module.Gtk.main_quit = orig_main_quit
 
     shutil.rmtree(root, ignore_errors=True)
 

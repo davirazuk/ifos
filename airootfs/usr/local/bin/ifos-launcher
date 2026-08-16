@@ -29,6 +29,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import unicodedata
 import urllib.parse
 from datetime import datetime
@@ -1570,32 +1571,47 @@ class Launcher(Gtk.Window):
     LAUNCH_GRACE_MS = 1500
 
     def launch_watched(self, name: str, command: str) -> None:
+        # stderr goes to a real file, not a pipe. A pipe has a fixed kernel
+        # buffer - about 64KB - and nothing here reads from it before the
+        # grace period is up. A program chatty enough to fill that buffer
+        # blocks on its own write() and never gets anywhere near opening a
+        # window; poll() then reads as "still running" forever, so the
+        # launcher declares success and quits, and the program sits stuck
+        # off-screen. NVIDIA's driver is exactly this chatty - shader cache
+        # and GLX/PRIME messages on startup - which is why this showed up as
+        # "works from a terminal, does nothing from the launcher" only on
+        # NVIDIA machines: a terminal's stdout/stderr isn't a bounded pipe.
+        stderr_file = tempfile.TemporaryFile()
         try:
             proc = subprocess.Popen(
                 ["/bin/sh", "-c", command],
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
+                stderr=stderr_file,
                 start_new_session=True,
             )
         except OSError as exc:
+            stderr_file.close()
             self.notify("Falha ao executar %s:\n%s" % (name, exc))
             return
 
         self.hide()
-        GLib.timeout_add(self.LAUNCH_GRACE_MS, self._after_launch, proc, name)
+        GLib.timeout_add(self.LAUNCH_GRACE_MS, self._after_launch, proc, name, stderr_file)
 
-    def _after_launch(self, proc, name: str) -> bool:
+    def _after_launch(self, proc, name: str, stderr_file) -> bool:
         if proc.poll() is None or proc.returncode == 0:
+            stderr_file.close()
             Gtk.main_quit()
             return False
 
         # It failed. Read whatever it said, and put the window back so there is
         # something to read it in.
         try:
-            _out, err = proc.communicate(timeout=2)
-            message = (err or b"").decode("utf-8", "replace").strip()
-        except (subprocess.SubprocessError, ValueError):
+            stderr_file.seek(0)
+            message = stderr_file.read().decode("utf-8", "replace").strip()
+        except OSError:
             message = ""
+        finally:
+            stderr_file.close()
         self.show()
         self.present()
         self._report_failure(name, message)
