@@ -1505,6 +1505,41 @@ OUT=$(IFOS_MUSIC_SYNC_ADB="$M4/bin/adb" bash "$MS" --phone /sdcard/Music --pc "$
 RC=$?
 check "FLAC pequeno do celular substitui o MP3 grande do PC" says "celular substitui"
 
+# ── 21c. --exclude e --only ───────────────────────────────────────────────────
+#  Pedido de verdade: "quero sincronizar tudo menos os minidiscs do Radiohead"
+#  ou o oposto, "só os minidiscs". Os dois têm que dar resultados diferentes
+#  do relatório sem filtro nenhum.
+case_name "--exclude e --only filtram o que entra no plano"
+M5="$TMP/music3"; mkdir -p "$M5/bin" "$M5/pc/Album" "$M5/pc/Minidiscs"
+cat > "$M5/bin/adb" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  devices) echo "List of devices attached"; echo "PHONE1	device" ;;
+  shell)
+    shift
+    if [[ "\$*" == find* ]]; then
+      printf '5000000\t/sdcard/Music/Album/song.flac\n'
+      printf '4000000\t/sdcard/Music/Minidiscs/md1.flac\n'
+    fi
+    ;;
+esac
+EOF
+chmod +x "$M5/bin/adb"
+
+run_m5() { OUT=$(IFOS_MUSIC_SYNC_ADB="$M5/bin/adb" bash "$MS" --phone /sdcard/Music --pc "$M5/pc" "$@" 2>&1); RC=$?; }
+
+run_m5
+check "sem filtro, acha os dois"            says "song.flac"
+check "sem filtro, acha os dois (2)"        says "md1.flac"
+
+run_m5 --exclude minidiscs
+check "--exclude tira os minidiscs"         not_says "md1.flac"
+check "--exclude deixa o resto"             says "song.flac"
+
+run_m5 --only minidiscs
+check "--only pega só os minidiscs"         says "md1.flac"
+check "--only tira o resto"                 not_says "song.flac"
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"

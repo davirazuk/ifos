@@ -6,6 +6,12 @@
 #      ifos-music-sync --apply        aplica de verdade
 #      ifos-music-sync --phone CAMINHO   pasta no celular   (padrão: /sdcard/Music)
 #      ifos-music-sync --pc CAMINHO      pasta no PC        (padrão: pasta de Música do usuário)
+#      ifos-music-sync --exclude TEXTO   ignora tudo cujo caminho contém TEXTO (repetível)
+#      ifos-music-sync --only TEXTO      só mexe no que contém TEXTO (repetível)
+#
+#  --exclude e --only comparam contra o caminho relativo inteiro (pasta e
+#  arquivo), sem diferença entre maiúsculas e minúsculas. Com os dois juntos,
+#  --only decide o conjunto primeiro e --exclude tira de dentro dele.
 #
 #  O problema que isto resolve: a mesma música às vezes existe nos dois
 #  lugares em qualidades diferentes - um FLAC comprimido de um jeito no PC,
@@ -119,6 +125,27 @@ audio_rank() {   # audio_rank <arquivo-local>
 
 ext_of() { local f=${1##*.}; printf '%s' "${f,,}"; }
 
+# ── filtro ────────────────────────────────────────────────────────────────────
+#  --exclude e --only, preenchidos pelo main(). Comparação por substring, sem
+#  diferença de maiúsculas - "minidiscs" acha "MINIDISCS", "Minidiscs [HACKED]"
+#  e qualquer coisa que contenha esse pedaço no caminho.
+EXCLUDE_PATTERNS=(); ONLY_PATTERNS=()
+
+passes_filter() {   # passes_filter <caminho-relativo>
+    local rel_lc=${1,,} pat
+    if (( ${#ONLY_PATTERNS[@]} )); then
+        local hit=0
+        for pat in "${ONLY_PATTERNS[@]}"; do
+            [[ $rel_lc == *"${pat,,}"* ]] && { hit=1; break; }
+        done
+        (( hit )) || return 1
+    fi
+    for pat in "${EXCLUDE_PATTERNS[@]}"; do
+        [[ $rel_lc == *"${pat,,}"* ]] && return 1
+    done
+    return 0
+}
+
 # Caminho sem a extensão, para casar "Álbum/Faixa.flac" com "Álbum/Faixa.mp3"
 # quando a mesma música existe nos dois lados em formatos diferentes - o par
 # que a comparação por caminho exato nunca acha, porque o caminho não é o
@@ -145,11 +172,13 @@ build_plan() {   # build_plan <pasta-celular> <pasta-pc> <pasta-temp-para-baixar
     while IFS=$'\t' read -r size rel; do
         [[ -n $rel ]] || continue
         rel=${rel#"$phone_dir"/}
+        passes_filter "$rel" || continue
         PHONE_SIZE["$rel"]=$size
     done < <(phone_find "$phone_dir")
 
     while IFS=$'\t' read -r size rel; do
         [[ -n $rel ]] || continue
+        passes_filter "$rel" || continue
         PC_SIZE["$rel"]=$size
     done < <(pc_find "$pc_dir")
 
@@ -403,6 +432,8 @@ main() {
             --apply) apply=1; shift ;;
             --phone) phone_dir=${2:?"--phone precisa de um caminho"}; shift 2 ;;
             --pc)    pc_dir=${2:?"--pc precisa de um caminho"}; shift 2 ;;
+            --exclude) EXCLUDE_PATTERNS+=("${2:?"--exclude precisa de um texto"}"); shift 2 ;;
+            --only)    ONLY_PATTERNS+=("${2:?"--only precisa de um texto"}"); shift 2 ;;
             -h|--help) usage; exit 0 ;;
             *) printf 'ifos-music-sync: opção desconhecida: %s\n' "$1" >&2; usage >&2; exit 2 ;;
         esac
