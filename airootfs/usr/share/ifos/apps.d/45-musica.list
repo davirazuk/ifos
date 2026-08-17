@@ -13,3 +13,4 @@ Ardour|Estação de trabalho de áudio digital (DAW)|ardour|repo
 MuseScore|Escrita de partituras|musescore|repo
 Picard|Organiza e etiqueta sua coleção (MusicBrainz)|picard|repo
 Nuclear|Tocador de streaming livre|nuclear-player-bin|aur
+Sincronizar música com o celular (ifos-music-sync)|Junta a música do celular Android com a do PC, mantendo a de maior qualidade. O IFOS já traz `ifos-music-sync --help` sem instalar nada|android-tools ffmpeg|repo

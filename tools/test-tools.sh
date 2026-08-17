@@ -1410,6 +1410,136 @@ BAD=$(awk -F'|' '!/^#/ && NF==4 && $3 !~ /^[a-zA-Z0-9@._+-]+( [a-zA-Z0-9@._+-]+)
 OUT=$BAD
 check "todo nome de pacote é plausível" [ -z "$BAD" ]
 
+# ── 21. ifos-music-sync, contra um adb de mentira ────────────────────────────
+#  Nenhuma parte disto pode tocar num celular de verdade durante o teste - por
+#  isso o adb inteiro é trocado por um script que fala com arquivos em vez de
+#  USB. O que se está testando é a lógica de decisão (o que vai para onde,
+#  quando é seguro mexer) e não o adb em si.
+case_name "ifos-music-sync decide o que fazer sem tocar em nada sem --apply"
+MS="$PROFILE/airootfs/usr/local/bin/ifos-music-sync"
+M3="$TMP/music"; mkdir -p "$M3/bin" "$M3/pc/Album"
+
+# adb de mentira: "devices" devolve o celular combinado por ADB_N (0, 1 ou 2 -
+# a mesma pergunta que o Redragon já ensinou a fazer primeiro: quantos há?);
+# "shell find" devolve uma lista de arquivo fixa; pull/push só registram o que
+# pediram, para o teste conferir depois sem mexer em disco de verdade.
+cat > "$M3/bin/adb" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  devices)
+    echo "List of devices attached"
+    n=\${ADB_N:-1}
+    (( n >= 1 )) && echo "PHONE1	device"
+    (( n >= 2 )) && echo "PHONE2	device"
+    ;;
+  shell)
+    shift
+    cmd="\$*"
+    if [[ \$cmd == find* ]]; then
+      # only_pc.mp3 não aparece aqui de propósito: ele só existe do lado do
+      # PC no disco de verdade (abaixo), porque é isso que "só no PC" quer
+      # dizer. Listá-lo aqui também - erro que este teste já cometeu uma vez -
+      # faz o próprio celular fingir tê-lo, e "só no PC" nunca acontece.
+      printf '5000000\t/sdcard/Music/Album/only_phone.flac\n'
+      printf '3000000\t/sdcard/Music/Album/same.mp3\n'
+    fi
+    ;;
+  pull) echo "PULL \$2 \$3" >> "$M3/log" ;;
+  push) echo "PUSH \$2 \$3" >> "$M3/log" ;;
+esac
+EOF
+chmod +x "$M3/bin/adb"
+touch "$M3/pc/Album/only_pc.mp3"
+head -c 3000000 /dev/zero > "$M3/pc/Album/same.mp3"   # exatamente 3000000 bytes, igual ao celular
+
+run_ms() { OUT=$(ADB_N=${ADB_N:-1} IFOS_MUSIC_SYNC_ADB="$M3/bin/adb" bash "$MS" \
+                  --phone /sdcard/Music --pc "$M3/pc" "$@" 2>&1); RC=$?; }
+
+ADB_N=0 run_ms
+check "sem celular, explica e sai 1"           says "Nenhum celular"
+check "sem celular, sai com código 1"          rc_is 1
+
+ADB_N=2 run_ms
+check "dois celulares, recusa adivinhar"       says "Mais de um"
+check "dois celulares, sai com código 1"       rc_is 1
+
+: > "$M3/log"
+ADB_N=1 run_ms
+check "relatório acha o que só tem no celular"  says "only_phone.flac"
+check "relatório acha o que só tem no PC"       says "only_pc.mp3"
+check "relatório não mexe em nada sem --apply"  [ ! -s "$M3/log" ]
+
+: > "$M3/log"
+ADB_N=1 run_ms --apply
+check "--apply traz o que só tinha no celular"  \
+    grep -q "PULL /sdcard/Music/Album/only_phone.flac" "$M3/log"
+check "--apply manda o que só tinha no PC"      \
+    grep -q "PUSH .*/Album/only_pc.mp3 /sdcard/Music/Album/only_pc.mp3" "$M3/log"
+check "--apply não mexe no que já é igual"      \
+    bash -c '! grep -q same.mp3 "'"$M3"'/log"'
+
+# ── 21b. Sem perda ganha de com perda, mesmo caminho, tamanho ao contrário ───
+#  O caso que a comparação por tamanho sozinha acerta ao contrário: um FLAC
+#  pequeno (voz e violão, pouca coisa acontecendo) contra um MP3 grande do
+#  mesmo tipo de faixa. Por tamanho o MP3 ganharia; por formato, sem perda
+#  ganha sempre - é a regra que esta seção testa.
+case_name "sem perda ganha de com perda, nunca por tamanho"
+M4="$TMP/music2"; mkdir -p "$M4/bin" "$M4/pc/Album"
+cat > "$M4/bin/adb" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  devices) echo "List of devices attached"; echo "PHONE1	device" ;;
+  shell)
+    shift
+    if [[ "\$*" == find* ]]; then
+      printf '500000\t/sdcard/Music/Album/faixa.flac\n'
+    fi
+    ;;
+  pull) echo "PULL \$2 \$3" >> "$M4/log" ;;
+esac
+EOF
+chmod +x "$M4/bin/adb"
+head -c 9000000 /dev/zero > "$M4/pc/Album/faixa.mp3"   # bem maior, e ainda assim perde
+
+OUT=$(IFOS_MUSIC_SYNC_ADB="$M4/bin/adb" bash "$MS" --phone /sdcard/Music --pc "$M4/pc" 2>&1)
+RC=$?
+check "FLAC pequeno do celular substitui o MP3 grande do PC" says "celular substitui"
+
+# ── 21c. --exclude e --only ───────────────────────────────────────────────────
+#  Pedido de verdade: "quero sincronizar tudo menos os minidiscs do Radiohead"
+#  ou o oposto, "só os minidiscs". Os dois têm que dar resultados diferentes
+#  do relatório sem filtro nenhum.
+case_name "--exclude e --only filtram o que entra no plano"
+M5="$TMP/music3"; mkdir -p "$M5/bin" "$M5/pc/Album" "$M5/pc/Minidiscs"
+cat > "$M5/bin/adb" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  devices) echo "List of devices attached"; echo "PHONE1	device" ;;
+  shell)
+    shift
+    if [[ "\$*" == find* ]]; then
+      printf '5000000\t/sdcard/Music/Album/song.flac\n'
+      printf '4000000\t/sdcard/Music/Minidiscs/md1.flac\n'
+    fi
+    ;;
+esac
+EOF
+chmod +x "$M5/bin/adb"
+
+run_m5() { OUT=$(IFOS_MUSIC_SYNC_ADB="$M5/bin/adb" bash "$MS" --phone /sdcard/Music --pc "$M5/pc" "$@" 2>&1); RC=$?; }
+
+run_m5
+check "sem filtro, acha os dois"            says "song.flac"
+check "sem filtro, acha os dois (2)"        says "md1.flac"
+
+run_m5 --exclude minidiscs
+check "--exclude tira os minidiscs"         not_says "md1.flac"
+check "--exclude deixa o resto"             says "song.flac"
+
+run_m5 --only minidiscs
+check "--only pega só os minidiscs"         says "md1.flac"
+check "--only tira o resto"                 not_says "song.flac"
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"

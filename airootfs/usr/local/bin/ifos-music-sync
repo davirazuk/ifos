@@ -1,0 +1,477 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+#  ifos-music-sync — junta a música do celular com a do PC, sem perder qualidade
+#
+#      ifos-music-sync                relatório: o que seria feito, sem mexer em nada
+#      ifos-music-sync --apply        aplica de verdade
+#      ifos-music-sync --phone CAMINHO   pasta no celular   (padrão: /sdcard/Music)
+#      ifos-music-sync --pc CAMINHO      pasta no PC        (padrão: pasta de Música do usuário)
+#      ifos-music-sync --exclude TEXTO   ignora tudo cujo caminho contém TEXTO (repetível)
+#      ifos-music-sync --only TEXTO      só mexe no que contém TEXTO (repetível)
+#
+#  --exclude e --only comparam contra o caminho relativo inteiro (pasta e
+#  arquivo), sem diferença entre maiúsculas e minúsculas. Com os dois juntos,
+#  --only decide o conjunto primeiro e --exclude tira de dentro dele.
+#
+#  O problema que isto resolve: a mesma música às vezes existe nos dois
+#  lugares em qualidades diferentes - um FLAC comprimido de um jeito no PC,
+#  outro jeito no celular, ou um MP3 de 128kbps de um lado e um FLAC do outro -
+#  e comparar isso à mão, arquivo por arquivo, não escala para uma biblioteca
+#  de verdade.
+#
+#  O que o relatório mostra, sempre antes de qualquer --apply:
+#    - faixas que só existem num dos lados (seriam copiadas para o outro)
+#    - faixas que existem nos dois mas em qualidade diferente (a melhor
+#      substituiria a pior, nos dois lados)
+#    - faixas iguais nos dois lados (nada a fazer, não aparecem no relatório)
+#
+#  "Não faça mudança que você não consegue medir" (CLAUDE.md, seção 3): dois
+#  FLACs do mesmo áudio podem ter tamanhos bem diferentes só por causa do nível
+#  de compressão escolhido na hora de gravar - isso não é diferença de
+#  qualidade nenhuma, é o mesmo áudio, mais ou menos compacto. Comparar por
+#  tamanho de arquivo nesse caso dá a resposta errada. A única forma correta de
+#  comparar dois arquivos do mesmo formato é olhar a taxa de amostragem e a
+#  profundidade de bits de verdade, o que pede o ffprobe. Sem ele, dois
+#  arquivos do mesmo formato são tratados como iguais - nenhuma mudança é
+#  melhor que uma mudança errada.
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+c_reset=$'\033[0m'; c_b=$'\033[1m'; c_grn=$'\033[1;32m'
+c_dim=$'\033[2m'; c_yel=$'\033[1;33m'; c_red=$'\033[1;31m'
+
+# Injetável pelo teste: um `adb` de mentira que fala com listas de arquivo em
+# vez de um celular de verdade. Em uso normal é só "adb", do PATH.
+ADB=${IFOS_MUSIC_SYNC_ADB:-adb}
+
+# Extensões de áudio reconhecidas, em duas categorias: sem perda (ganha
+# sempre de um arquivo com perda do mesmo lado) e com perda (só compete por
+# tamanho/qualidade dentro do próprio grupo, e só com o ffprobe).
+LOSSLESS_EXTS="flac wav ape shn"
+LOSSY_EXTS="mp3 m4a ogg opus aac"
+
+is_audio_ext() {   # is_audio_ext <ext-minúscula>
+    case " $LOSSLESS_EXTS $LOSSY_EXTS " in *" $1 "*) return 0 ;; esac
+    return 1
+}
+is_lossless_ext() {
+    case " $LOSSLESS_EXTS " in *" $1 "*) return 0 ;; esac
+    return 1
+}
+
+find_expr() {   # a expressão -iname que o find (local e remoto) usa
+    local expr="" ext first=1
+    for ext in $LOSSLESS_EXTS $LOSSY_EXTS; do
+        if (( first )); then expr="-iname *.$ext"; first=0
+        else expr="$expr -o -iname *.$ext"; fi
+    done
+    printf '%s' "$expr"
+}
+
+# ── celular ───────────────────────────────────────────────────────────────────
+
+adb_device_count() {
+    "$ADB" devices 2>/dev/null | awk 'NR>1 && $2=="device" {n++} END{print n+0}'
+}
+
+# Aspas simples dentro de aspas simples não existem em shell - e nomes de
+# música têm aspas o tempo todo ("That's", "I'm", "Don't"). Isto já quebrou
+# hoje: um `find` remoto com o caminho entre aspas simples cru cortava o
+# comando no meio do nome e devolvia menos arquivos do que existem, em
+# silêncio, sem erro nenhum. `'\''` fecha a aspa, escapa uma aspa literal, e
+# abre a aspa de novo - é a única forma portátil de pôr uma aspa simples
+# dentro de uma string de aspas simples.
+shq() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+
+phone_find() {   # phone_find <pasta-remota>   →  <tamanho>\t<caminho> por linha
+    # shellcheck disable=SC2046
+    "$ADB" shell "find $(shq "$1") \( $(find_expr) \) -printf '%s\t%p\n' 2>/dev/null" \
+        2>/dev/null | tr -d '\r'
+}
+
+phone_pull() { "$ADB" pull "$1" "$2" >/dev/null 2>&1; }   # <remoto> <local>
+phone_push() { "$ADB" push "$1" "$2" >/dev/null 2>&1; }   # <local> <remoto>
+phone_mkdir() { "$ADB" shell "mkdir -p $(shq "$1")" >/dev/null 2>&1; }
+phone_rm()    { "$ADB" shell "rm -f $(shq "$1")" >/dev/null 2>&1; }
+
+# ── PC ────────────────────────────────────────────────────────────────────────
+
+pc_find() {   # pc_find <pasta-local>   →  <tamanho>\t<caminho> por linha, relativo à pasta
+    local dir=$1
+    # find_expr devolve vários argumentos do find de propósito - "-iname *.flac
+    # -o -iname *.mp3 ..." - e cada um tem que chegar como uma palavra separada.
+    # shellcheck disable=SC2046,SC2086
+    find "$dir" -type f \( $(find_expr) \) -printf '%s\t%P\n' 2>/dev/null
+}
+
+# ── qualidade ─────────────────────────────────────────────────────────────────
+
+have_ffprobe() { command -v ffprobe >/dev/null 2>&1; }
+
+# sample_rate*bits_per_raw_sample, um número só para comparar. Maior é melhor.
+# Vazio quando o ffprobe não sabe dizer (arquivo corrompido, sem stream de
+# áudio) - o chamador trata vazio como "não dá para medir, não mexe".
+audio_rank() {   # audio_rank <arquivo-local>
+    have_ffprobe || return 0
+    local sr bits
+    sr=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate \
+         -of csv=p=0 "$1" 2>/dev/null | head -1)
+    bits=$(ffprobe -v error -select_streams a:0 -show_entries stream=bits_per_raw_sample \
+         -of csv=p=0 "$1" 2>/dev/null | head -1)
+    [[ $sr =~ ^[0-9]+$ ]] || return 0
+    [[ $bits =~ ^[0-9]+$ ]] || bits=16   # com perda normalmente não anuncia bits; 16 é um empate razoável
+    printf '%s' "$(( sr * bits ))"
+}
+
+ext_of() { local f=${1##*.}; printf '%s' "${f,,}"; }
+
+# ── filtro ────────────────────────────────────────────────────────────────────
+#  --exclude e --only, preenchidos pelo main(). Comparação por substring, sem
+#  diferença de maiúsculas - "minidiscs" acha "MINIDISCS", "Minidiscs [HACKED]"
+#  e qualquer coisa que contenha esse pedaço no caminho.
+EXCLUDE_PATTERNS=(); ONLY_PATTERNS=()
+
+passes_filter() {   # passes_filter <caminho-relativo>
+    local rel_lc=${1,,} pat
+    if (( ${#ONLY_PATTERNS[@]} )); then
+        local hit=0
+        for pat in "${ONLY_PATTERNS[@]}"; do
+            [[ $rel_lc == *"${pat,,}"* ]] && { hit=1; break; }
+        done
+        (( hit )) || return 1
+    fi
+    for pat in "${EXCLUDE_PATTERNS[@]}"; do
+        [[ $rel_lc == *"${pat,,}"* ]] && return 1
+    done
+    return 0
+}
+
+# Caminho sem a extensão, para casar "Álbum/Faixa.flac" com "Álbum/Faixa.mp3"
+# quando a mesma música existe nos dois lados em formatos diferentes - o par
+# que a comparação por caminho exato nunca acha, porque o caminho não é o
+# mesmo. Só entra em jogo depois que a passada por caminho exato já rodou; se
+# duas faixas do mesmo lado colidirem no mesmo nome sem extensão, nenhuma das
+# duas participa - ambíguo demais para adivinhar.
+noext() { printf '%s' "${1%.*}"; }
+
+# ── plano ─────────────────────────────────────────────────────────────────────
+#  Lê os dois lados uma vez, casa por caminho relativo, e decide o que fazer
+#  com cada par. Nada aqui copia, apaga ou empurra nada - só decide. Quem
+#  aplica é o main, e só se --apply foi pedido.
+
+declare -A PHONE_SIZE PC_SIZE
+ONLY_PHONE=() ONLY_PC=() BETTER_ON_PHONE=() BETTER_ON_PC=() SAME=()
+
+build_plan() {   # build_plan <pasta-celular> <pasta-pc> <pasta-temp-para-baixar>
+    local phone_dir=$1 pc_dir=$2 tmp=$3
+    local size rel
+
+    PHONE_SIZE=(); PC_SIZE=()
+    ONLY_PHONE=(); ONLY_PC=(); BETTER_ON_PHONE=(); BETTER_ON_PC=(); SAME=()
+
+    while IFS=$'\t' read -r size rel; do
+        [[ -n $rel ]] || continue
+        rel=${rel#"$phone_dir"/}
+        passes_filter "$rel" || continue
+        PHONE_SIZE["$rel"]=$size
+    done < <(phone_find "$phone_dir")
+
+    while IFS=$'\t' read -r size rel; do
+        [[ -n $rel ]] || continue
+        passes_filter "$rel" || continue
+        PC_SIZE["$rel"]=$size
+    done < <(pc_find "$pc_dir")
+
+    local -A matched_phone=() matched_pc=()
+
+    # ── passada 1: mesmo caminho relativo, extensão incluída ──────────────────
+    for rel in "${!PHONE_SIZE[@]}"; do
+        [[ -n ${PC_SIZE[$rel]+x} ]] || continue
+        matched_phone[$rel]=1; matched_pc[$rel]=1
+        decide_pair "$rel" "$rel" "$phone_dir" "$pc_dir" "$tmp"
+    done
+
+    for rel in "${!PHONE_SIZE[@]}"; do
+        [[ -z ${matched_phone[$rel]+x} ]] && ONLY_PHONE+=("$rel")
+    done
+    for rel in "${!PC_SIZE[@]}"; do
+        [[ -z ${matched_pc[$rel]+x} ]] && ONLY_PC+=("$rel")
+    done
+
+    # ── passada 2: mesmo caminho sem a extensão, para a mesma música existir  ──
+    #  em formatos diferentes nos dois lados (um FLAC de um lado, um MP3 do
+    #  outro). Só o que sobrou da passada 1 participa. Uma colisão - duas
+    #  faixas do mesmo lado com o mesmo nome sem extensão - tira as duas da
+    #  jogada em vez de adivinhar qual é a certa.
+    local -A fuzzy_phone=() fuzzy_phone_n=() fuzzy_pc=() fuzzy_pc_n=()
+    local key still_only_phone=() still_only_pc=()
+
+    for rel in "${ONLY_PHONE[@]:-}"; do
+        [[ -n $rel ]] || continue
+        key=$(noext "$rel")
+        fuzzy_phone[$key]=$rel
+        fuzzy_phone_n[$key]=$(( ${fuzzy_phone_n[$key]:-0} + 1 ))
+    done
+    for rel in "${ONLY_PC[@]:-}"; do
+        [[ -n $rel ]] || continue
+        key=$(noext "$rel")
+        fuzzy_pc[$key]=$rel
+        fuzzy_pc_n[$key]=$(( ${fuzzy_pc_n[$key]:-0} + 1 ))
+    done
+
+    for rel in "${ONLY_PHONE[@]:-}"; do
+        [[ -n $rel ]] || continue
+        key=$(noext "$rel")
+        if [[ -n ${fuzzy_pc[$key]+x} && ${fuzzy_phone_n[$key]} == 1 && ${fuzzy_pc_n[$key]} == 1 ]]; then
+            decide_pair "$rel" "${fuzzy_pc[$key]}" "$phone_dir" "$pc_dir" "$tmp"
+        else
+            still_only_phone+=("$rel")
+        fi
+    done
+    for rel in "${ONLY_PC[@]:-}"; do
+        [[ -n $rel ]] || continue
+        key=$(noext "$rel")
+        if [[ -n ${fuzzy_phone[$key]+x} && ${fuzzy_phone_n[$key]} == 1 && ${fuzzy_pc_n[$key]} == 1 ]]; then
+            :   # já decidido do lado do celular, acima - não faz de novo
+        else
+            still_only_pc+=("$rel")
+        fi
+    done
+
+    # Sem ":-" aqui: um array de verdade vazio já se expande para zero
+    # palavras sob set -u, e ":-" faria "still_only_phone" vazio virar um
+    # array de um elemento (a string vazia) em vez de continuar vazio - o que
+    # inflava "Só no celular" e "Só no PC" em um mesmo quando as duas listas
+    # estavam de fato vazias.
+    ONLY_PHONE=("${still_only_phone[@]}")
+    ONLY_PC=("${still_only_pc[@]}")
+}
+
+# decide_pair <caminho-celular> <caminho-pc> <pasta-celular> <pasta-pc> <tmp>
+#  Decide um par que existe nos dois lados (mesmo caminho ou não) e empilha o
+#  resultado em BETTER_ON_PHONE / BETTER_ON_PC / SAME. Não mexe em nada.
+decide_pair() {
+    local phone_rel=$1 pc_rel=$2 phone_dir=$3 pc_dir=$4 tmp=$5
+    local ext; ext=$(ext_of "$phone_rel")
+    local ext_pc; ext_pc=$(ext_of "$pc_rel")
+
+    if is_lossless_ext "$ext" && ! is_lossless_ext "$ext_pc"; then
+        BETTER_ON_PHONE+=("$phone_rel"$'\t'"$pc_rel"); return
+    fi
+    if is_lossless_ext "$ext_pc" && ! is_lossless_ext "$ext"; then
+        BETTER_ON_PC+=("$phone_rel"$'\t'"$pc_rel"); return
+    fi
+    if [[ $ext == "$ext_pc" && ${PHONE_SIZE[$phone_rel]} == "${PC_SIZE[$pc_rel]}" ]]; then
+        SAME+=("$phone_rel"); return   # mesma extensão, mesmo tamanho: quase certo que é o mesmo arquivo
+    fi
+
+    # Mesma categoria (as duas sem perda, ou as duas com perda), tamanhos
+    # diferentes: só o ffprobe decide. Baixa uma cópia temporária do lado do
+    # celular para medir - não tem outro jeito de olhar dentro de um arquivo
+    # que está no celular.
+    if ! have_ffprobe; then
+        SAME+=("$phone_rel"); return   # não dá para medir, não mexe
+    fi
+    local tmpfile; tmpfile="$tmp/$(basename "$phone_rel")"
+    if ! phone_pull "$phone_dir/$phone_rel" "$tmpfile"; then
+        SAME+=("$phone_rel"); return
+    fi
+    local rank_phone rank_pc
+    rank_phone=$(audio_rank "$tmpfile")
+    rank_pc=$(audio_rank "$pc_dir/$pc_rel")
+    rm -f "$tmpfile"
+
+    if [[ -z $rank_phone || -z $rank_pc ]]; then
+        SAME+=("$phone_rel")
+    elif (( rank_phone > rank_pc )); then
+        BETTER_ON_PHONE+=("$phone_rel"$'\t'"$pc_rel")
+    elif (( rank_pc > rank_phone )); then
+        BETTER_ON_PC+=("$phone_rel"$'\t'"$pc_rel")
+    else
+        SAME+=("$phone_rel")
+    fi
+}
+
+# ── relatório ─────────────────────────────────────────────────────────────────
+
+print_report() {
+    printf '\n  %sIFOS — sincronizar música%s\n\n' "$c_b" "$c_reset"
+    printf '    Só no celular:     %s%d%s faixa(s)\n' "$c_b" "${#ONLY_PHONE[@]}" "$c_reset"
+    printf '    Só no PC:          %s%d%s faixa(s)\n' "$c_b" "${#ONLY_PC[@]}" "$c_reset"
+    printf '    Celular tem melhor: %s%d%s faixa(s)\n' "$c_b" "${#BETTER_ON_PHONE[@]}" "$c_reset"
+    printf '    PC tem melhor:      %s%d%s faixa(s)\n' "$c_b" "${#BETTER_ON_PC[@]}" "$c_reset"
+    printf '    Iguais:             %s%d%s faixa(s)  %s(nada a fazer)%s\n\n' \
+           "$c_b" "${#SAME[@]}" "$c_reset" "$c_dim" "$c_reset"
+
+    if ! have_ffprobe; then
+        printf '    %s!%s ffprobe não está instalado: faixas do mesmo formato e tamanhos\n' "$c_yel" "$c_reset"
+        printf '      diferentes foram tratadas como iguais, porque não dá para medir a\n'
+        printf '      diferença sem ele. Instale %sffmpeg%s para uma comparação de verdade.\n\n' \
+               "$c_b" "$c_reset"
+    fi
+
+    local rel
+    for rel in "${ONLY_PHONE[@]:-}"; do
+        [[ -n $rel ]] && printf '    %s+%s  celular → PC       %s\n' "$c_grn" "$c_reset" "$rel"
+    done
+    for rel in "${ONLY_PC[@]:-}"; do
+        [[ -n $rel ]] && printf '    %s+%s  PC → celular       %s\n' "$c_grn" "$c_reset" "$rel"
+    done
+    local pair phone_rel pc_rel
+    for pair in "${BETTER_ON_PHONE[@]:-}"; do
+        [[ -n $pair ]] || continue
+        IFS=$'\t' read -r phone_rel pc_rel <<<"$pair"
+        if [[ $phone_rel == "$pc_rel" ]]; then
+            printf '    %s↑%s  celular substitui  %s\n' "$c_yel" "$c_reset" "$phone_rel"
+        else
+            printf '    %s↑%s  celular substitui  %s  %s(troca %s por %s)%s\n' \
+                   "$c_yel" "$c_reset" "$pc_rel" "$c_dim" "$pc_rel" "$phone_rel" "$c_reset"
+        fi
+    done
+    for pair in "${BETTER_ON_PC[@]:-}"; do
+        [[ -n $pair ]] || continue
+        IFS=$'\t' read -r phone_rel pc_rel <<<"$pair"
+        if [[ $phone_rel == "$pc_rel" ]]; then
+            printf '    %s↑%s  PC substitui       %s\n' "$c_yel" "$c_reset" "$phone_rel"
+        else
+            printf '    %s↑%s  PC substitui       %s  %s(troca %s por %s)%s\n' \
+                   "$c_yel" "$c_reset" "$phone_rel" "$c_dim" "$phone_rel" "$pc_rel" "$c_reset"
+        fi
+    done
+
+    local total=$(( ${#ONLY_PHONE[@]} + ${#ONLY_PC[@]} + ${#BETTER_ON_PHONE[@]} + ${#BETTER_ON_PC[@]} ))
+    if (( total == 0 )); then
+        printf '    %s✓%s Já está tudo igual dos dois lados.\n\n' "$c_grn" "$c_reset"
+    else
+        printf '\n    %d mudança(s) no total. Nada foi tocado ainda —\n' "$total"
+        printf '    rode com %s--apply%s para aplicar de verdade.\n\n' "$c_b" "$c_reset"
+    fi
+}
+
+# ── aplicar ───────────────────────────────────────────────────────────────────
+
+apply_plan() {   # apply_plan <pasta-celular> <pasta-pc>
+    local phone_dir=$1 pc_dir=$2
+    local rel failed=0
+
+    for rel in "${ONLY_PHONE[@]:-}"; do
+        [[ -n $rel ]] || continue
+        mkdir -p "$(dirname "$pc_dir/$rel")"
+        if phone_pull "$phone_dir/$rel" "$pc_dir/$rel"; then
+            printf '  %s✓%s celular → PC: %s\n' "$c_grn" "$c_reset" "$rel"
+        else
+            printf '  %s✗%s falhou: %s\n' "$c_red" "$c_reset" "$rel"; failed=$((failed+1))
+        fi
+    done
+    for rel in "${ONLY_PC[@]:-}"; do
+        [[ -n $rel ]] || continue
+        phone_mkdir "$(dirname "$phone_dir/$rel")"
+        if phone_push "$pc_dir/$rel" "$phone_dir/$rel"; then
+            printf '  %s✓%s PC → celular: %s\n' "$c_grn" "$c_reset" "$rel"
+        else
+            printf '  %s✗%s falhou: %s\n' "$c_red" "$c_reset" "$rel"; failed=$((failed+1))
+        fi
+    done
+    # BETTER_ON_PHONE/PC guardam "caminho-celular\tcaminho-pc" - quase sempre
+    # o mesmo caminho, mas não quando a mesma música existe nos dois lados em
+    # formatos diferentes (passada 2 do build_plan). Nesse caso o vencedor tem
+    # que ir para o caminho do lado perdedor E o arquivo perdedor tem que sair
+    # de cena, senão os dois ficam lado a lado - uma "substituição" que na
+    # verdade duplica.
+    local pair phone_rel pc_rel
+    for pair in "${BETTER_ON_PHONE[@]:-}"; do
+        [[ -n $pair ]] || continue
+        IFS=$'\t' read -r phone_rel pc_rel <<<"$pair"
+        # O conteúdo vencedor (celular) vai para o caminho dele mesmo, extensão
+        # incluída - não para o caminho do lado que perdeu.
+        if phone_pull "$phone_dir/$phone_rel" "$pc_dir/$phone_rel"; then
+            printf '  %s✓%s celular substituiu o PC: %s\n' "$c_grn" "$c_reset" "$phone_rel"
+            if [[ $phone_rel != "$pc_rel" ]]; then
+                rm -f "$pc_dir/$pc_rel"   # a versão antiga e pior, formato diferente
+            fi
+        else
+            printf '  %s✗%s falhou: %s\n' "$c_red" "$c_reset" "$phone_rel"; failed=$((failed+1))
+        fi
+    done
+    for pair in "${BETTER_ON_PC[@]:-}"; do
+        [[ -n $pair ]] || continue
+        IFS=$'\t' read -r phone_rel pc_rel <<<"$pair"
+        if phone_push "$pc_dir/$pc_rel" "$phone_dir/$pc_rel"; then
+            printf '  %s✓%s PC substituiu o celular: %s\n' "$c_grn" "$c_reset" "$pc_rel"
+            if [[ $phone_rel != "$pc_rel" ]]; then
+                phone_rm "$phone_dir/$phone_rel"   # a versão antiga e pior, formato diferente
+            fi
+        else
+            printf '  %s✗%s falhou: %s\n' "$c_red" "$c_reset" "$pc_rel"; failed=$((failed+1))
+        fi
+    done
+
+    printf '\n'
+    if (( failed )); then
+        printf '  %s!%s %d transferência(s) falharam. O resto foi aplicado.\n\n' "$c_yel" "$c_reset" "$failed"
+        return 1
+    fi
+    printf '  %s✓%s Pronto.\n\n' "$c_grn" "$c_reset"
+    return 0
+}
+
+# ── entrada ───────────────────────────────────────────────────────────────────
+
+usage() { sed -n '3,13p' "$0" | sed 's/^# \?//'; }
+
+main() {
+    local phone_dir="/sdcard/Music" pc_dir="" apply=0
+
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+        pc_dir=$(xdg-user-dir MUSIC 2>/dev/null)
+    fi
+    [[ -n $pc_dir ]] || pc_dir="$HOME/Music"
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --apply) apply=1; shift ;;
+            --phone) phone_dir=${2:?"--phone precisa de um caminho"}; shift 2 ;;
+            --pc)    pc_dir=${2:?"--pc precisa de um caminho"}; shift 2 ;;
+            --exclude) EXCLUDE_PATTERNS+=("${2:?"--exclude precisa de um texto"}"); shift 2 ;;
+            --only)    ONLY_PATTERNS+=("${2:?"--only precisa de um texto"}"); shift 2 ;;
+            -h|--help) usage; exit 0 ;;
+            *) printf 'ifos-music-sync: opção desconhecida: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+        esac
+    done
+
+    local n; n=$(adb_device_count)
+    if (( n == 0 )); then
+        printf '  %s✗%s Nenhum celular encontrado. Ligue por USB com a depuração USB\n' "$c_red" "$c_reset"
+        printf '    ativada (ou por rede, com %sadb connect%s primeiro).\n\n' "$c_b" "$c_reset"
+        exit 1
+    elif (( n > 1 )); then
+        printf '  %s✗%s Mais de um celular ligado. Desligue um deles - o ifos-music-sync\n' "$c_red" "$c_reset"
+        printf '    não adivinha qual dos dois é o certo.\n\n'
+        exit 1
+    fi
+
+    if [[ ! -d $pc_dir ]]; then
+        printf '  %s✗%s Pasta do PC não existe: %s\n\n' "$c_red" "$c_reset" "$pc_dir"
+        exit 1
+    fi
+
+    local tmp; tmp=$(mktemp -d)
+    # A string de trap roda depois que main() já retornou, quando a variável
+    # local "tmp" não existe mais - "$tmp" ali dentro daria "variável não
+    # associada" sob set -u. printf %q grava o caminho de verdade na própria
+    # string do trap, não uma referência a uma variável que não vai sobreviver.
+    # shellcheck disable=SC2064
+    # A expansão agora, e não na hora do sinal, é o ponto: "tmp" é local a
+    # main() e não existe mais quando o trap dispara depois dela retornar.
+    trap "rm -rf $(printf '%q' "$tmp")" EXIT
+
+    build_plan "$phone_dir" "$pc_dir" "$tmp"
+
+    if (( apply )); then
+        apply_plan "$phone_dir" "$pc_dir"
+    else
+        print_report
+    fi
+}
+
+main "$@"
