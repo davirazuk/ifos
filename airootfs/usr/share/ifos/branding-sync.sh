@@ -90,6 +90,7 @@ copy /usr/share/qt6ct/colors/ifos.conf
 copy /usr/share/backgrounds/ifos.png
 copy /usr/share/backgrounds/ifos-ifms.png
 copy /usr/share/backgrounds/ifos-mocha.png
+copy /usr/share/backgrounds/ifos-radiohead.png
 copy /usr/share/ifos/lock
 copy /usr/share/sddm/themes/ifos
 copy /etc/sddm.conf.d/ifos.conf

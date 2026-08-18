@@ -35,7 +35,7 @@ function ifos --description 'IFOS control command'
             echo -s '   ' $light 'ifos launcher  ' $reset $dim 'abrir o launcher em tela cheia' $reset
             echo -s '   ' $light 'ifos escola    ' $reset $dim 'Moodle e sistemas do IFMS' $reset
             echo -s '   ' $light 'ifos jogos     ' $reset $dim 'seção de jogos do launcher' $reset
-            echo -s '   ' $light 'ifos tema      ' $reset $dim 'alternar tema (ifms | mocha)' $reset
+            echo -s '   ' $light 'ifos tema      ' $reset $dim 'alternar tema (ifms | mocha | radiohead)' $reset
             echo -s '   ' $light 'ifos instalar  ' $reset $dim 'instalar o IFOS no computador' $reset
             echo -s '   ' $light 'ifos atalhos   ' $reset $dim 'lista de atalhos de teclado' $reset
             echo -s '   ' $light 'ifos update    ' $reset $dim 'atualizar o sistema e o próprio IFOS' $reset

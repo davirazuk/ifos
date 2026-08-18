@@ -5,7 +5,8 @@
 #      ifos-theme              show the current theme
 #      ifos-theme ifms         institutional green (default)
 #      ifos-theme mocha        Catppuccin Mocha
-#      ifos-theme toggle       switch to whichever one is not current
+#      ifos-theme radiohead    dark, cool, near-black with neon blue/pink/lavender
+#      ifos-theme toggle       cycle to the next theme in the list
 #      ifos-theme ifms --system   also change the login screen (asks for sudo)
 #
 #  Swaps the wallpaper and every colour in the i3, polybar, rofi, dunst and
@@ -17,17 +18,22 @@ set -uo pipefail
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
 BG_DIR=/usr/share/backgrounds
 STAMP="$CFG/ifos/theme"
-THEMES="ifms mocha"
+THEMES="ifms mocha radiohead"
 
-# Same roles in both palettes, in the same order, so switching is a positional
+# Same roles in every palette, in the same order, so switching is a positional
 # substitution: background, surface, hover, text, dim, accent, accent-2.
 #              bg       surface  hover    text     dim      accent   accent2
 # Quoted: an unquoted # starts a comment inside an array literal.
 ifms_palette=('#10241d' '#1b3a2e' '#24503f' '#e8f5e9' '#7fa392' '#00a86b' '#7ed957')
 mocha_palette=('#1e1e2e' '#313244' '#45475a' '#cdd6f4' '#6c7086' '#89b4fa' '#cba6f7')
+# Near-black with a cold blue structural accent and a warm pink pop, matching
+# the same trans-flag-on-void palette used for the desktop wallpaper set this
+# theme ships with (see tools/gen-artwork.py's "radiohead" entry).
+radiohead_palette=('#0a080e' '#180e22' '#241634' '#ede4f5' '#8a7a9c' '#5bcefa' '#f5a9b8')
 # Extra colours that only differ by name
 ifms_deep=('#0a1a14' '#b9d4c6' '#04150f' '#00c47d')
 mocha_deep=('#181825' '#a6adc8' '#11111b' '#7ca9f0')
+radiohead_deep=('#050308' '#c9b8d6' '#040308' '#8fe0ff')
 
 # Written out rather than scraped from the header comment with `sed -n '3,13p'`.
 # Two reasons: the comment is maintainer documentation and stays in English,
@@ -40,7 +46,8 @@ ifos-theme — troca as cores de todo o desktop
     ifos-theme                 mostra o tema atual
     ifos-theme ifms            verde institucional (padrão)
     ifos-theme mocha           Catppuccin Mocha
-    ifos-theme toggle          troca para o que não estiver em uso
+    ifos-theme radiohead       quase-preto com azul e rosa neon
+    ifos-theme toggle          avança para o próximo tema da lista
     ifos-theme ifms --system   muda também a tela de login (pede sudo)
 
 Troca o papel de parede e todas as cores das configurações do i3, polybar,
@@ -50,15 +57,32 @@ AJUDA
 }
 current() { [[ -f $STAMP ]] && cat "$STAMP" || echo ifms; }
 
+# toggle used to be a hardcoded ifms<->mocha ternary, which silently mishandled
+# a third theme: toggling away from radiohead landed back on ifms every time
+# instead of advancing to mocha. Cycles through $THEMES by position instead, so
+# adding a fourth theme later won't need this touched again.
+next_theme() {
+    local cur=$1 i
+    local -a arr
+    read -ra arr <<<"$THEMES"
+    for i in "${!arr[@]}"; do
+        if [[ ${arr[i]} == "$cur" ]]; then
+            echo "${arr[$(( (i + 1) % ${#arr[@]} ))]}"
+            return
+        fi
+    done
+    echo "${arr[0]}"
+}
+
 THEME=""
 SYSTEM=0
 for arg in "$@"; do
     case $arg in
         -h|--help) usage; exit 0 ;;
         --system)  SYSTEM=1 ;;
-        ifms|mocha) THEME=$arg ;;
-        toggle)    THEME=$( [[ $(current) == ifms ]] && echo mocha || echo ifms ) ;;
-        *) echo "ifos-theme: argumento desconhecido '$arg' (use ifms, mocha ou toggle)" >&2; exit 1 ;;
+        ifms|mocha|radiohead) THEME=$arg ;;
+        toggle)    THEME=$(next_theme "$(current)") ;;
+        *) echo "ifos-theme: argumento desconhecido '$arg' (use ifms, mocha, radiohead ou toggle)" >&2; exit 1 ;;
     esac
 done
 
@@ -68,7 +92,17 @@ if [[ -z $THEME ]]; then
 fi
 
 FROM=$(current)
-[[ $FROM == "$THEME" ]] && FROM=$( [[ $THEME == ifms ]] && echo mocha || echo ifms )
+if [[ $FROM == "$THEME" ]]; then
+    # Already on this theme - nothing to substitute. The old fallback here
+    # picked a FROM via the same two-way ternary toggle used, which for a
+    # third theme could pick the wrong outgoing palette and leave a stray
+    # substitution in place instead of a clean no-op.
+    FROM=""
+fi
+
+# Empty arrays for the FROM="" (already-on-this-theme) case, so the
+# declare -n below resolves to something real instead of an unset "_palette".
+_palette=(); _deep=()
 
 # shellcheck disable=SC2178
 declare -n from_pal="${FROM}_palette"  to_pal="${THEME}_palette"
