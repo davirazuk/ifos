@@ -647,7 +647,7 @@ running a customised IFOS across a lab of machines.
 | --- | --- |
 | `ifos-launcher` | Full-screen launcher (`Mod+G`) |
 | `ifos-update` | Update packages, IFOS files and your desktop, then restart |
-| `ifos-theme ifms\|mocha\|radiohead\|toggle` | Switch between the green IFMS theme, Catppuccin Mocha and Radiohead (near-black, blue/pink); add `--system` to include the login screen, launcher and Big Picture session |
+| `ifos-theme ifms\|mocha\|toggle` | Switch between the green IFMS theme and Catppuccin Mocha; add `--system` to include the login screen, launcher and Big Picture session |
 | `ifos-lock` | Lock the screen against the wallpaper (`Mod+L`) |
 | `install-yay` | Enable AUR access |
 | `ifos-post-install` | Re-apply IFOS defaults on an installed system |
