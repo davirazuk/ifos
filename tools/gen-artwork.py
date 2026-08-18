@@ -3,11 +3,10 @@
 
     python3 tools/gen-artwork.py [--out AIROOTFS]
 
-Three palettes are produced:
-    ifms       institutional green - the default, IFOS is built for students
-               at IFMS Campus Dourados
-    mocha      the Catppuccin Mocha palette the desktop is themed around
-    radiohead  near-black with a cold blue accent and a warm pink pop
+Two palettes are produced:
+    ifms   institutional green - the default, IFOS is built for students at
+           IFMS Campus Dourados
+    mocha  the Catppuccin Mocha palette the desktop is themed around
 
 Everything is drawn on an RGBA canvas and composited, so alpha actually does
 something. The earlier version drew RGBA fills straight onto an RGB image,
@@ -48,16 +47,6 @@ PALETTES = {
         "accent3": (232, 245, 233),     # near-white
         "text": (232, 245, 233),
         "caption": "IFMS · Campus Dourados",
-    },
-    "radiohead": {
-        "crust": (10, 8, 14),
-        "base": (24, 14, 34),
-        "surface": (36, 22, 52),
-        "accent": (91, 206, 250),       # cold blue
-        "accent2": (245, 169, 184),     # warm pink
-        "accent3": (180, 130, 220),     # lavender
-        "text": (237, 228, 245),
-        "caption": "IFOS Linux",
     },
 }
 
