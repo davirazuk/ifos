@@ -8,10 +8,23 @@
 #      ifos-music-sync --pc CAMINHO      pasta no PC        (padrão: pasta de Música do usuário)
 #      ifos-music-sync --exclude TEXTO   ignora tudo cujo caminho contém TEXTO (repetível)
 #      ifos-music-sync --only TEXTO      só mexe no que contém TEXTO (repetível)
+#      ifos-music-sync --dedupe       acha faixa repetida no mesmo lado; --apply remove a redundante
 #
 #  --exclude e --only comparam contra o caminho relativo inteiro (pasta e
 #  arquivo), sem diferença entre maiúsculas e minúsculas. Com os dois juntos,
 #  --only decide o conjunto primeiro e --exclude tira de dentro dele.
+#
+#  --dedupe é outro problema: a mesma faixa mais de uma vez do mesmo lado -
+#  pastas diferentes, celular ou PC. Compara pelo nome do arquivo sem a
+#  extensão (sem diferença de maiúsculas/minúsculas, ignorando um sufixo
+#  "(1)"/"(2)" de cópia automática de gerenciador de arquivo ou navegador) e
+#  só confirma a duplicata pela duração real do áudio - nome igual sozinho não
+#  basta, porque faixas como "Intro" se repetem em álbuns sem nenhuma relação
+#  entre si. Entre duplicatas confirmadas vale a mesma regra de qualidade do
+#  resto desta ferramenta: sem perda ganha de com perda, e dentro da mesma
+#  categoria só o ffprobe decide - nunca tamanho. Precisa do ffprobe para
+#  funcionar; sem ele --dedupe não relata nada, para não apagar por
+#  adivinhação.
 #
 #  O problema que isto resolve: a mesma música às vezes existe nos dois
 #  lugares em qualidades diferentes - um FLAC comprimido de um jeito no PC,
@@ -121,6 +134,19 @@ audio_rank() {   # audio_rank <arquivo-local>
     [[ $sr =~ ^[0-9]+$ ]] || return 0
     [[ $bits =~ ^[0-9]+$ ]] || bits=16   # com perda normalmente não anuncia bits; 16 é um empate razoável
     printf '%s' "$(( sr * bits ))"
+}
+
+# Duração real do áudio em milissegundos (inteiro, via awk - bash não faz
+# conta com casa decimal). Vazio nas mesmas condições de audio_rank: sem
+# ffprobe, ou ffprobe não sabe dizer a duração. É o segundo sinal que
+# --dedupe exige antes de aceitar duas faixas de mesmo nome como duplicata -
+# ver a seção "duplicatas" mais abaixo.
+audio_duration_ms() {   # audio_duration_ms <arquivo-local>
+    have_ffprobe || return 0
+    local dur
+    dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$1" 2>/dev/null | head -1)
+    [[ $dur =~ ^[0-9]+([.][0-9]+)?$ ]] || return 0
+    awk -v d="$dur" 'BEGIN { printf "%d", d * 1000 }'
 }
 
 ext_of() { local f=${1##*.}; printf '%s' "${f,,}"; }
@@ -292,22 +318,194 @@ decide_pair() {
     fi
 }
 
+# ── duplicatas ────────────────────────────────────────────────────────────────
+#  A mesma faixa mais de uma vez do mesmo lado - pastas diferentes, nome de
+#  arquivo igual. É um problema diferente do resto do arquivo: lá as duas
+#  cópias em jogo estão em lados opostos (celular vs. PC), e a pior nunca some
+#  sem a melhor já ter chegado no lugar dela. Aqui as duas cópias já estão do
+#  mesmo lado - não tem o que trazer, só o que sobra.
+#
+#  "Duplicata" quer dizer: mesmo nome de arquivo sem a extensão (sem
+#  diferença de maiúsculas/minúsculas, e ignorando um sufixo "(1)"/"(2)" de
+#  cópia automática de gerenciador de arquivo ou navegador) E mesma duração
+#  real, dentro de ~2s, medida pelo ffprobe. O nome sozinho não é prova de
+#  nada - "Intro.mp3" se repete em álbuns que não têm nada a ver um com o
+#  outro, e é extremamente improvável que duas faixas assim, além do nome,
+#  durem quase o mesmo tanto por coincidência. Exigir os dois sinais juntos é
+#  o que separa uma duplicata de verdade de uma coincidência de nome - e sem
+#  ffprobe não dá para confirmar duração nenhuma, então build_dupe_plan nem
+#  tenta sem ele. Mesma regra de "não faça mudança que você não consegue
+#  medir" do resto desta ferramenta.
+#
+#  Entre duplicatas confirmadas, a escolha de qual fica reaproveita a mesma
+#  regra de qualidade de decide_pair: sem perda ganha de com perda sempre, e
+#  dentro da mesma categoria só o ffprobe decide (taxa de amostragem ×
+#  profundidade de bits) - nunca tamanho. Empate de verdade (mesmo ffprobe, ou
+#  as duas cópias idênticas) não é motivo para deixar as duas: fica a de
+#  caminho relativo menor em ordem alfabética, só para ter uma resposta
+#  estável - não porque uma cópia é "melhor" que a outra. Se alguma
+#  comparação dentro do grupo não dá para medir, o grupo inteiro fica de fora:
+#  melhor não apagar nada do que apagar o arquivo errado.
+
+DUPE_TOLERANCE_MS=2000   # até 2s de diferença na duração ainda conta como a mesma gravação
+DUPE_PHONE=(); DUPE_PC=()
+
+dup_key() {   # dup_key <caminho-relativo>  →  nome de arquivo sem extensão, normalizado
+    local base=${1##*/}
+    base=${base%.*}
+    base=${base,,}
+    # Sufixo de cópia automática ("Faixa (1).mp3") - o padrão do gerenciador
+    # de arquivo e do navegador quando o mesmo download acontece duas vezes.
+    [[ $base =~ ^(.+)\ \([0-9]+\)$ ]] && base=${BASH_REMATCH[1]}
+    printf '%s' "$base"
+}
+
+# localize_for_probe <lado> <caminho-relativo> <pasta-celular> <pasta-pc> <tmp>
+#  Devolve, por stdout, um caminho local que o ffprobe consegue ler. Do lado
+#  do PC já é local; do lado do celular precisa baixar - não tem outro jeito
+#  de olhar dentro de um arquivo que está no aparelho. O que baixa fica em
+#  "tmp" e some no trap de saída do main(), como o resto desta ferramenta já
+#  faz - não apaga por conta própria aqui.
+localize_for_probe() {
+    local side=$1 rel=$2 phone_dir=$3 pc_dir=$4 tmp=$5
+    if [[ $side == pc ]]; then
+        printf '%s' "$pc_dir/$rel"
+        return 0
+    fi
+    local tmpfile; tmpfile="$tmp/dup_$(basename "$rel")"
+    phone_pull "$phone_dir/$rel" "$tmpfile" || return 1
+    printf '%s' "$tmpfile"
+}
+
+# dedupe_side <lado: phone|pc> <pasta-celular> <pasta-pc> <tmp>
+#  Agrupa as faixas de um lado só por dup_key, confirma cada grupo por
+#  duração real, decide quem fica pela regra de qualidade de sempre, e
+#  empilha o resto em DUPE_PHONE / DUPE_PC como "redundante\tmantido".
+dedupe_side() {
+    local side=$1 phone_dir=$2 pc_dir=$3 tmp=$4
+    local map_name=PHONE_SIZE; [[ $side == pc ]] && map_name=PC_SIZE
+    # shellcheck disable=SC2178
+    local -n SIZE_MAP=$map_name
+    local out_name=DUPE_PHONE; [[ $side == pc ]] && out_name=DUPE_PC
+    # shellcheck disable=SC2178
+    local -n DUPES=$out_name
+
+    local -A members=() count=()
+    local rel key
+    for rel in "${!SIZE_MAP[@]}"; do
+        key=$(dup_key "$rel")
+        members[$key]+="$rel"$'\n'
+        count[$key]=$(( ${count[$key]:-0} + 1 ))
+    done
+
+    for key in "${!count[@]}"; do
+        (( count[$key] > 1 )) || continue
+        local -a candidates=()
+        # LC_ALL=C: o desempate alfabético abaixo só é "determinístico de
+        # verdade" se a ordem não mudar de locale para locale - testado com
+        # pt_BR.UTF-8, que ordena "/" depois de dígito e embaralha a resposta.
+        mapfile -t candidates < <(printf '%s' "${members[$key]}" | LC_ALL=C sort)
+
+        # Localiza tudo de uma vez - evita baixar o mesmo arquivo do celular
+        # duas vezes (uma para a duração, outra para o rank de qualidade).
+        local -A local_path=()
+        local c lp
+        for c in "${candidates[@]}"; do
+            lp=$(localize_for_probe "$side" "$c" "$phone_dir" "$pc_dir" "$tmp") && local_path[$c]=$lp
+        done
+
+        # ── confirma por duração contra a primeira candidata (ordem
+        #    alfabética, logo estável) - quem não bate fica de fora do
+        #    grupo, tratado como coincidência de nome, não duplicata.
+        local ref=${candidates[0]}
+        [[ -n ${local_path[$ref]+x} ]] || continue
+        local ref_dur; ref_dur=$(audio_duration_ms "${local_path[$ref]}")
+        [[ -n $ref_dur ]] || continue
+
+        local -a confirmed=("$ref")
+        for c in "${candidates[@]:1}"; do
+            [[ -n ${local_path[$c]+x} ]] || continue
+            local dur; dur=$(audio_duration_ms "${local_path[$c]}")
+            [[ -n $dur ]] || continue
+            local diff=$(( dur > ref_dur ? dur - ref_dur : ref_dur - dur ))
+            (( diff <= DUPE_TOLERANCE_MS )) && confirmed+=("$c")
+        done
+        (( ${#confirmed[@]} >= 2 )) || continue
+
+        # ── entre as confirmadas, sem perda ganha de com perda sempre ──────
+        local -a lossless=()
+        for c in "${confirmed[@]}"; do
+            is_lossless_ext "$(ext_of "$c")" && lossless+=("$c")
+        done
+        local -a contenders=("${confirmed[@]}")
+        (( ${#lossless[@]} )) && contenders=("${lossless[@]}")
+
+        local winner=""
+        if (( ${#contenders[@]} == 1 )); then
+            winner=${contenders[0]}
+        else
+            # Dentro da mesma categoria, só o ffprobe decide - nunca tamanho,
+            # a mesma regra de decide_pair.
+            local -A rank=()
+            local max_rank="" measurable=1
+            for c in "${contenders[@]}"; do
+                rank[$c]=$(audio_rank "${local_path[$c]}")
+                if [[ -z ${rank[$c]} ]]; then measurable=0; break; fi
+                [[ -z $max_rank ]] && max_rank=${rank[$c]}
+                (( rank[$c] > max_rank )) && max_rank=${rank[$c]}
+            done
+            if (( measurable )); then
+                for c in "${contenders[@]}"; do
+                    if (( rank[$c] == max_rank )); then winner=$c; break; fi
+                done
+            fi
+            # measurable=0: não deu para comparar dentro da categoria - winner
+            # continua vazio, e o grupo inteiro fica de fora, abaixo.
+        fi
+
+        [[ -n $winner ]] || continue
+        for c in "${confirmed[@]}"; do
+            [[ $c == "$winner" ]] || DUPES+=("$c"$'\t'"$winner")
+        done
+    done
+}
+
+build_dupe_plan() {   # build_dupe_plan <pasta-celular> <pasta-pc> <pasta-temp-para-baixar>
+    DUPE_PHONE=(); DUPE_PC=()
+    have_ffprobe || return 0
+    dedupe_side phone "$1" "$2" "$3"
+    dedupe_side pc "$1" "$2" "$3"
+}
+
 # ── relatório ─────────────────────────────────────────────────────────────────
 
-print_report() {
+print_report() {   # print_report <mostrar-duplicatas: 0|1>
+    local show_dupes=${1:-0}
     printf '\n  %sIFOS — sincronizar música%s\n\n' "$c_b" "$c_reset"
     printf '    Só no celular:     %s%d%s faixa(s)\n' "$c_b" "${#ONLY_PHONE[@]}" "$c_reset"
     printf '    Só no PC:          %s%d%s faixa(s)\n' "$c_b" "${#ONLY_PC[@]}" "$c_reset"
     printf '    Celular tem melhor: %s%d%s faixa(s)\n' "$c_b" "${#BETTER_ON_PHONE[@]}" "$c_reset"
     printf '    PC tem melhor:      %s%d%s faixa(s)\n' "$c_b" "${#BETTER_ON_PC[@]}" "$c_reset"
-    printf '    Iguais:             %s%d%s faixa(s)  %s(nada a fazer)%s\n\n' \
+    printf '    Iguais:             %s%d%s faixa(s)  %s(nada a fazer)%s\n' \
            "$c_b" "${#SAME[@]}" "$c_reset" "$c_dim" "$c_reset"
+    if (( show_dupes )); then
+        printf '    Duplicado no celular: %s%d%s faixa(s) redundante(s)\n' \
+               "$c_b" "${#DUPE_PHONE[@]}" "$c_reset"
+        printf '    Duplicado no PC:      %s%d%s faixa(s) redundante(s)\n' \
+               "$c_b" "${#DUPE_PC[@]}" "$c_reset"
+    fi
+    printf '\n'
 
     if ! have_ffprobe; then
         printf '    %s!%s ffprobe não está instalado: faixas do mesmo formato e tamanhos\n' "$c_yel" "$c_reset"
         printf '      diferentes foram tratadas como iguais, porque não dá para medir a\n'
-        printf '      diferença sem ele. Instale %sffmpeg%s para uma comparação de verdade.\n\n' \
+        printf '      diferença sem ele. Instale %sffmpeg%s para uma comparação de verdade.\n' \
                "$c_b" "$c_reset"
+        if (( show_dupes )); then
+            printf '      --dedupe também não achou nada: sem ffprobe não dá para confirmar\n'
+            printf '      duração, e nome de arquivo igual sozinho não é prova de duplicata.\n'
+        fi
+        printf '\n'
     fi
 
     local rel
@@ -339,7 +537,24 @@ print_report() {
         fi
     done
 
+    if (( show_dupes )); then
+        local dup keep
+        for pair in "${DUPE_PHONE[@]:-}"; do
+            [[ -n $pair ]] || continue
+            IFS=$'\t' read -r dup keep <<<"$pair"
+            printf '    %s-%s  duplicata no celular  %s  %s(fica %s)%s\n' \
+                   "$c_red" "$c_reset" "$dup" "$c_dim" "$keep" "$c_reset"
+        done
+        for pair in "${DUPE_PC[@]:-}"; do
+            [[ -n $pair ]] || continue
+            IFS=$'\t' read -r dup keep <<<"$pair"
+            printf '    %s-%s  duplicata no PC       %s  %s(fica %s)%s\n' \
+                   "$c_red" "$c_reset" "$dup" "$c_dim" "$keep" "$c_reset"
+        done
+    fi
+
     local total=$(( ${#ONLY_PHONE[@]} + ${#ONLY_PC[@]} + ${#BETTER_ON_PHONE[@]} + ${#BETTER_ON_PC[@]} ))
+    (( show_dupes )) && total=$(( total + ${#DUPE_PHONE[@]} + ${#DUPE_PC[@]} ))
     if (( total == 0 )); then
         printf '    %s✓%s Já está tudo igual dos dois lados.\n\n' "$c_grn" "$c_reset"
     else
@@ -415,12 +630,55 @@ apply_plan() {   # apply_plan <pasta-celular> <pasta-pc>
     return 0
 }
 
+# apply_dupe_plan <pasta-celular> <pasta-pc>
+#  Remove as faixas que build_dupe_plan marcou como redundantes. Só chega
+#  aqui com --dedupe e --apply juntos - sem seção nenhuma se não houver nada
+#  para remover, para não sujar a saída de --apply de quem não pediu dedupe.
+apply_dupe_plan() {
+    local phone_dir=$1 pc_dir=$2
+    local pair rel keep failed=0
+
+    (( ${#DUPE_PHONE[@]} == 0 && ${#DUPE_PC[@]} == 0 )) && return 0
+
+    printf '  %sDuplicatas:%s\n' "$c_b" "$c_reset"
+    for pair in "${DUPE_PHONE[@]:-}"; do
+        [[ -n $pair ]] || continue
+        IFS=$'\t' read -r rel keep <<<"$pair"
+        if phone_rm "$phone_dir/$rel"; then
+            printf '  %s✓%s duplicata removida do celular: %s  %s(ficou %s)%s\n' \
+                   "$c_grn" "$c_reset" "$rel" "$c_dim" "$keep" "$c_reset"
+        else
+            printf '  %s✗%s falhou ao remover do celular: %s\n' "$c_red" "$c_reset" "$rel"
+            failed=$((failed+1))
+        fi
+    done
+    for pair in "${DUPE_PC[@]:-}"; do
+        [[ -n $pair ]] || continue
+        IFS=$'\t' read -r rel keep <<<"$pair"
+        if rm -f "$pc_dir/$rel"; then
+            printf '  %s✓%s duplicata removida do PC: %s  %s(ficou %s)%s\n' \
+                   "$c_grn" "$c_reset" "$rel" "$c_dim" "$keep" "$c_reset"
+        else
+            printf '  %s✗%s falhou ao remover do PC: %s\n' "$c_red" "$c_reset" "$rel"
+            failed=$((failed+1))
+        fi
+    done
+
+    printf '\n'
+    if (( failed )); then
+        printf '  %s!%s %d remoção(ões) de duplicata falharam.\n\n' "$c_yel" "$c_reset" "$failed"
+        return 1
+    fi
+    printf '  %s✓%s Duplicatas removidas.\n\n' "$c_grn" "$c_reset"
+    return 0
+}
+
 # ── entrada ───────────────────────────────────────────────────────────────────
 
-usage() { sed -n '3,13p' "$0" | sed 's/^# \?//'; }
+usage() { sed -n '3,27p' "$0" | sed 's/^# \?//'; }
 
 main() {
-    local phone_dir="/sdcard/Music" pc_dir="" apply=0
+    local phone_dir="/sdcard/Music" pc_dir="" apply=0 dedupe=0
 
     if command -v xdg-user-dir >/dev/null 2>&1; then
         pc_dir=$(xdg-user-dir MUSIC 2>/dev/null)
@@ -434,6 +692,7 @@ main() {
             --pc)    pc_dir=${2:?"--pc precisa de um caminho"}; shift 2 ;;
             --exclude) EXCLUDE_PATTERNS+=("${2:?"--exclude precisa de um texto"}"); shift 2 ;;
             --only)    ONLY_PATTERNS+=("${2:?"--only precisa de um texto"}"); shift 2 ;;
+            --dedupe) dedupe=1; shift ;;
             -h|--help) usage; exit 0 ;;
             *) printf 'ifos-music-sync: opção desconhecida: %s\n' "$1" >&2; usage >&2; exit 2 ;;
         esac
@@ -466,11 +725,13 @@ main() {
     trap "rm -rf $(printf '%q' "$tmp")" EXIT
 
     build_plan "$phone_dir" "$pc_dir" "$tmp"
+    (( dedupe )) && build_dupe_plan "$phone_dir" "$pc_dir" "$tmp"
 
     if (( apply )); then
         apply_plan "$phone_dir" "$pc_dir"
+        (( dedupe )) && apply_dupe_plan "$phone_dir" "$pc_dir"
     else
-        print_report
+        print_report "$dedupe"
     fi
 }
 

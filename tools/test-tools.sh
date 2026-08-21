@@ -1540,6 +1540,150 @@ run_m5 --only minidiscs
 check "--only pega só os minidiscs"         says "md1.flac"
 check "--only tira o resto"                 not_says "song.flac"
 
+# ── 21d. --dedupe, duplicata dentro do mesmo lado (PC) ───────────────────────
+#  Diferente do resto desta seção, uma duplicata de verdade só se prova com
+#  áudio de verdade: build_dupe_plan exige uma duração medida pelo ffprobe
+#  antes de aceitar qualquer par como duplicata (ver o comentário na seção
+#  "duplicatas" do próprio ifos-music-sync), e ffprobe não mede um arquivo de
+#  zeros. gen_audio usa o ffmpeg - a mesma dependência que o ffprobe já pede
+#  - para gerar um tom puro curto, com formato e duração escolhidos.
+gen_audio() {   # gen_audio <arquivo> <segundos> [taxa] [profundidade] [codec]
+    local file=$1 secs=$2 rate=${3:-44100} depth=${4:-s16} codec=${5:-flac}
+    mkdir -p "$(dirname "$file")"
+    if [[ $codec == mp3 ]]; then
+        ffmpeg -y -f lavfi -i "sine=frequency=440:duration=$secs" \
+               -c:a libmp3lame -b:a 128k "$file" -loglevel error
+    elif [[ $depth == s32 ]]; then
+        ffmpeg -y -f lavfi -i "sine=frequency=440:duration=$secs" \
+               -ar "$rate" -sample_fmt s32 -bits_per_raw_sample 24 -c:a flac \
+               "$file" -loglevel error
+    else
+        ffmpeg -y -f lavfi -i "sine=frequency=440:duration=$secs" \
+               -ar "$rate" -sample_fmt "$depth" -c:a flac "$file" -loglevel error
+    fi
+}
+
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    printf '\n  %s!%s ffmpeg não está instalado - pulando os testes de --dedupe. Sem\n' \
+           "$c_red" "$c_reset"
+    printf '    ele não dá para gerar áudio de verdade nem confirmar duração, e o\n'
+    printf '    --dedupe também não confirma nada sem o ffprobe que vem junto.\n'
+else
+
+case_name "ifos-music-sync --dedupe acha duplicata dentro do mesmo lado (PC), com ffprobe de verdade"
+M6="$TMP/music_dedupe_pc"; mkdir -p "$M6/bin" "$M6/pc"
+cat > "$M6/bin/adb" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  devices) echo "List of devices attached"; echo "PHONE1	device" ;;
+  shell) shift ;;   # nada no celular - este teste é só do lado do PC
+esac
+EOF
+chmod +x "$M6/bin/adb"
+
+# Duplicata exata, desempate alfabético: mesmo áudio, duas pastas.
+gen_audio "$M6/pc/Album A/faixa.flac" 1
+mkdir -p "$M6/pc/Album B"
+cp "$M6/pc/Album A/faixa.flac" "$M6/pc/Album B/faixa.flac"
+
+# Qualidade diferente, mesma faixa: 48kHz/24bit tem que ganhar do 44.1kHz/16bit
+# - só o ffprobe sabe disso, tamanho de arquivo não entra na conta.
+gen_audio "$M6/pc/Lote1/melhor.flac" 1 44100 s16
+gen_audio "$M6/pc/Lote2/melhor.flac" 1 48000 s32
+
+# Sem perda contra com perda: o FLAC ganha sempre, mesmo sem olhar o ffprobe.
+gen_audio "$M6/pc/Rip/perde.flac" 1 44100 s16
+gen_audio "$M6/pc/Download/perde.mp3" 1 44100 s16 mp3
+
+# Falso positivo: duas faixas chamadas "intro", mas com durações bem
+# diferentes - nome igual sozinho não é prova de nada, isso não é duplicata.
+gen_audio "$M6/pc/Album C/intro.flac" 1
+gen_audio "$M6/pc/Album D/intro.flac" 4
+
+# Sufixo de cópia automática do gerenciador de arquivo/navegador.
+gen_audio "$M6/pc/Baixados/copia.flac" 1
+mkdir -p "$M6/pc/Baixados2"
+cp "$M6/pc/Baixados/copia.flac" "$M6/pc/Baixados2/copia (1).flac"
+
+run_m6() { OUT=$(IFOS_MUSIC_SYNC_ADB="$M6/bin/adb" bash "$MS" --phone /sdcard/Music --pc "$M6/pc" "$@" 2>&1); RC=$?; }
+
+run_m6
+check "sem --dedupe, relatório nem toca no assunto"            not_says "Duplicado"
+
+run_m6 --dedupe
+check "acha a duplicata exata"                                 says "duplicata no PC       Album B/faixa.flac"
+check "e mantém a outra cópia"                                 says "fica Album A/faixa.flac"
+check "entre qualidades diferentes, fica a de 48kHz/24bit"     says "fica Lote2/melhor.flac"
+check "sem perda ganha de com perda, dentro do dedupe também"  says "fica Rip/perde.flac"
+check "\"Faixa (1)\" é reconhecida como a mesma faixa"         says "fica Baixados/copia.flac"
+check "duas faixas \"intro\" de durações diferentes não são duplicata" \
+    not_says "duplicata no PC       Album C/intro.flac"
+check "nem a outra"                                            not_says "duplicata no PC       Album D/intro.flac"
+check "relatório de --dedupe não mexe em nada sem --apply" \
+    bash -c '[ -e "'"$M6"'/pc/Album B/faixa.flac" ] && [ -e "'"$M6"'/pc/Lote1/melhor.flac" ]'
+
+run_m6 --dedupe --apply
+check "--apply remove a duplicata exata"              [ ! -e "$M6/pc/Album B/faixa.flac" ]
+check "--apply mantém a cópia escolhida"               [ -e "$M6/pc/Album A/faixa.flac" ]
+check "--apply remove a cópia de qualidade pior"      [ ! -e "$M6/pc/Lote1/melhor.flac" ]
+check "--apply mantém a de qualidade melhor"           [ -e "$M6/pc/Lote2/melhor.flac" ]
+check "--apply remove o MP3 redundante"               [ ! -e "$M6/pc/Download/perde.mp3" ]
+check "--apply mantém o FLAC"                          [ -e "$M6/pc/Rip/perde.flac" ]
+check "--apply remove \"Faixa (1)\""                  [ ! -e "$M6/pc/Baixados2/copia (1).flac" ]
+check "--apply não mexe nas duas faixas \"intro\" (não são duplicata)" \
+    bash -c '[ -e "'"$M6"'/pc/Album C/intro.flac" ] && [ -e "'"$M6"'/pc/Album D/intro.flac" ]'
+
+# ── 21e. O mesmo, do lado do celular - pull de verdade, não só o nome ───────
+#  O resto desta seção usa um adb de mentira que nunca baixa nada de verdade
+#  (só escreve "PULL" no log). Aqui o pull precisa copiar bytes de verdade,
+#  porque build_dupe_plan só aceita uma duplicata depois de medir a duração
+#  pelo ffprobe, e não tem ffprobe que meça um arquivo que não existe.
+case_name "ifos-music-sync --dedupe no celular usa pull de verdade para confirmar, e --apply remove com phone_rm"
+M7="$TMP/music_dedupe_phone"
+mkdir -p "$M7/bin" "$M7/phone_real/AlbumX" "$M7/phone_real/AlbumY" "$M7/pc"
+gen_audio "$M7/phone_real/AlbumX/musica.flac" 1
+cp "$M7/phone_real/AlbumX/musica.flac" "$M7/phone_real/AlbumY/musica.flac"
+
+cat > "$M7/bin/adb" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  devices) echo "List of devices attached"; echo "PHONE1	device" ;;
+  shell)
+    shift
+    cmd="\$*"
+    if [[ \$cmd == find* ]]; then
+      printf '99999\t/sdcard/Music/AlbumX/musica.flac\n'
+      printf '99999\t/sdcard/Music/AlbumY/musica.flac\n'
+    elif [[ \$cmd == "rm -f "* ]]; then
+      echo "RM \$cmd" >> "$M7/log"
+    fi
+    ;;
+  pull)
+    real="$M7/phone_real/\${2#/sdcard/Music/}"
+    cp "\$real" "\$3"
+    echo "PULL \$2 \$3" >> "$M7/log"
+    ;;
+esac
+EOF
+chmod +x "$M7/bin/adb"
+
+: > "$M7/log"
+OUT=$(IFOS_MUSIC_SYNC_ADB="$M7/bin/adb" bash "$MS" --phone /sdcard/Music --pc "$M7/pc" --dedupe 2>&1)
+RC=$?
+check "acha a duplicata no celular via pull de verdade" says "duplicata no celular  AlbumY/musica.flac"
+check "relatório sozinho não remove nada do celular" \
+    bash -c '! grep -q "^RM " "'"$M7"'/log"'
+
+: > "$M7/log"
+OUT=$(IFOS_MUSIC_SYNC_ADB="$M7/bin/adb" bash "$MS" --phone /sdcard/Music --pc "$M7/pc" --dedupe --apply 2>&1)
+RC=$?
+check "--apply remove a duplicata do celular com phone_rm" \
+    grep -q "RM rm -f '/sdcard/Music/AlbumY/musica.flac'" "$M7/log"
+check "e não mexe na cópia que ficou" \
+    bash -c '! grep -q "RM.*AlbumX" "'"$M7"'/log"'
+
+fi   # command -v ffmpeg
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"
