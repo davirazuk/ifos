@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+#  ifos-drive-music-sync — manda a pasta de música para o Google Drive
+#
+#      ifos-drive-music-sync              relatório: o que subiria, sem enviar
+#      ifos-drive-music-sync --apply      envia de verdade
+#      ifos-drive-music-sync --pc CAMINHO      pasta local (padrão: Música)
+#      ifos-drive-music-sync --remote NOME     remoto do rclone
+#                                              (padrão: gdrive:Music Library)
+#      ifos-drive-music-sync --log CAMINHO     onde escrever o log
+#
+#  Espelho, não cópia: o que não existe mais no PC é removido do Drive. Por
+#  isso o padrão é relatório, igual ao ifos-music-sync — quem apaga é o
+#  --apply, e só depois de você ler o que ele vai apagar.
+#
+#  Sobe em duas fases, porque os dois tipos de arquivo travam por motivos
+#  diferentes e a configuração que ajuda um atrapalha o outro:
+#
+#    fase 1  arquivos pequenos (.lrc, cover.jpg). São milhares e somam poucos
+#            megabytes: o custo é ida-e-volta com a API do Drive, não banda.
+#    fase 2  os FLAC. Aí sim a banda de subida é o limite, e paralelismo alto
+#            não sobe nada mais rápido - só deixa vários arquivos pela metade
+#            ao mesmo tempo, e uma queda joga horas fora em vez de minutos.
+#
+#  O gargalo que ninguém vê: se o remoto usa o client_id COMPARTILHADO do
+#  rclone, a cota de requisições por minuto é dividida com todo mundo no mundo
+#  que nunca criou o seu. Quando ela estoura, o Drive responde 403
+#  rateLimitExceeded, o rclone entra em espera e não escreve nada no log em
+#  nível INFO: o contador congela e parece rede morta. Esta ferramenta avisa
+#  quando detecta isso, porque o sintoma não se parece nem um pouco com a
+#  causa. O conserto é criar um client_id próprio:
+#  https://rclone.org/drive/#making-your-own-client-id
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+c_reset=$'\033[0m'; c_b=$'\033[1m'; c_grn=$'\033[1;32m'
+c_dim=$'\033[2m'; c_yel=$'\033[1;33m'; c_red=$'\033[1;31m'
+
+# Injetável pelo teste: um `rclone` de mentira. Em uso normal é o do PATH.
+RCLONE=${IFOS_DRIVE_SYNC_RCLONE:-rclone}
+
+usage() { sed -n '3,15p' "$0" | sed 's/^# \?//'; }
+
+die() { printf '%s✗%s %s\n' "$c_red" "$c_reset" "$1" >&2; exit 1; }
+
+pc_dir=""
+remote="gdrive:Music Library"
+log_file=""
+apply=0
+
+if command -v xdg-user-dir >/dev/null 2>&1; then
+    pc_dir=$(xdg-user-dir MUSIC 2>/dev/null)
+fi
+[[ -n $pc_dir && -d $pc_dir ]] || pc_dir="$HOME/Música"
+[[ -d $pc_dir ]] || pc_dir="$HOME/Músicas"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --apply)  apply=1; shift ;;
+        --pc)     pc_dir=${2:?"--pc precisa de um caminho"}; shift 2 ;;
+        --remote) remote=${2:?"--remote precisa de um nome"}; shift 2 ;;
+        --log)    log_file=${2:?"--log precisa de um caminho"}; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) die "opção desconhecida: $1" ;;
+    esac
+done
+
+command -v "$RCLONE" >/dev/null 2>&1 || die "o rclone não está instalado."
+[[ -d $pc_dir ]] || die "a pasta de música não existe: $pc_dir"
+
+[[ -n $log_file ]] || log_file="$HOME/.local/share/ifos-music/drive-sync-$(date +%Y%m%d-%H%M).log"
+mkdir -p "$(dirname "$log_file")" 2>/dev/null
+
+printf '\n  %sIFOS — mandar a música para o Drive%s\n\n' "$c_b" "$c_reset"
+printf '    pasta:  %s\n    remoto: %s\n    log:    %s\n\n' "$pc_dir" "$remote" "$log_file"
+
+# ── o aviso que economiza uma madrugada ───────────────────────────────────────
+# `rclone config show` não imprime client_id nenhum quando o remoto usa o
+# compartilhado. Isso não é erro - o remoto funciona - mas a cota é rateada com
+# o mundo inteiro, e o sintoma (transferência que congela sem mensagem) não
+# aponta para cá sozinho.
+remote_name=${remote%%:*}
+if ! "$RCLONE" config show "$remote_name" 2>/dev/null | grep -q '^client_id'; then
+    printf '  %s!%s  o remoto %s usa o client_id compartilhado do rclone.\n' \
+        "$c_yel" "$c_reset" "$remote_name"
+    printf '     A cota de requisições por minuto é dividida com todo mundo que\n'
+    printf '     nunca criou o seu, e quando ela estoura a subida congela sem\n'
+    printf '     escrever erro nenhum no log. Criar o seu resolve, e em algum\n'
+    printf '     momento vai ser obrigatório - o rclone avisa que o\n'
+    printf '     compartilhado será desativado.\n'
+    printf '     %shttps://rclone.org/drive/#making-your-own-client-id%s\n\n' "$c_dim" "$c_reset"
+fi
+
+# --tpslimit é o que segura a cota compartilhada. Não troque por mais
+# paralelismo: contra uma cota rateada, mais transferências ao mesmo tempo
+# estouram mais rápido e o resultado final é mais lento, não mais rápido.
+common=(--fast-list --drive-stop-on-upload-limit
+        --tpslimit 4 --tpslimit-burst 4 --drive-pacer-min-sleep 200ms
+        --retries 50 --low-level-retries 20 --retries-sleep 60s
+        --stats-one-line --log-level INFO --log-file "$log_file")
+
+if (( ! apply )); then
+    common+=(--dry-run)
+    printf '  %srelatório%s — nada será enviado nem removido. Use --apply.\n\n' \
+        "$c_yel" "$c_reset"
+fi
+
+run_phase() {   # run_phase <rótulo> <filtro...> -- <flags...>
+    local label=$1; shift
+    printf '  %s%s%s\n' "$c_dim" "$label" "$c_reset"
+    printf '=== %s %s ===\n' "$label" "$(date '+%F %T')" >>"$log_file"
+    "$RCLONE" sync "$pc_dir" "$remote" "$@" "${common[@]}"
+}
+
+rc=0
+run_phase "fase 1: arquivos pequenos (<=1M)" \
+    --max-size 1M --transfers 16 --checkers 8 --stats 5m || rc=$?
+run_phase "fase 2: arquivos grandes (>1M)" \
+    --min-size 1M --transfers 2 --checkers 8 --drive-chunk-size 16M --stats 10m || rc=$?
+
+if (( rc )); then
+    printf '\n  %s✗%s o rclone terminou com erro. O log tem o motivo: %s\n\n' \
+        "$c_red" "$c_reset" "$log_file"
+else
+    printf '\n  %s✓%s pronto. Log: %s\n\n' "$c_grn" "$c_reset" "$log_file"
+fi
+exit $rc
