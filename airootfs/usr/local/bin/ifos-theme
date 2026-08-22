@@ -5,8 +5,10 @@
 #      ifos-theme              show the current theme
 #      ifos-theme ifms         institutional green (default)
 #      ifos-theme mocha        Catppuccin Mocha
-#      ifos-theme toggle       switch to whichever one is not current
+#      ifos-theme toggle       switch to the next available theme
 #      ifos-theme ifms --system   also change the login screen (asks for sudo)
+#      ifos-theme <nome>       a theme the user defined themselves, from
+#                              ~/.config/ifos/themes/<nome>.theme
 #
 #  Swaps the wallpaper and every colour in the i3, polybar, rofi, dunst and
 #  terminal configuration. Works on whichever palette is currently applied, so
@@ -23,10 +25,15 @@ THEMES="ifms mocha"
 # substitution: background, surface, hover, text, dim, accent, accent-2.
 #              bg       surface  hover    text     dim      accent   accent2
 # Quoted: an unquoted # starts a comment inside an array literal.
+# Lidas por nome via `local -n` em load_theme, que o shellcheck não enxerga.
+# shellcheck disable=SC2034
 ifms_palette=('#10241d' '#1b3a2e' '#24503f' '#e8f5e9' '#7fa392' '#00a86b' '#7ed957')
+# shellcheck disable=SC2034
 mocha_palette=('#1e1e2e' '#313244' '#45475a' '#cdd6f4' '#6c7086' '#89b4fa' '#cba6f7')
 # Extra colours that only differ by name
+# shellcheck disable=SC2034
 ifms_deep=('#0a1a14' '#b9d4c6' '#04150f' '#00c47d')
+# shellcheck disable=SC2034
 mocha_deep=('#181825' '#a6adc8' '#11111b' '#7ca9f0')
 
 # Written out rather than scraped from the header comment with `sed -n '3,13p'`.
@@ -40,15 +47,119 @@ ifos-theme — troca as cores de todo o desktop
     ifos-theme                 mostra o tema atual
     ifos-theme ifms            verde institucional (padrão)
     ifos-theme mocha           Catppuccin Mocha
-    ifos-theme toggle          troca para o que não estiver em uso
+    ifos-theme toggle          troca para o próximo tema disponível
     ifos-theme ifms --system   muda também a tela de login (pede sudo)
 
 Troca o papel de parede e todas as cores das configurações do i3, polybar,
 rofi, dunst e do terminal. Funciona a partir da paleta que estiver aplicada,
 então pode ser executado várias vezes sem estragar nada.
+
+SEU PRÓPRIO TEMA
+Crie ~/.config/ifos/themes/<nome>.theme e ele passa a valer como qualquer
+outro - inclusive depois de um `ifos-update`, que reaplica sozinho o tema
+carimbado. Sem isso, um tema feito à mão volta ao verde a cada atualização,
+porque a atualização reescreve os arquivos de configuração.
+
+    # ~/.config/ifos/themes/meutema.theme
+    # sete cores, nesta ordem:
+    #   fundo, superfície, realce, texto, apagado, destaque, destaque-2
+    palette = #0a0c10 #161a22 #222834 #e4e8ee #6e7887 #5bcefa #c94f4f
+    # quatro cores extras: fundo-escuro, subtexto, mais-escuro, destaque-claro
+    deep    = #050609 #a8b0bc #040508 #f5a9b8
+    # opcional; sem esta linha o papel de parede não muda
+    wallpaper = ~/Imagens/meupapel.png
+    # opcional: trocas extras, de->para, aplicadas só ao entrar neste tema.
+    # Servem para cores que não têm papel na paleta de sete - o IFOS é um
+    # repinte do Catppuccin Mocha e sobraram alguns acentos do original
+    # espalhados pela polybar, pelo rofi e pelos terminais.
+    extra = #f38ba8>#c94f4f #a6e3a1>#6e7887
+
+Linha começando com # é comentário. Cor é sempre #RRGGBB.
+Pode repetir 'extra' em várias linhas.
 AJUDA
 }
 current() { [[ -f $STAMP ]] && cat "$STAMP" || echo ifms; }
+
+# ── Temas do usuário ─────────────────────────────────────────────────────────
+# Um tema feito à mão não sobrevivia a um `ifos-update`: a atualização
+# reescreve /etc/skel e a tela de login com o verde padrão e depois manda
+# `ifos-theme "$(cat ~/.config/ifos/theme)"` repintar por cima - mas esta
+# ferramenta só conhecia dois nomes, recusava qualquer outro, e o desktop
+# ficava verde de novo sem dizer por quê. Ler um arquivo do usuário resolve
+# isso na raiz: o carimbo passa a nomear algo que existe.
+USER_DIR="$CFG/ifos/themes"
+
+available_themes() {
+    local out="$THEMES" f n
+    for f in "$USER_DIR"/*.theme; do
+        [[ -e $f ]] || continue
+        n=${f##*/}; n=${n%.theme}
+        case " $out " in *" $n "*) continue ;; esac
+        out+=" $n"
+    done
+    printf '%s' "$out"
+}
+
+is_theme() {
+    case " $(available_themes) " in *" $1 "*) return 0 ;; esac
+    return 1
+}
+
+# load_theme <nome> → LOAD_PAL, LOAD_DEEP, LOAD_WALL
+# Devolve 1 quando o tema não existe e 2 quando o arquivo existe mas está
+# malformado - separados de propósito, porque "não achei" e "achei e está
+# errado" pedem mensagens diferentes.
+load_theme() {
+    local name=$1 f line key val c _ex
+    LOAD_PAL=(); LOAD_DEEP=(); LOAD_EXTRA=(); LOAD_WALL="$BG_DIR/ifos-$name.png"
+    case " $THEMES " in
+        *" $name "*)
+            # shellcheck disable=SC2178
+            local -n _p="${name}_palette"  _d="${name}_deep"
+            LOAD_PAL=("${_p[@]}"); LOAD_DEEP=("${_d[@]}")
+            return 0 ;;
+    esac
+    f="$USER_DIR/$name.theme"
+    [[ -r $f ]] || return 1
+    # Comentário só na margem esquerda: uma cor começa com # também, então
+    # cortar tudo a partir do primeiro # apagaria a paleta inteira.
+    while IFS= read -r line || [[ -n $line ]]; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        [[ -z $line || ${line:0:1} == "#" ]] && continue
+        [[ $line == *=* ]] || continue
+        key=${line%%=*}; val=${line#*=}
+        key=${key//[[:space:]]/}
+        case $key in
+            palette)   read -r -a LOAD_PAL  <<<"$val" ;;
+            deep)      read -r -a LOAD_DEEP <<<"$val" ;;
+            extra)     read -r -a _ex <<<"$val"; LOAD_EXTRA+=("${_ex[@]}") ;;
+            wallpaper) val="${val#"${val%%[![:space:]]*}"}"
+                       val="${val%"${val##*[![:space:]]}"}"
+                       LOAD_WALL="${val/#\~/$HOME}" ;;
+        esac
+    done <"$f"
+    if (( ${#LOAD_PAL[@]} != 7 )); then
+        echo "ifos-theme: $f: 'palette' precisa de 7 cores, achei ${#LOAD_PAL[@]}." >&2
+        return 2
+    fi
+    if (( ${#LOAD_DEEP[@]} != 4 )); then
+        echo "ifos-theme: $f: 'deep' precisa de 4 cores, achei ${#LOAD_DEEP[@]}." >&2
+        return 2
+    fi
+    for c in "${LOAD_PAL[@]}" "${LOAD_DEEP[@]}"; do
+        if [[ ! $c =~ ^#[0-9a-fA-F]{6}$ ]]; then
+            echo "ifos-theme: $f: '$c' não é uma cor #RRGGBB." >&2
+            return 2
+        fi
+    done
+    for c in "${LOAD_EXTRA[@]}"; do
+        if [[ ! $c =~ ^#[0-9a-fA-F]{6}\>#[0-9a-fA-F]{6}$ ]]; then
+            echo "ifos-theme: $f: '$c' não está no formato #RRGGBB>#RRGGBB." >&2
+            return 2
+        fi
+    done
+    return 0
+}
 
 THEME=""
 SYSTEM=0
@@ -56,26 +167,62 @@ for arg in "$@"; do
     case $arg in
         -h|--help) usage; exit 0 ;;
         --system)  SYSTEM=1 ;;
-        ifms|mocha) THEME=$arg ;;
-        toggle)    THEME=$( [[ $(current) == ifms ]] && echo mocha || echo ifms ) ;;
-        *) echo "ifos-theme: argumento desconhecido '$arg' (use ifms, mocha ou toggle)" >&2; exit 1 ;;
+        toggle)
+            # Cicla a lista inteira em vez de alternar dois nomes fixos: com
+            # só os dois embutidos o resultado é idêntico ao de antes.
+            mapfile -t _all < <(tr ' ' '\n' <<<"$(available_themes)" | grep -v '^$')
+            _cur=$(current); _next=${_all[0]}
+            for _i in "${!_all[@]}"; do
+                if [[ ${_all[_i]} == "$_cur" ]]; then
+                    _next=${_all[(_i + 1) % ${#_all[@]}]}; break
+                fi
+            done
+            THEME=$_next ;;
+        *)
+            if is_theme "$arg"; then THEME=$arg
+            else
+                echo "ifos-theme: argumento desconhecido '$arg'" >&2
+                echo "Disponíveis: $(available_themes) (ou toggle)" >&2
+                echo "Para criar o seu: ifos-theme --help" >&2
+                exit 1
+            fi ;;
     esac
 done
 
 if [[ -z $THEME ]]; then
-    printf 'Tema atual:  %s\nDisponíveis: %s\n' "$(current)" "$THEMES"
+    printf 'Tema atual:  %s\nDisponíveis: %s\n' "$(current)" "$(available_themes)"
     exit 0
 fi
 
 FROM=$(current)
-[[ $FROM == "$THEME" ]] && FROM=$( [[ $THEME == ifms ]] && echo mocha || echo ifms )
+if [[ $FROM == "$THEME" ]]; then
+    # Repintar de um tema para ele mesmo não faria nada. Sai do primeiro
+    # tema disponível que não seja este - com os dois embutidos, o mesmo
+    # ifms<->mocha de antes.
+    for _t in $(available_themes); do
+        [[ $_t != "$THEME" ]] && { FROM=$_t; break; }
+    done
+fi
 
-# shellcheck disable=SC2178
-declare -n from_pal="${FROM}_palette"  to_pal="${THEME}_palette"
-declare -n from_deep="${FROM}_deep"    to_deep="${THEME}_deep"
+load_theme "$FROM" || {
+    echo "ifos-theme: não consegui ler o tema atual '$FROM'." >&2; exit 1; }
+from_pal=("${LOAD_PAL[@]}"); from_deep=("${LOAD_DEEP[@]}")
 
-WALL="$BG_DIR/ifos-$THEME.png"
-[[ -f $WALL ]] || { echo "ifos-theme: papel de parede ausente: $WALL" >&2; exit 1; }
+load_theme "$THEME" || {
+    echo "ifos-theme: não consegui ler o tema '$THEME'." >&2; exit 1; }
+to_pal=("${LOAD_PAL[@]}"); to_deep=("${LOAD_DEEP[@]}")
+to_extra=("${LOAD_EXTRA[@]}")
+WALL="$LOAD_WALL"
+
+# Papel de parede ausente derruba um tema embutido (é defeito de instalação),
+# mas num tema do usuário só significa "não quero trocar o papel de parede".
+WALL_OK=1
+if [[ ! -f $WALL ]]; then
+    case " $THEMES " in
+        *" $THEME "*) echo "ifos-theme: papel de parede ausente: $WALL" >&2; exit 1 ;;
+        *) WALL_OK=0 ;;
+    esac
+fi
 
 SUDO=""; [[ $EUID -ne 0 ]] && SUDO=sudo
 
@@ -93,6 +240,16 @@ build_expr() {
     for i in "${!from_deep[@]}"; do
         expr+="s/${from_deep[i]}/${to_deep[i]}/gI;"
         expr+="s/${from_deep[i]#\#}/${to_deep[i]#\#}/gI;"
+    done
+    # As trocas extras do tema de destino, se houver. São de mão única de
+    # propósito: a cor de origem não tem papel na paleta de sete, então não
+    # existe "a mesma cor no outro tema" para voltar - e duas origens podem
+    # cair no mesmo destino, o que não teria como desfazer sozinho.
+    local pair pfrom pto
+    for pair in "${to_extra[@]}"; do
+        pfrom=${pair%%>*}; pto=${pair#*>}
+        expr+="s/${pfrom}/${pto}/gI;"
+        expr+="s/${pfrom#\#}/${pto#\#}/gI;"
     done
     printf '%s' "$expr"
 }
@@ -121,11 +278,13 @@ for f in "$CFG/i3/config" "$CFG/polybar/config.ini" "$CFG/rofi/ifos.rasi" \
 done
 
 # ── Wallpaper ────────────────────────────────────────────────────────────────
-if [[ -f $CFG/i3/config ]]; then
-    sed -i "s|feh --no-fehbg --bg-fill .*|feh --no-fehbg --bg-fill $WALL|" "$CFG/i3/config"
-fi
-if command -v feh >/dev/null && [[ -n ${DISPLAY:-} ]]; then
-    feh --no-fehbg --bg-fill "$WALL"
+if (( WALL_OK )); then
+    if [[ -f $CFG/i3/config ]]; then
+        sed -i "s|feh --no-fehbg --bg-fill .*|feh --no-fehbg --bg-fill $WALL|" "$CFG/i3/config"
+    fi
+    if command -v feh >/dev/null && [[ -n ${DISPLAY:-} ]]; then
+        feh --no-fehbg --bg-fill "$WALL"
+    fi
 fi
 
 mkdir -p "$(dirname "$STAMP")"; echo "$THEME" >"$STAMP"
@@ -147,8 +306,10 @@ fi
 # bright accent would have kept it after switching. They go through the same
 # substitution as everything else now.
 if (( SYSTEM )); then
-    $SUDO cp "$WALL" /usr/share/sddm/themes/ifos/background.png 2>/dev/null
-    $SUDO cp "$WALL" "$BG_DIR/ifos.png" 2>/dev/null
+    if (( WALL_OK )); then
+        $SUDO cp "$WALL" /usr/share/sddm/themes/ifos/background.png 2>/dev/null
+        $SUDO cp "$WALL" "$BG_DIR/ifos.png" 2>/dev/null
+    fi
 
     for f in /usr/share/sddm/themes/ifos/Main.qml \
              /usr/share/ifos/i3-bigpicture.config \
