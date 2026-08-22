@@ -1837,6 +1837,75 @@ check "e pinta com a paleta do mocha"                says "#89b4fa"
 OUT=$(cat "$PROFILE/airootfs/usr/local/bin/ifos-update")
 check "o ifos-update repinta o tema carimbado"       says "ifos-theme \"\$WANT\""
 
+# ── 24. ifos-update traz o padrão novo sem apagar o que é do usuário ─────────
+#  O defeito: a atualização copiava /etc/skel por cima do ~/.config inteiro.
+#  Quem personalizou o desktop perdia tudo a cada atualização e só descobria
+#  depois, com a barra de volta ao padrão. Havia backup, mas "está tudo lá,
+#  vá procurar" não é a mesma coisa que não ter quebrado nada.
+#
+#  A função é extraída do arquivo e executada contra pastas de mentira, então
+#  isto testa o código de verdade sem tocar em /etc/skel nem em nenhum ~.
+case_name "ifos-update instala o que falta e não mexe no que já está igual"
+UPD="$PROFILE/airootfs/usr/local/bin/ifos-update"
+T10="$TMP/skel"; rm -rf "$T10"; mkdir -p "$T10/skel/.config/polybar" "$T10/home/.config/polybar"
+sed -n '/^sync_from_skel() {/,/^}/p' "$UPD" > "$T10/fn.sh"
+check "a função pôde ser extraída do ifos-update" test -s "$T10/fn.sh"
+
+skel_run() {   # skel_run <force>
+    (
+        set +u
+        FORCE_DOTFILES=$1
+        SKEL_NEW=0; SKEL_SAME=0; SKEL_KEPT=0; SKEL_KEPT_LIST=()
+        HOME="$T10/home"
+        # shellcheck disable=SC1090
+        . "$T10/fn.sh"
+        sync_from_skel "$T10/skel/.config" "$T10/home/.config"
+        printf 'new=%s same=%s kept=%s\n' "$SKEL_NEW" "$SKEL_SAME" "$SKEL_KEPT"
+    )
+}
+
+printf 'novo\n'   > "$T10/skel/.config/polybar/nunca-visto.ini"
+printf 'igual\n'  > "$T10/skel/.config/polybar/igual.ini"
+printf 'igual\n'  > "$T10/home/.config/polybar/igual.ini"
+printf 'padrao\n' > "$T10/skel/.config/polybar/config.ini"
+printf 'MEU RICE\n' > "$T10/home/.config/polybar/config.ini"
+
+OUT=$(skel_run 0); RC=$?
+check "termina bem"                              rc_is 0
+check "instala o arquivo que não existia"        test -f "$T10/home/.config/polybar/nunca-visto.ini"
+check "conta 1 instalado"                        says "new=1"
+check "conta 1 já em dia"                        says "same=1"
+check "conta 1 preservado"                       says "kept=1"
+
+case_name "ifos-update PRESERVA o arquivo que o usuário mudou"
+#  Esta é a verificação que dá nome ao conserto: o conteúdo do usuário tem que
+#  continuar exatamente onde estava.
+OUT=$(cat "$T10/home/.config/polybar/config.ini")
+check "o arquivo do usuário continua o dele"     says "MEU RICE"
+check "e não virou o padrão"                     not_says "padrao"
+check "o padrão novo ficou ao lado como .novo"   test -f "$T10/home/.config/polybar/config.ini.novo"
+OUT=$(cat "$T10/home/.config/polybar/config.ini.novo" 2>/dev/null)
+check "e o .novo tem o conteúdo novo"            says "padrao"
+check "arquivo já igual não ganha .novo" \
+    bash -c '! test -e "'"$T10"'/home/.config/polybar/igual.ini.novo"'
+
+case_name "ifos-update não gera .novo.novo na atualização seguinte"
+#  Rodar duas vezes seguidas não pode acumular lixo: um .novo de antes não é
+#  origem de nada.
+OUT=$(skel_run 0)
+check "roda de novo sem erro"                    says "kept=1"
+check "não criou .novo.novo" \
+    bash -c '! test -e "'"$T10"'/home/.config/polybar/config.ini.novo.novo"'
+
+case_name "ifos-update --force-dotfiles ainda sobrescreve, para quem quer recomeçar"
+OUT=$(skel_run 1)
+OUT=$(cat "$T10/home/.config/polybar/config.ini")
+check "com --force o padrão vence"               says "padrao"
+
+OUT=$(cat "$UPD")
+check "a bandeira existe no ifos-update"         says -- "--force-dotfiles"
+check "e a cópia de segurança continua sendo feita"  says "config-backup-"
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"
