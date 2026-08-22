@@ -1759,6 +1759,84 @@ check "e recusa opção que não conhece"       rc_is 1
 OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
 check "o branding-sync copia a ferramenta"   says "ifos-drive-music-sync"
 
+# ── 23. ifos-theme aceita tema feito pelo usuário ────────────────────────────
+#  O defeito que isto fecha: um tema feito à mão voltava ao verde a cada
+#  `ifos-update`. A atualização reescreve os arquivos com o padrão e depois
+#  manda `ifos-theme "$(cat ~/.config/ifos/theme)"` repintar - mas a
+#  ferramenta só conhecia dois nomes e recusava o carimbo, em silêncio para
+#  quem estava olhando o desktop. Tudo aqui roda com XDG_CONFIG_HOME apontando
+#  para uma pasta descartável e sem DISPLAY: nada toca na máquina.
+case_name "ifos-theme enxerga um tema do usuário"
+TH="$PROFILE/airootfs/usr/local/bin/ifos-theme"
+T9="$TMP/theme"; rm -rf "$T9"; mkdir -p "$T9/ifos/themes" "$T9/i3"
+printf 'palette = #0a0c10 #161a22 #222834 #e4e8ee #6e7887 #5bcefa #c94f4f\ndeep = #050609 #a8b0bc #040508 #f5a9b8\n' \
+    > "$T9/ifos/themes/meu.theme"
+echo ifms > "$T9/ifos/theme"
+th_run() { ( unset DISPLAY; XDG_CONFIG_HOME="$T9" bash "$TH" "$@" 2>&1 ); }
+
+OUT=$(th_run); RC=$?
+check "lista o tema do usuário junto dos embutidos"  says "meu"
+check "e continua listando os embutidos"             says "mocha"
+
+case_name "ifos-theme aplica o tema do usuário e carimba o nome"
+printf 'client.focused #00a86b #10241d #e8f5e9\nbar { background #1b3a2e }\n' > "$T9/i3/config"
+OUT=$(th_run meu); RC=$?
+check "termina bem"                                  rc_is 0
+OUT=$(cat "$T9/i3/config")
+check "troca o destaque verde pela cor pedida"       says "#5bcefa"
+check "troca o fundo"                                says "#0a0c10"
+check "e não sobra verde nenhum"                     not_says "#00a86b"
+#  O carimbo é o que o ifos-update lê para repintar depois de atualizar. Se
+#  ele não guardar o nome do tema do usuário, o conserto inteiro não vale.
+OUT=$(cat "$T9/ifos/theme")
+check "carimba o nome do tema do usuário"            says "meu"
+
+case_name "ifos-theme recusa tema quebrado sem estragar nada"
+printf 'palette = #0a0c10 #161a22\n' > "$T9/ifos/themes/quebrado.theme"
+OUT=$(th_run quebrado); RC=$?
+check "para quando faltam cores"                     rc_is 1
+check "e diz quantas achou"                          says "7 cores"
+printf 'palette = #0a0c10 #161a22 #222834 #e4e8ee #6e7887 #5bcefa nao-e-cor\ndeep = #050609 #a8b0bc #040508 #f5a9b8\n' \
+    > "$T9/ifos/themes/torto.theme"
+OUT=$(th_run torto); RC=$?
+check "recusa o que não é #RRGGBB"                   says "não é uma cor"
+OUT=$(th_run inexistente); RC=$?
+check "e recusa nome que não existe"                 rc_is 1
+
+case_name "ifos-theme aplica as trocas extras do tema"
+#  O IFOS é um repinte do Catppuccin Mocha e sobraram acentos do original -
+#  o #f38ba8 (rosa) era usado como se fosse vermelho na bateria, no
+#  workspace urgente e no ANSI dos dois terminais. Cor assim não tem papel
+#  na paleta de sete, então sem 'extra' um tema do usuário não consegue
+#  descrever o próprio desktop por inteiro.
+printf 'palette = #0a0c10 #161a22 #222834 #e4e8ee #6e7887 #5bcefa #c94f4f\ndeep = #050609 #a8b0bc #040508 #f5a9b8\nextra = #f38ba8>#c94f4f\nextra = #a6e3a1>#6e7887\n' \
+    > "$T9/ifos/themes/comextra.theme"
+printf 'urgent #f38ba8\nok #a6e3a1\nfocus #00a86b\n' > "$T9/i3/config"
+echo ifms > "$T9/ifos/theme"
+OUT=$(th_run comextra); RC=$?
+check "termina bem"                                  rc_is 0
+OUT=$(cat "$T9/i3/config")
+check "troca o rosa do Catppuccin pelo vermelho"     says "#c94f4f"
+check "e não sobra rosa"                             not_says "#f38ba8"
+check "aplica a segunda linha de extra também"       not_says "#a6e3a1"
+check "sem atrapalhar a paleta normal"               says "#5bcefa"
+printf 'palette = #0a0c10 #161a22 #222834 #e4e8ee #6e7887 #5bcefa #c94f4f\ndeep = #050609 #a8b0bc #040508 #f5a9b8\nextra = #f38ba8 #c94f4f\n' \
+    > "$T9/ifos/themes/extratorto.theme"
+OUT=$(th_run extratorto); RC=$?
+check "recusa extra fora do formato de->para"        says "#RRGGBB>#RRGGBB"
+
+case_name "ifos-theme não regrediu nos temas embutidos"
+printf 'client.focused #00a86b #10241d #e8f5e9\n' > "$T9/i3/config"
+echo ifms > "$T9/ifos/theme"
+OUT=$(th_run mocha); RC=$?
+check "ifms -> mocha continua funcionando"           rc_is 0
+OUT=$(cat "$T9/i3/config")
+check "e pinta com a paleta do mocha"                says "#89b4fa"
+
+#  A outra metade do conserto mora no ifos-update: é ele que chama de volta.
+OUT=$(cat "$PROFILE/airootfs/usr/local/bin/ifos-update")
+check "o ifos-update repinta o tema carimbado"       says "ifos-theme \"\$WANT\""
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"
