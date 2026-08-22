@@ -1906,6 +1906,79 @@ OUT=$(cat "$UPD")
 check "a bandeira existe no ifos-update"         says -- "--force-dotfiles"
 check "e a cópia de segurança continua sendo feita"  says "config-backup-"
 
+# ── 25. battery-watch avisa quando a bateria cai NA TOMADA ───────────────────
+#  O defeito, vindo de uma máquina de verdade: a bateria caiu de 100% para 3%
+#  ao longo de uma madrugada inteira com o carregador na tomada, e o
+#  /sys/.../status dizia "Charging" o tempo todo — carregando a 1,8W, menos do
+#  que a máquina gastava. O script só olhava para status == Discharging, então
+#  não avisou nada em momento nenhum, nem a 3%, e ainda REARMAVA os avisos a
+#  cada volta porque tratava "não está descarregando" como "está tudo bem".
+#  A máquina desligou sozinha no meio de um trabalho longo.
+#
+#  Tudo aqui roda contra uma /sys de mentira e um notify-send de mentira: o
+#  teste não precisa de bateria, nem de tomada, nem de esperar horas.
+case_name "battery-watch enxerga a bateria caindo com o carregador conectado"
+BW="$PROFILE/airootfs/etc/skel/.config/i3/scripts/battery-watch.sh"
+T11="$TMP/bat"; rm -rf "$T11"; mkdir -p "$T11/ps/BAT0" "$T11/ps/AC" "$T11/bin"
+cat > "$T11/bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$NOTIFY_LOG"
+EOF
+chmod +x "$T11/bin/notify-send"
+
+bat_run() {   # bat_run <cap-inicial> <cap-depois> <ac 0|1>
+    : > "$T11/log"
+    printf '%s\n' "$1" > "$T11/ps/BAT0/capacity"
+    printf 'Charging\n'  > "$T11/ps/BAT0/status"
+    printf '%s\n' "$3"   > "$T11/ps/AC/online"
+    (
+        PATH="$T11/bin:$PATH" NOTIFY_LOG="$T11/log" \
+        IFOS_BATTERY_PS_ROOT="$T11/ps" IFOS_BATTERY_INTERVAL=1 \
+        IFOS_BATTERY_MAX_TICKS=3 IFOS_BATTERY_DROP_PCT=5 IFOS_BATTERY_DROP_SECS=0 \
+        bash "$BW" &
+        BWPID=$!
+        sleep 0.35
+        printf '%s\n' "$2" > "$T11/ps/BAT0/capacity"
+        wait "$BWPID"
+    ) >/dev/null 2>&1
+    cat "$T11/log" 2>/dev/null
+}
+
+OUT=$(bat_run 100 80 1); RC=$?
+check "avisa que está caindo na tomada"        says "caindo na tomada"
+check "e é urgência crítica"                   says "critical"
+check "diz o percentual atual"                 says "80%"
+#  A mensagem NÃO pode ser "conecte o carregador": ele já está conectado, e
+#  mandar fazer o que já está feito é o que faz alguém ignorar o aviso.
+check "não manda conectar o que já está ligado" not_says "Conecte o carregador agora"
+
+case_name "battery-watch continua avisando o de sempre fora da tomada"
+OUT=$(bat_run 30 15 0)
+check "bateria baixa fora da tomada"           says "Bateria baixa"
+check "sem falar em defeito de carregamento"   not_says "caindo na tomada"
+OUT=$(bat_run 30 8 0)
+check "bateria crítica fora da tomada"         says "Bateria crítica"
+check "e manda conectar o carregador"          says "Conecte o carregador"
+
+case_name "battery-watch fica quieto quando está tudo bem"
+OUT=$(bat_run 60 70 1)
+check "subindo, não avisa nada"                bash -c '[[ ! -s "'"$T11"'/log" ]]'
+OUT=$(bat_run 100 99 1)
+#  1% de oscilação numa bateria cheia é o firmware calibrando. Gritar nisso
+#  seria pior que não avisar: um aviso que dá alarme falso deixa de ser lido.
+check "queda de 1% não vira alarme"            not_says "caindo na tomada"
+
+case_name "battery-watch sai na hora em máquina sem bateria"
+T12="$TMP/nobat"; rm -rf "$T12"; mkdir -p "$T12/ps"
+OUT=$(IFOS_BATTERY_PS_ROOT="$T12/ps" IFOS_BATTERY_MAX_TICKS=1 bash "$BW" 2>&1); RC=$?
+check "termina bem e sem dizer nada"           rc_is 0
+check "sem saída nenhuma"                      bash -c '[[ -z "'"$OUT"'" ]]'
+
+OUT=$(cat "$BW")
+#  A razão de o defeito ter passado: o script confiava no status declarado.
+check "não usa mais o status para decidir"     not_says 'status=$(cat'
+check "e explica por quê no arquivo"           says "Charging"
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"
