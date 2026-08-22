@@ -1684,6 +1684,81 @@ check "e não mexe na cópia que ficou" \
 
 fi   # command -v ffmpeg
 
+# ── 22. ifos-drive-music-sync, contra um rclone de mentira ───────────────────
+#  Esta ferramenta faz um espelho: o que sumiu do PC some do Drive. Um teste
+#  que chamasse o rclone de verdade apagaria a música de alguém, então o
+#  rclone inteiro é trocado por um script que só anota o que foi pedido. O que
+#  se testa é a decisão - o que ela manda o rclone fazer - e não o rclone.
+case_name "ifos-drive-music-sync não envia nem apaga nada sem --apply"
+DS="$PROFILE/airootfs/usr/local/bin/ifos-drive-music-sync"
+M8="$TMP/drive"; mkdir -p "$M8/bin" "$M8/pc"
+
+# rclone de mentira: "config show" responde com ou sem client_id conforme
+# FAKE_CLIENT_ID, porque é exatamente isso que a ferramenta precisa distinguir;
+# qualquer outra chamada é anotada em $RLOG, uma linha por invocação.
+cat > "$M8/bin/rclone" <<'EOF'
+#!/usr/bin/env bash
+if [[ ${1:-} == config ]]; then
+    printf '[gdrive]\ntype = drive\n'
+    [[ -n ${FAKE_CLIENT_ID:-} ]] && printf 'client_id = 123.apps.googleusercontent.com\n'
+    exit 0
+fi
+printf '%s\n' "$*" >> "$RLOG"
+EOF
+chmod +x "$M8/bin/rclone"
+
+: > "$M8/log"
+OUT=$(IFOS_DRIVE_SYNC_RCLONE="$M8/bin/rclone" RLOG="$M8/log" \
+      bash "$DS" --pc "$M8/pc" --log "$M8/rclone.log" 2>&1); RC=$?
+check "termina bem"                          rc_is 0
+check "avisa que é só relatório"             says "relatório"
+# --dry-run é a diferença inteira entre relatório e espelho. Sem ele o padrão
+# apagaria arquivo no Drive sem ninguém ter pedido.
+check "passa --dry-run para o rclone"        grep -q -- "--dry-run" "$M8/log"
+
+: > "$M8/log"
+OUT=$(IFOS_DRIVE_SYNC_RCLONE="$M8/bin/rclone" RLOG="$M8/log" \
+      bash "$DS" --pc "$M8/pc" --log "$M8/rclone.log" --apply 2>&1); RC=$?
+check "com --apply o --dry-run some"         bash -c '! grep -q -- "--dry-run" "'"$M8"'/log"'
+
+case_name "ifos-drive-music-sync sobe em duas fases, com ajuste diferente em cada"
+#  Arquivo pequeno trava em ida-e-volta de API; arquivo grande trava em banda.
+#  A configuração que ajuda um atrapalha o outro, por isso são duas chamadas.
+check "há duas chamadas ao rclone"           bash -c '[[ $(wc -l < "'"$M8"'/log") == 2 ]]'
+check "a primeira fase pega os pequenos"     grep -q -- "--max-size 1M" "$M8/log"
+check "a segunda fase pega os grandes"       grep -q -- "--min-size 1M" "$M8/log"
+check "pequenos vão com paralelismo alto"    grep -q -- "--max-size 1M --transfers 16" "$M8/log"
+#  Paralelismo alto no arquivo grande não sobe mais rápido - a banda já está
+#  cheia - e ainda deixa vários pela metade, então uma queda joga horas fora.
+check "grandes vão com paralelismo baixo"    grep -q -- "--min-size 1M --transfers 2" "$M8/log"
+#  Contra uma cota rateada com o mundo, educação vale mais que paralelismo.
+check "as duas fases seguram a cota"         bash -c '[[ $(grep -c -- "--tpslimit 4" "'"$M8"'/log") == 2 ]]'
+
+case_name "ifos-drive-music-sync avisa do client_id compartilhado"
+#  O sintoma desse problema (subida que congela sem escrever erro nenhum) não
+#  aponta para a causa sozinho. Uma madrugada já foi perdida assim.
+: > "$M8/log"
+OUT=$(IFOS_DRIVE_SYNC_RCLONE="$M8/bin/rclone" RLOG="$M8/log" \
+      bash "$DS" --pc "$M8/pc" --log "$M8/rclone.log" 2>&1)
+check "diz que o client_id é compartilhado"  says "client_id compartilhado"
+check "e manda onde criar o próprio"         says "making-your-own-client-id"
+
+: > "$M8/log"
+OUT=$(IFOS_DRIVE_SYNC_RCLONE="$M8/bin/rclone" RLOG="$M8/log" FAKE_CLIENT_ID=1 \
+      bash "$DS" --pc "$M8/pc" --log "$M8/rclone.log" 2>&1)
+check "quem já tem o seu não é incomodado"   not_says "client_id compartilhado"
+
+case_name "ifos-drive-music-sync recusa o que não dá para fazer"
+OUT=$(IFOS_DRIVE_SYNC_RCLONE="$M8/bin/rclone" RLOG="$M8/log" \
+      bash "$DS" --pc "$M8/pasta-que-nao-existe" --log "$M8/rclone.log" 2>&1); RC=$?
+check "para quando a pasta não existe"       rc_is 1
+OUT=$(IFOS_DRIVE_SYNC_RCLONE="$M8/bin/rclone" RLOG="$M8/log" \
+      bash "$DS" --pc "$M8/pc" --log "$M8/rclone.log" --nao-existe 2>&1); RC=$?
+check "e recusa opção que não conhece"       rc_is 1
+
+OUT=$(cat "$PROFILE/airootfs/usr/share/ifos/branding-sync.sh")
+check "o branding-sync copia a ferramenta"   says "ifos-drive-music-sync"
+
 # ═════════════════════════════════════════════════════════════════════════════
 printf '\n  %s%d passaram%s' "$c_grn" "$PASS" "$c_reset"
 (( FAIL )) && printf ', %s%d falharam%s' "$c_red" "$FAIL" "$c_reset"
