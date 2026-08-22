@@ -5,6 +5,7 @@
 #      ifos-update                 packages, IFOS files, your desktop, restart
 #      ifos-update --no-reboot     everything, but stay running
 #      ifos-update --no-dotfiles   leave your own ~/.config alone
+#      ifos-update --force-dotfiles  overwrite even the files you changed
 #      ifos-update --ifos-only     skip pacman, just refresh the IFOS files
 #      ifos-update --packages      only pacman -Syu
 #      ifos-update --repair        only repair known-broken files in your ~/.config
@@ -54,6 +55,7 @@ DO_IFOS=1
 # /etc/skel, so leaving this opt-in meant the desktop half of an update
 # silently did not arrive unless you knew to ask for it.
 DO_DOTFILES=1
+FORCE_DOTFILES=0
 DO_REBOOT=1
 CHECK_ONLY=0
 REPAIR_ONLY=0
@@ -70,6 +72,7 @@ ifos-update — atualiza o sistema e baixa os arquivos mais novos do IFOS
     ifos-update                 pacotes, arquivos do IFOS, seu desktop, reinicia
     ifos-update --no-reboot     tudo, mas sem reiniciar no final
     ifos-update --no-dotfiles   não mexe no seu ~/.config
+    ifos-update --force-dotfiles  sobrescreve até o que você mudou
     ifos-update --ifos-only     pula o pacman, só atualiza os arquivos do IFOS
     ifos-update --packages      só pacman -Syu
     ifos-update --repair        só conserta arquivos quebrados no seu ~/.config
@@ -94,6 +97,7 @@ for arg in "$@"; do
         --packages)    DO_IFOS=0 ;;
         --dotfiles)    DO_DOTFILES=1 ;;   # kept: it is the default now
         --no-dotfiles) DO_DOTFILES=0 ;;
+        --force-dotfiles) FORCE_DOTFILES=1 ;;
         --no-reboot)   DO_REBOOT=0 ;;
         --repair)      REPAIR_ONLY=1; DO_PACKAGES=0 ;;
         --check)       CHECK_ONLY=1 ;;
@@ -576,6 +580,54 @@ enable_missing_services
 # what is still wrong, not what the three steps above were about to fix.
 repair_graphics
 
+# ── Trazer os padrões novos sem apagar o que é seu ───────────────────────────
+#  O que isto conserta: a atualização copiava /etc/skel por cima do ~/.config
+#  inteiro. Quem tinha personalizado o desktop — e personalizar o desktop é
+#  metade da graça de ter um — perdia tudo a cada atualização e só descobria
+#  depois, com a barra e as cores de volta ao padrão. Havia cópia de segurança,
+#  mas "está tudo lá no backup, vá procurar" não é a mesma coisa que não ter
+#  quebrado nada.
+#
+#  A regra agora é a mesma do pacman com os arquivos do /etc, que é a convenção
+#  do Arch e todo mundo aqui já vai encontrar de qualquer jeito:
+#
+#    arquivo não existe        instala
+#    arquivo igual ao novo     não faz nada
+#    arquivo diferente         MANTÉM O SEU e deixa o novo ao lado, .novo
+#
+#  --force-dotfiles volta ao comportamento antigo, para quem quer justamente
+#  jogar a personalização fora e recomeçar do padrão.
+SKEL_DIR=${IFOS_SKEL_DIR:-/etc/skel}
+SKEL_NEW=0
+SKEL_SAME=0
+SKEL_KEPT=0
+SKEL_KEPT_LIST=()
+
+sync_from_skel() {   # sync_from_skel <origem> <destino>
+    local src=$1 dst=$2 rel s d
+    [[ -d $src ]] || return 0
+    while IFS= read -r -d '' s; do
+        rel=${s#"$src"/}
+        # Um .novo de uma atualização anterior não é fonte de nada, e comparar
+        # contra ele geraria .novo.novo.
+        [[ $rel == *.novo ]] && continue
+        d="$dst/$rel"
+        mkdir -p "$(dirname "$d")" 2>/dev/null
+        if [[ ! -e $d ]]; then
+            cp -a "$s" "$d" 2>/dev/null && SKEL_NEW=$((SKEL_NEW + 1))
+        elif cmp -s "$s" "$d"; then
+            SKEL_SAME=$((SKEL_SAME + 1))
+        elif (( FORCE_DOTFILES )); then
+            cp -a "$s" "$d" 2>/dev/null
+        else
+            cp -a "$s" "$d.novo" 2>/dev/null && {
+                SKEL_KEPT=$((SKEL_KEPT + 1))
+                SKEL_KEPT_LIST+=("${d/#"$HOME"/\~}")
+            }
+        fi
+    done < <(find "$src" -type f -print0 2>/dev/null)
+}
+
 # ── The user's own configuration ─────────────────────────────────────────────
 if (( DO_DOTFILES )) && [[ $EUID -eq 0 ]]; then
     # Refusing outright would now abort a normal `sudo ifos-update`, since this
@@ -591,11 +643,38 @@ elif (( DO_DOTFILES )); then
     for d in i3 polybar rofi dunst picom fish alacritty xfce4 gtk-3.0 gtk-4.0 fastfetch; do
         [[ -e "$HOME/.config/$d" ]] && cp -a "$HOME/.config/$d" "$BACKUP/" 2>/dev/null
     done
-    cp -a /etc/skel/.config/. "$HOME/.config/" 2>/dev/null
+    sync_from_skel "$SKEL_DIR/.config" "$HOME/.config"
     for f in .xprofile .xinitrc .dialogrc .bashrc; do
-        [[ -f /etc/skel/$f ]] && cp -a "/etc/skel/$f" "$HOME/$f"
+        [[ -f $SKEL_DIR/$f ]] || continue
+        if [[ ! -e "$HOME/$f" ]]; then
+            cp -a "$SKEL_DIR/$f" "$HOME/$f" && SKEL_NEW=$((SKEL_NEW + 1))
+        elif cmp -s "$SKEL_DIR/$f" "$HOME/$f"; then
+            SKEL_SAME=$((SKEL_SAME + 1))
+        elif (( FORCE_DOTFILES )); then
+            cp -a "$SKEL_DIR/$f" "$HOME/$f"
+        else
+            cp -a "$SKEL_DIR/$f" "$HOME/$f.novo" && {
+                SKEL_KEPT=$((SKEL_KEPT + 1))
+                # O til aqui é texto para o usuário ler, não caminho para
+                # abrir - a lista só é impressa.
+                # shellcheck disable=SC2088
+                SKEL_KEPT_LIST+=("~/$f")
+            }
+        fi
     done
-    ok "Configurações atualizadas (as anteriores estão em $BACKUP)"
+
+    if (( FORCE_DOTFILES )); then
+        ok "Configurações sobrescritas pelo padrão (as suas estão em $BACKUP)."
+    else
+        ok "Padrões novos: $SKEL_NEW instalado(s), $SKEL_SAME já em dia."
+        if (( SKEL_KEPT )); then
+            warn "$SKEL_KEPT arquivo(s) seu(s) foram MANTIDOS. A versão nova de cada um ficou ao lado, com .novo no fim:"
+            for _f in "${SKEL_KEPT_LIST[@]}"; do
+                printf '        %s.novo\n' "$_f"
+            done
+            warn "Compare com 'diff arquivo arquivo.novo' e junte o que quiser. Cópia completa em $BACKUP."
+        fi
+    fi
 
     # This runs on every update now, so the backups would otherwise pile up in
     # the home directory one per run. Keep the last few and drop the rest.
